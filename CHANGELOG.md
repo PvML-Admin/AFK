@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.2
+
+- Life is the red bar and prayer is the purple bar, wherever the HUD strip sits. Yellow adrenaline and green summoning are not life or prayer. Current may be higher than the cap, with thousands separators and no fixed upper limit.
+- Buff timers are read from green-bordered icons anywhere on the client. `10m` is minutes. A plain number such as `60` is seconds.
+- Combat and skilling count as activity. A target health bar, hitsplat or HUD value change, an XP or inventory change, or motion around the player resets the idle timer.
+- Settings number boxes, labels, the AFK sound switch, and the client list use the navy and gold theme. The watch pill says GAME DETECTED. Header buttons are flat. Pinning freezes one capture while the rectangle is dragged.
+
 ## 0.2.1
 
 - The installer splash says Kavros AFK Warden.

@@ -123,7 +123,7 @@ try {
     $packages = Join-Path $PSScriptRoot 'packages'
     $velopackDll = Get-PinnedPackage $packages 'Velopack' '1.2.161' 'lib\net472\Velopack.dll'
     $jsonDll = Get-PinnedPackage $packages 'Newtonsoft.Json' '13.0.4' 'lib\net45\Newtonsoft.Json.dll'
-    $references = @('mscorlib.dll','System.dll','System.Core.dll','System.Drawing.dll','System.Windows.Forms.dll','System.Xml.dll','System.Runtime.WindowsRuntime.dll') |
+    $references = @('mscorlib.dll','System.dll','System.Core.dll','System.Drawing.dll','System.Windows.Forms.dll','System.Xml.dll','System.IO.Compression.dll','System.Runtime.WindowsRuntime.dll') |
         ForEach-Object { '/reference:' + (Join-Path $frameworkDirectory $_) }
     $references += '/reference:' + (Join-Path $env:WINDIR 'Microsoft.NET\assembly\GAC_MSIL\System.Runtime\v4.0_4.0.0.0__b03f5f7f11d50a3a\System.Runtime.dll')
     $references += '/reference:' + $velopackDll

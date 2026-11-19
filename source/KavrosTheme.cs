@@ -245,7 +245,7 @@ namespace KavrosAfkWarden
             using (Brush s = new SolidBrush(surface)) g.FillRectangle(s, client);
             Color fill, edge, ink;
             if (tone == ButtonTone.Primary) { fill = Gold; edge = GoldEdge; ink = GoldInk; if (hover) fill = Color.FromArgb(240, 207, 128); if (pressed) fill = Color.FromArgb(213, 178, 107); }
-            else if (tone == ButtonTone.Ghost) { fill = surface; edge = ButtonLine; ink = TextSoft; if (hover) fill = Hover; if (pressed) fill = BgDeep; }
+            else if (tone == ButtonTone.Ghost) { fill = surface; edge = hover || pressed ? Gold : Line; ink = hover ? Text : TextSoft; if (hover) fill = Hover; if (pressed) fill = BgDeep; }
             else { fill = Button; edge = ButtonLine; ink = Text; if (hover) fill = Color.FromArgb(34, 54, 71); if (pressed) fill = Color.FromArgb(20, 34, 46); }
             if (!enabled) { fill = Blend(fill, surface, 0.45); edge = Blend(edge, surface, 0.6); ink = Blend(TextSoft, surface, 0.6); }
             FillRounded(g, new Rectangle(client.X, client.Y, client.Width, client.Height), 3, fill, edge);
@@ -371,7 +371,7 @@ namespace KavrosAfkWarden
             using (Brush s = new SolidBrush(surface)) g.FillRectangle(s, label.ClientRectangle);
             string text = label.Text ?? "";
             string pill, rest; PillTone tone;
-            if (text.StartsWith("Game found: ", StringComparison.Ordinal)) { pill = "Game found"; rest = text.Substring(12); tone = PillTone.Ok; }
+            if (text.StartsWith("GAME DETECTED: ", StringComparison.Ordinal)) { pill = "GAME DETECTED"; rest = text.Substring(15); tone = PillTone.Ok; }
             else if (text.IndexOf("launcher found", StringComparison.OrdinalIgnoreCase) >= 0) { pill = "Launcher"; rest = text; tone = PillTone.Warn; }
             else if (text.StartsWith("Looking for Kavros -", StringComparison.Ordinal)) { pill = "Not found"; rest = text; tone = PillTone.Bad; }
             else { pill = "Searching"; rest = text; tone = PillTone.Warn; }

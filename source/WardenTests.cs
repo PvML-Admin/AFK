@@ -29,6 +29,7 @@ namespace KavrosAfkWarden
                 Digits();
                 Hud();
                 Potions();
+                LiveCapture(root);
                 Manifest(root);
             }
             catch (Exception ex)
@@ -152,6 +153,12 @@ namespace KavrosAfkWarden
             LevelWatch watch = new LevelWatch();
             DateTime t = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
             Check(watch.Tick(20, 100, true, 30, true, t, TimeSpan.FromSeconds(20)), "20 percent fires a 30 percent hitpoint alert");
+            int boosted;
+            Check(Thresholds.TryMeasure(1633, 1060, true, out boosted) && boosted > 100 && boosted == 154, "boosted life 1,633/1,060 is over 100 percent and is not clamped, got " + boosted.ToString());
+            Check(!Thresholds.IsLow(1633, 1060, true, 30), "life above the cap is not a low-hitpoint alert");
+            int prayerPct;
+            Check(Thresholds.TryMeasure(1040, 990, true, out prayerPct) && prayerPct > 100, "boosted prayer 1,040/990 stays above 100 percent, got " + prayerPct.ToString());
+            Check(!Thresholds.IsLow(1040, 990, true, 20), "prayer above the cap is not a low-prayer alert");
             Check(watch.Low && !watch.Tick(22, 100, true, 30, true, t.AddSeconds(1), TimeSpan.FromSeconds(20)), "still low, inside the margin, does not refire or recover");
             Check(watch.Low && !watch.Tick(null, null, true, 30, true, t.AddSeconds(2), TimeSpan.FromSeconds(20)), "a missing reading is not a recovery");
             Check(!watch.Tick(21, 100, true, 30, true, t.AddSeconds(3), TimeSpan.FromSeconds(20)), "the same low reading still does not refire");
@@ -337,11 +344,10 @@ namespace KavrosAfkWarden
 
         private static void DrawSlash(ImageBuffer image, int x, int y, int color)
         {
-            for (int i = 0; i < 28; i++)
+            for (int i = 0; i < 12; i++)
             {
-                int px = x + i / 2;
-                int py = y + i;
-                image.Fill(px, py, 2, 2, color);
+                image.Set(x + i / 2, y + i, color);
+                image.Set(x + i / 2 + 1, y + i, color);
             }
         }
 
@@ -412,6 +418,18 @@ namespace KavrosAfkWarden
             pin.HpPinH = 1;
             HudReading pinnedReading = HudReader.Read(pinned, pin);
             Check(pinnedReading.Hp == 42 && pinnedReading.HpHow == "pin", "a pinned rectangle overrides the automatic search");
+            ImageBuffer wideNumber = ImageBuffer.Blank(520, 80, ImageBuffer.Pack(10, 16, 22));
+            int redWide = ImageBuffer.Pack(196, 42, 42);
+            wideNumber.Fill(20, 48, 220, 8, redWide);
+            DrawLifeNumber(wideNumber, 20, 26, new int[] { 1, 2, 3, 4, 5, 6, 7 }, new int[] { 1, 0, 0, 0, 0, 0, 0 }, white);
+            int purpleWide = ImageBuffer.Pack(142, 70, 196);
+            wideNumber.Fill(270, 48, 200, 8, purpleWide);
+            DrawLifeNumber(wideNumber, 270, 26, new int[] { 1, 0, 4, 0 }, new int[] { 9, 9, 0 }, white);
+            HudReading wideReading = HudReader.Read(wideNumber, new WardenSettings());
+            Check(wideReading.Hp == 1234567 && wideReading.HpMax == 1000000, "a seven-digit boosted life value is kept, got " + (wideReading.Hp == null ? "none" : wideReading.Hp.Value.ToString()) + "/" + (wideReading.HpMax == null ? "-" : wideReading.HpMax.Value.ToString()) + " " + HudReader.Explain(wideNumber, new IntRect(10, 16, 240, 40)));
+            Check(wideReading.Prayer == 1040 && wideReading.PrayerMax == 990, "prayer above its cap is kept");
+            int sevenPct;
+            Check(Thresholds.TryMeasure(1234567, 1000000, true, out sevenPct) && sevenPct == 123, "seven-digit life uses the cap as the percent base, got " + sevenPct.ToString());
         }
 
         private static void Potions()
@@ -521,9 +539,42 @@ namespace KavrosAfkWarden
             }
         }
 
+        private static void LiveCapture(string root)
+        {
+            string path = Path.Combine(root, "verification", "fixtures", "debug-capture.png");
+            if (!File.Exists(path))
+            {
+                failures.Add("missing live fixture " + path);
+                assertions++;
+                return;
+            }
+            ImageBuffer image = PngImage.Load(path);
+            HudReading reading = HudReader.Read(image, new WardenSettings());
+            Check(reading.Hp == 1293 && reading.HpMax == 1060 && reading.Hp > reading.HpMax, "live capture life is the red bar 1293/1060, above the cap, got " + (reading.Hp == null ? "none" : reading.Hp.Value.ToString()) + "/" + (reading.HpMax == null ? "-" : reading.HpMax.Value.ToString()));
+            Check(reading.Prayer == 1040 && reading.PrayerMax == 990 && reading.Prayer > reading.PrayerMax, "live capture prayer is the purple bar 1040/990, above the cap, got " + (reading.Prayer == null ? "none" : reading.Prayer.Value.ToString()) + "/" + (reading.PrayerMax == null ? "-" : reading.PrayerMax.Value.ToString()));
+            Check(reading.Hp != 60 && reading.Hp != 6060 && reading.Hp != 66, "summoning 60/60 is not reported as hitpoints");
+            int seconds = 0, minutes = 0;
+            if (reading.Buffs != null)
+            {
+                for (int i = 0; i < reading.Buffs.Count; i++)
+                {
+                    if (!reading.Buffs[i].HasTime) continue;
+                    if (reading.Buffs[i].Minutes && reading.Buffs[i].Value == 10) minutes++;
+                    if (!reading.Buffs[i].Minutes && reading.Buffs[i].Value == 60) seconds++;
+                }
+            }
+            string seen = "";
+            if (reading.Buffs != null)
+                for (int i = 0; i < reading.Buffs.Count; i++)
+                    seen += reading.BuffRects[i].X.ToString() + ":" + (reading.Buffs[i].HasTime ? (reading.Buffs[i].Minutes ? reading.Buffs[i].Value.ToString() + "m" : reading.Buffs[i].Value.ToString()) : "-") + " ";
+            Check(reading.BuffBarFound && seconds >= 1 && minutes >= 4, "live buff row reads 60 seconds and four 10 minute icons, got " + seen);
+            SceneActivity scene = new SceneActivity();
+            Check(scene.Tick(image, reading), "the combat frame is activity, so idle does not start");
+        }
+
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.1" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.2" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -534,10 +585,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.1\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.2\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.1.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.2.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

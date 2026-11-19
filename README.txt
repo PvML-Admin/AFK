@@ -1,4 +1,4 @@
-KAVROS AFK WARDEN v0.2.1
+KAVROS AFK WARDEN v0.2.2
 =========================
 
 Close the previous copy with Exit. Extract the WHOLE ZIP into a new folder,

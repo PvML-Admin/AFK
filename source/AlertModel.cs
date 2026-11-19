@@ -53,8 +53,8 @@ namespace KavrosAfkWarden
         public void Clamp()
         {
             IdleSeconds = ClampInt(IdleSeconds, 3, 600);
-            HpThreshold = ClampInt(HpThreshold, 1, HpPercent ? 99 : 99999);
-            PrayerThreshold = ClampInt(PrayerThreshold, 1, PrayerPercent ? 99 : 99999);
+            HpThreshold = ClampInt(HpThreshold, 1, HpPercent ? 999 : 9999999);
+            PrayerThreshold = ClampInt(PrayerThreshold, 1, PrayerPercent ? 999 : 9999999);
             AfkSeconds = ClampInt(AfkSeconds, 60, 1800);
             AfkLeadSeconds = ClampInt(AfkLeadSeconds, 5, AfkSeconds - 5);
             PotionSeconds = ClampInt(PotionSeconds, 1, 600);

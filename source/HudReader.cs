@@ -12,6 +12,8 @@ namespace KavrosAfkWarden
         public int? Prayer;
         public int? PrayerMax;
         public bool PrayerFromOrb;
+        public int? Adrenaline;
+        public int StripY;
         public string PrayerHow = "";
         public int? PotionSeconds;
         public int PotionCount;
@@ -50,9 +52,8 @@ namespace KavrosAfkWarden
         // digit's bounding box does not include the empty margin in the prototype.
         public static int Match(int[,] grid)
         {
-            int best = 99;
-            int second = 99;
-            int value = -1;
+            int[] score = new int[10];
+            for (int i = 0; i < 10; i++) score[i] = 99;
             for (int digit = 0; digit < Glyphs.Length; digit++)
             {
                 int[,] canonical = Canonical(Glyphs[digit]);
@@ -60,18 +61,50 @@ namespace KavrosAfkWarden
                 for (int y = 0; y < 7; y++)
                     for (int x = 0; x < 5; x++)
                         if (grid[y, x] != canonical[y, x]) distance++;
-                if (distance < best)
+                if (distance < score[digit]) score[digit] = distance;
+            }
+            for (int i = 0; i < ExtraDigits.Length; i++)
+            {
+                int distance = 0;
+                string pattern = ExtraPatterns[i];
+                for (int y = 0; y < 7; y++)
+                    for (int x = 0; x < 5; x++)
+                        if (grid[y, x] != (pattern[y * 5 + x] == '1' ? 1 : 0)) distance++;
+                int digit = ExtraDigits[i];
+                if (distance < score[digit]) score[digit] = distance;
+            }
+            int best = 99;
+            int second = 99;
+            int value = -1;
+            for (int digit = 0; digit < 10; digit++)
+            {
+                if (score[digit] < best)
                 {
                     second = best;
-                    best = distance;
+                    best = score[digit];
                     value = digit;
                 }
-                else if (distance < second) second = distance;
+                else if (score[digit] < second) second = score[digit];
             }
             if (best > 8) return -1;
-            if (second - best < 1 && best > 2) return -1;
+            if (second - best < 2 && best > 3) return -1;
             return value;
         }
+
+        // Shapes sampled from the Kavros HUD font (outlined, about 8px). The
+        // prototype glyphs above still match the self-test's drawn digits.
+        private static readonly int[] ExtraDigits = { 1, 2, 3, 4, 5, 6, 9, 0, 0 };
+        private static readonly string[] ExtraPatterns = {
+            "00100111000010000100001000010011111",
+            "01110000100001100010001000100011110",
+            "01100000100001001110000100001111110",
+            "00011001110010101001110011111100001",
+            "11111110001100011110000010000111111",
+            "00110010001000011110100011000111111",
+            "01110100111000110001011110000111110",
+            "01110110011000110001100011000111111",
+            "00110011101110101001110011100100110"
+        };
 
         private static int[,] Canonical(string glyph)
         {
@@ -135,28 +168,47 @@ namespace KavrosAfkWarden
             return reading;
         }
 
-        // The real Kavros strip is movable. Life is the red bar, prayer is the
-        // purple bar. Adrenaline (yellow) and summoning (green) are ignored.
+        // The strip can sit anywhere. Life is the red bar, prayer the purple
+        // bar. Yellow adrenaline and green summoning are never life or prayer.
         private static void ReadStrip(ImageBuffer image, HudReading reading, bool wantLife, bool wantPrayer)
         {
-            List<IntRect> reds = FindBars(image, new IntRect(0, 0, image.Width, image.Height), RedBar);
-            List<IntRect> purples = FindBars(image, new IntRect(0, 0, image.Width, image.Height), PurpleBar);
+            IntRect whole = new IntRect(0, 0, image.Width, image.Height);
+            List<IntRect> reds = FindBars(image, whole, RedBar);
+            List<IntRect> yellows = FindBars(image, whole, YellowBar);
+            List<IntRect> purples = FindBars(image, whole, PurpleBar);
+            List<IntRect> greens = FindBars(image, whole, SummonBar);
             IntRect red = new IntRect();
+            IntRect yellow = new IntRect();
             IntRect purple = new IntRect();
             bool pair = false;
             int best = 0;
             for (int i = 0; i < reds.Count; i++)
                 for (int j = 0; j < purples.Count; j++)
                 {
-                    if (Math.Abs(reds[i].Y - purples[j].Y) > 12) continue;
-                    if (purples[j].X <= reds[i].X) continue;
-                    IntRect redSpan = SpanRow(reds, reds[i]);
-                    IntRect purpleSpan = SpanRow(purples, purples[j]);
-                    int score = redSpan.Width + purpleSpan.Width;
-                    if (!pair || score > best) { pair = true; best = score; red = redSpan; purple = purpleSpan; }
+                    if (purples[j].X <= reds[i].Right) continue;
+                    if (Math.Abs(reds[i].Y - purples[j].Y) > 10) continue;
+                    if (purples[j].X - reds[i].Right > Math.Max(reds[i].Width, 40) * 6) continue;
+                    IntRect redSpan = SpanClose(reds, reds[i]);
+                    IntRect purpleSpan = SpanClose(purples, purples[j]);
+                    int score = 20;
+                    IntRect between = BarBetween(yellows, redSpan.Right, purpleSpan.X, redSpan.Y);
+                    if (between.Width > 0) score += 30;
+                    IntRect after = BarBetween(greens, purpleSpan.Right - 4, purpleSpan.Right + purpleSpan.Width * 3, purpleSpan.Y);
+                    if (after.Width > 0) score += 30;
+                    int widthGap = Math.Abs(redSpan.Width - purpleSpan.Width);
+                    if (widthGap < 24) score += 10;
+                    if (!pair || score > best)
+                    {
+                        pair = true;
+                        best = score;
+                        red = redSpan;
+                        purple = purpleSpan;
+                        yellow = between;
+                    }
                 }
             if (!pair) return;
             reading.StripFound = true;
+            reading.StripY = red.Y;
             IntRect lifeText = Above(image, red);
             IntRect prayerText = Above(image, purple);
             reading.LifeText = lifeText;
@@ -171,15 +223,34 @@ namespace KavrosAfkWarden
                 NumberRead number = ReadNumber(image, prayerText, WhiteInk);
                 Apply(reading, false, number, "bar");
             }
+            if (yellow.Width > 0)
+            {
+                bool ignored;
+                NumberRead adrenaline = ReadLine(image, Above(image, yellow), WhiteInk, out ignored);
+                if (adrenaline.Ok && adrenaline.Current > 0 && adrenaline.Current <= 200) reading.Adrenaline = adrenaline.Current;
+            }
         }
 
-        private static IntRect SpanRow(List<IntRect> bars, IntRect seed)
+        private static IntRect BarBetween(List<IntRect> bars, int left, int right, int y)
+        {
+            IntRect found = new IntRect();
+            for (int i = 0; i < bars.Count; i++)
+            {
+                if (Math.Abs(bars[i].Y - y) > 10) continue;
+                if (bars[i].X < left - 8 || bars[i].Right > right + 8) continue;
+                if (bars[i].Width > found.Width) found = bars[i];
+            }
+            return found;
+        }
+
+        private static IntRect SpanClose(List<IntRect> bars, IntRect seed)
         {
             int left = seed.X;
             int right = seed.Right;
             for (int i = 0; i < bars.Count; i++)
             {
-                if (Math.Abs(bars[i].Y - seed.Y) > 6) continue;
+                if (Math.Abs(bars[i].Y - seed.Y) > 4) continue;
+                if (bars[i].X > right + 8 || bars[i].Right < left - 8) continue;
                 if (bars[i].X < left) left = bars[i].X;
                 if (bars[i].Right > right) right = bars[i].Right;
             }
@@ -219,14 +290,14 @@ namespace KavrosAfkWarden
         private static bool BorderGreen(int c)
         {
             int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
-            return g >= 150 && g > r + 40 && g > b + 30;
+            return g >= 120 && r < 180 && b < 150 && g > r + 25 && g > b + 20;
         }
 
         private static List<IntRect> FindBuffIcons(ImageBuffer image, IntRect region)
         {
             List<IntRect> found = new List<IntRect>();
             region = Clamp(image, region.X, region.Y, region.Width, region.Height);
-            for (int y = region.Y; y < region.Bottom; y += 2)
+            for (int y = region.Y; y < region.Bottom; y++)
             {
                 int x = region.X;
                 while (x < region.Right)
@@ -235,7 +306,7 @@ namespace KavrosAfkWarden
                     int start = x;
                     while (x < region.Right && x - start < 48 && BorderGreen(image.Argb(x, y))) x++;
                     int span = x - start;
-                    if (span < 26 || span > 46) continue;
+                    if (span < 22 || span > 46) continue;
                     if (!IconAt(image, start, y, span)) continue;
                     bool overlap = false;
                     for (int i = 0; i < found.Count; i++)
@@ -247,23 +318,25 @@ namespace KavrosAfkWarden
                 }
             }
             if (found.Count == 0) return found;
-            found.Sort(delegate(IntRect a, IntRect b) { return a.X.CompareTo(b.X); });
-            int bestStart = 0, bestCount = 1, runStart = 0, run = 1;
-            for (int i = 1; i < found.Count; i++)
+            int bestY = found[0].Y;
+            int bestCount = 0;
+            for (int i = 0; i < found.Count; i++)
             {
-                if (Math.Abs(found[i].Y - found[runStart].Y) <= 8 && found[i].X - found[i - 1].Right < 24)
-                    run++;
-                else { runStart = i; run = 1; }
-                if (run > bestCount) { bestCount = run; bestStart = runStart; }
+                int count = 0;
+                for (int j = 0; j < found.Count; j++)
+                    if (Math.Abs(found[j].Y - found[i].Y) <= 4) count++;
+                if (count > bestCount) { bestCount = count; bestY = found[i].Y; }
             }
             List<IntRect> row = new List<IntRect>();
-            for (int i = bestStart; i < bestStart + bestCount; i++) row.Add(found[i]);
+            for (int i = 0; i < found.Count; i++)
+                if (Math.Abs(found[i].Y - bestY) <= 4) row.Add(found[i]);
+            row.Sort(delegate(IntRect a, IntRect b) { return a.X.CompareTo(b.X); });
             return row;
         }
 
         private static bool IconAt(ImageBuffer image, int x, int y, int size)
         {
-            int edge = 0, edgeTotal = 0, inside = 0, insideTotal = 0;
+            int edge = 0, edgeTotal = 0;
             for (int i = 0; i < size; i++)
             {
                 edgeTotal += 4;
@@ -272,29 +345,50 @@ namespace KavrosAfkWarden
                 if (BorderGreen(image.Argb(x, y + i))) edge++;
                 if (BorderGreen(image.Argb(x + size - 1, y + i))) edge++;
             }
-            int inset = Math.Max(4, size / 6);
-            for (int yy = y + inset; yy < y + size - inset; yy += 2)
-                for (int xx = x + inset; xx < x + size - inset; xx += 2)
+            int inset = Math.Max(3, size / 8);
+            int inner = 0;
+            int innerTotal = 0;
+            for (int yy = y + inset; yy < y + size - inset; yy += 3)
+                for (int xx = x + inset; xx < x + size - inset; xx += 3)
                 {
-                    insideTotal++;
-                    if (BorderGreen(image.Argb(xx, yy))) inside++;
+                    innerTotal++;
+                    if (BorderGreen(image.Argb(xx, yy))) inner++;
                 }
-            return edgeTotal > 0 && edge * 100 / edgeTotal >= 55 && (insideTotal == 0 || inside * 100 / insideTotal < 30);
+            bool filled = innerTotal > 0 && inner * 100 / innerTotal >= 92;
+            return edgeTotal > 0 && edge * 100 / edgeTotal >= 40 && !filled;
         }
 
         private static BuffIcon ReadIconTime(ImageBuffer image, IntRect icon)
         {
             BuffIcon result = new BuffIcon();
             result.X = icon.X;
-            int textH = Math.Max(16, icon.Height / 2);
-            IntRect text = Clamp(image, icon.X + 1, icon.Bottom - textH, Math.Max(8, icon.Width - 2), textH - 1);
-            NumberRead number = ReadNumber(image, text, WhiteInk);
+            bool minutes;
+            NumberRead number = ReadIconLine(image, icon, Math.Max(10, icon.Height / 2), out minutes);
+            bool tightMinutes;
+            NumberRead tight = ReadIconLine(image, icon, Math.Min(12, icon.Height), out tightMinutes);
+            if (!number.Ok || (tight.Ok && (tightMinutes && !minutes || tight.Current.ToString().Length > number.Current.ToString().Length)))
+            {
+                number = tight;
+                minutes = tightMinutes;
+            }
             if (!number.Ok) return result;
-            bool minutes = IconHasMinuteMark(image, text);
             result.HasTime = true;
             result.Minutes = minutes;
             result.Value = number.Current;
             return result;
+        }
+
+        private static NumberRead ReadIconLine(ImageBuffer image, IntRect icon, int textH, out bool minutes)
+        {
+            IntRect text = Clamp(image, icon.X + 1, icon.Bottom - textH, Math.Max(8, icon.Width - 2), Math.Max(6, textH - 1));
+            NumberRead number = ReadLine(image, text, BuffInk, out minutes);
+            if (!number.Ok)
+            {
+                bool whiteMinutes;
+                NumberRead white = ReadLine(image, text, WhiteInk, out whiteMinutes);
+                if (white.Ok) { minutes = whiteMinutes; return white; }
+            }
+            return number;
         }
 
         // The letter m sits to the right of the digits and is wider than a digit.
@@ -357,8 +451,8 @@ namespace KavrosAfkWarden
 
         private static void Apply(HudReading reading, bool life, NumberRead number, string how)
         {
-            if (!number.Ok || number.Current <= 0 || number.Current > 9999999) return;
-            if (number.HasMax && (number.Max <= 0 || number.Max > 9999999)) number.HasMax = false;
+            if (!number.Ok || number.Current <= 0) return;
+            if (number.HasMax && number.Max <= 0) number.HasMax = false;
             if (life)
             {
                 reading.Hp = number.Current;
@@ -382,7 +476,15 @@ namespace KavrosAfkWarden
             int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
             int low = Math.Min(r, Math.Min(g, b));
             int high = Math.Max(r, Math.Max(g, b));
-            return low >= 145 && high - low <= 60;
+            return low >= 120 && high - low <= 80;
+        }
+
+        private static bool BuffInk(int c)
+        {
+            int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
+            int low = Math.Min(r, Math.Min(g, b));
+            int high = Math.Max(r, Math.Max(g, b));
+            return low >= 200 && high - low <= 70;
         }
 
         private static bool GreenInk(int c)
@@ -400,13 +502,26 @@ namespace KavrosAfkWarden
         private static bool RedBar(int c)
         {
             int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
-            return r >= 120 && r > g + 35 && r > b + 35 && b < 130;
+            // Yellow adrenaline fails g < 150. Green summoning fails r >= 160.
+            return r >= 160 && g < 150 && r > g + 50 && r > b + 40 && b < 170;
+        }
+
+        private static bool YellowBar(int c)
+        {
+            int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
+            return r >= 160 && g >= 90 && b < 90 && g > b + 40 && r > b + 40 && g + 80 > r;
         }
 
         private static bool PurpleBar(int c)
         {
             int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
-            return b >= 90 && r >= 60 && b > g + 20 && r > g + 8 && b + 50 > r && g < 160;
+            return b >= 80 && r >= 30 && r < 200 && b > r && b > g + 15 && g < 170;
+        }
+
+        private static bool SummonBar(int c)
+        {
+            int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
+            return g >= 110 && r < 170 && g > r + 25 && g > b + 20 && b < 140;
         }
 
         private static bool RedOrb(int c)
@@ -470,90 +585,81 @@ namespace KavrosAfkWarden
 
         private static NumberRead ReadNumber(ImageBuffer image, IntRect region, InkTest ink)
         {
+            bool minutes;
+            return ReadLine(image, region, ink, out minutes);
+        }
+
+        // Column groups, not connected blobs: the HUD font's 2, 3 and 9 break
+        // into pieces, and the slash must stay a separator so 60/60 is not 6060.
+        private static NumberRead ReadLine(ImageBuffer image, IntRect region, InkTest ink, out bool minutes)
+        {
+            minutes = false;
             NumberRead result = new NumberRead();
             region = Clamp(image, region.X, region.Y, region.Width, region.Height);
-            if (region.Width < 8 || region.Height < 8) return result;
+            if (region.Width < 6 || region.Height < 6) return result;
             bool[] mask = Mask(image, region, ink);
-            List<Blob> blobs = Components(mask, region.Width, region.Height);
-            List<InkBlob> glyphs = new List<InkBlob>();
-            System.Text.StringBuilder rejected = new System.Text.StringBuilder();
-            for (int i = 0; i < blobs.Count; i++)
-            {
-                Blob blob = blobs[i];
-                if (blob.Height >= 3 && blob.Height < 8 && blob.Width <= 12 && blob.Area >= 3 && blob.Area <= 48)
-                {
-                    InkBlob comma = new InkBlob();
-                    comma.Left = blob.Left;
-                    comma.Top = blob.Top;
-                    comma.Width = blob.Width;
-                    comma.Height = blob.Height;
-                    comma.Digit = -2;
-                    glyphs.Add(comma);
-                    continue;
-                }
-                if (blob.Height < 8 || blob.Height > 42 || blob.Width > 36 || blob.Area < 12)
-                {
-                    rejected.Append(" skip ").Append(blob.Width).Append("x").Append(blob.Height).Append(" a").Append(blob.Area);
-                    continue;
-                }
-                int[,] grid = Sample(mask, region.Width, blob);
-                int digit = DigitFont.Match(grid);
-                InkBlob inkBlob = new InkBlob();
-                inkBlob.Left = blob.Left;
-                inkBlob.Top = blob.Top;
-                inkBlob.Width = blob.Width;
-                inkBlob.Height = blob.Height;
-                inkBlob.Digit = digit;
-                bool diagonal = IsDiagonal(mask, region.Width, blob);
-                bool thin = blob.Width < blob.Height * 0.75;
-                inkBlob.Slash = digit < 0 && (diagonal || thin);
-                if (digit >= 0 || inkBlob.Slash) glyphs.Add(inkBlob);
-            }
-            System.Text.StringBuilder trace = new System.Text.StringBuilder();
-            trace.Append("blobs ").Append(blobs.Count).Append(" glyphs ").Append(glyphs.Count).Append(" [");
-            for (int t = 0; t < glyphs.Count; t++) trace.Append(glyphs[t].Slash ? "/" : glyphs[t].Digit.ToString());
-            trace.Append("]").Append(rejected);
-            LastTrace = trace.ToString();
-            if (glyphs.Count == 0) return result;
-            glyphs.Sort(delegate(InkBlob a, InkBlob b) { return a.Left.CompareTo(b.Left); });
-            int lineTop = glyphs[0].Top;
-            int lineHeight = glyphs[0].Height;
-            for (int i = 1; i < glyphs.Count; i++)
-            {
-                if (glyphs[i].Height > lineHeight) lineHeight = glyphs[i].Height;
-            }
+            int width = region.Width;
+            int height = region.Height;
+            bool[] column = new bool[width];
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                    if (mask[y * width + x]) column[x] = true;
             string current = "";
             string max = "";
             bool inMax = false;
-            int previousRight = -1000;
-            for (int i = 0; i < glyphs.Count; i++)
+            int digitRight = -1;
+            System.Text.StringBuilder trace = new System.Text.StringBuilder();
+            trace.Append("cols");
+            int cursor = 0;
+            while (cursor < width)
             {
-                InkBlob glyph = glyphs[i];
-                int overlap = Math.Min(glyph.Top + glyph.Height, lineTop + lineHeight) - Math.Max(glyph.Top, lineTop);
-                if (overlap < Math.Min(glyph.Height, lineHeight) / 3) continue;
-                int gap = glyph.Left - previousRight;
-                // A comma is a short mark between digits. It stays inside the
-                // same number, so 1,633 stays 1633 and can be larger than the max.
-                if (glyph.Digit == -2)
+                if (!column[cursor]) { cursor++; continue; }
+                int start = cursor;
+                while (cursor < width && column[cursor]) cursor++;
+                int top = height;
+                int bottom = 0;
+                int area = 0;
+                for (int yy = 0; yy < height; yy++)
+                    for (int xx = start; xx < cursor; xx++)
+                        if (mask[yy * width + xx])
+                        {
+                            area++;
+                            if (yy < top) top = yy;
+                            if (yy > bottom) bottom = yy;
+                        }
+                int ww = cursor - start;
+                int hh = bottom - top + 1;
+                if (area < 3 || hh < 3) continue;
+                if (hh <= 4 && ww <= 5 && area <= 14) { trace.Append(" ,"); continue; }
+                Blob blob = new Blob();
+                blob.Left = start;
+                blob.Top = top;
+                blob.Right = cursor - 1;
+                blob.Bottom = bottom;
+                blob.Area = area;
+                int digit = -1;
+                if (ww <= 16 && hh >= 5 && hh <= 24)
+                    digit = DigitFont.Match(Sample(mask, width, blob));
+                bool slash = digit < 0 && hh >= 6 && ww <= 8 && ww * 2 <= hh + 4 && IsDiagonal(mask, width, blob);
+                if (digit >= 0)
                 {
-                    previousRight = glyph.Left + glyph.Width;
-                    continue;
+                    trace.Append(" ").Append(digit);
+                    if (inMax) max += digit.ToString();
+                    else current += digit.ToString();
+                    digitRight = cursor;
                 }
-                if (glyph.Slash || (current.Length > 0 && !inMax && gap > lineHeight / 2))
+                else if (slash && current.Length > 0 && !inMax)
                 {
+                    trace.Append(" /");
                     inMax = true;
-                    if (glyph.Slash)
-                    {
-                        previousRight = glyph.Left + glyph.Width;
-                        continue;
-                    }
                 }
-                else if (inMax && max.Length > 0 && gap > lineHeight) break;
-                previousRight = glyph.Left + glyph.Width;
-                if (glyph.Slash) continue;
-                if (inMax) max += glyph.Digit.ToString();
-                else current += glyph.Digit.ToString();
+                else if (digitRight >= 0 && start + 2 >= digitRight && ww >= 3 && hh >= 5)
+                {
+                    trace.Append(" m");
+                    minutes = true;
+                }
             }
+            LastTrace = trace.ToString();
             int value;
             if (!TryParse(current, out value)) return result;
             result.Ok = true;
@@ -570,22 +676,25 @@ namespace KavrosAfkWarden
         private static bool TryParse(string text, out int value)
         {
             value = 0;
-            if (text == null || text.Length == 0 || text.Length > 5) return false;
+            if (text == null || text.Length == 0 || text.Length > 9) return false;
             return int.TryParse(text, out value);
         }
 
         private static bool IsDiagonal(bool[] mask, int stride, Blob blob)
         {
-            int diag = 0;
+            int main = 0;
+            int anti = 0;
             for (int y = blob.Top; y < blob.Top + blob.Height; y++)
                 for (int x = blob.Left; x < blob.Left + blob.Width; x++)
                 {
                     if (!mask[y * stride + x]) continue;
                     double nx = blob.Width <= 1 ? 0 : (x - blob.Left) / (double)(blob.Width - 1);
                     double ny = blob.Height <= 1 ? 0 : (y - blob.Top) / (double)(blob.Height - 1);
-                    if (Math.Abs(nx - ny) < 0.34) diag++;
+                    if (Math.Abs(nx - ny) < 0.42) main++;
+                    if (Math.Abs(nx + ny - 1) < 0.42) anti++;
                 }
-            return blob.Area > 8 && diag > blob.Area * 0.5;
+            int diag = main > anti ? main : anti;
+            return blob.Area >= 6 && diag * 2 > blob.Area;
         }
 
         private static int[,] Sample(bool[] mask, int stride, Blob blob)

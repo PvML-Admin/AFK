@@ -263,6 +263,7 @@ namespace KavrosAfkWarden
         private readonly FrameGrab grab = new FrameGrab();
         private Rectangle dockedGame;
         private bool haveDockedGame;
+        private readonly SceneActivity activity = new SceneActivity();
         private DateTime lastDebugSave = DateTime.MinValue;
         private readonly StableValue hpStable = new StableValue();
         private readonly StableValue hpMaxStable = new StableValue();
@@ -296,7 +297,7 @@ namespace KavrosAfkWarden
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(516, 924);
+            ClientSize = new Size(680, 1020);
             Icon = LoadIcon();
             BuildControls();
             ApplySettingsToControls();
@@ -357,88 +358,92 @@ namespace KavrosAfkWarden
             };
             Controls.Add(subtitle);
 
-            windows.SetBounds(28, 128, 340, 28);
+            windows.SetBounds(28, 128, 480, 28);
             windows.DropDownStyle = ComboBoxStyle.DropDownList;
+            windows.DrawMode = DrawMode.OwnerDrawFixed;
+            windows.ItemHeight = 22;
+            windows.IntegralHeight = false;
             KavrosTheme.StyleCombo(windows);
+            windows.DrawItem += DrawWindowItem;
             windows.SelectedIndexChanged += delegate { if (!loading) AttachSelected(); };
             Controls.Add(windows);
-            AddButton("Refresh", 376, 128, 108, ButtonTone.Secondary, delegate { RefreshWindows(); });
-            connection.SetBounds(28, 164, 456, 28);
+            AddButton("Refresh", 520, 128, 128, ButtonTone.Secondary, delegate { RefreshWindows(); });
+            connection.SetBounds(28, 164, 620, 28);
             connection.Renderer = DrawConnection;
             connection.Text = "Waiting for Kavros";
             Controls.Add(connection);
             pause = Check("Pause watching", 28, 200, 160, settings.Paused);
             AddButton("Pick client", 210, 196, 120, ButtonTone.Secondary, delegate { picking = true; SetStatus("Click the Kavros window to watch."); });
 
-            idleOn = Check("Idle alert", 28, 292, 120, settings.IdleEnabled);
-            Caption("After", 28, 318);
-            Number(idleSeconds, 78, 314, 3, 600, settings.IdleSeconds);
-            Caption("seconds", 150, 318);
-            idleSound = Check("Sound", 250, 316, 90, settings.IdleSound);
-            idleNotify = Check("Notify", 350, 316, 100, settings.IdleNotify);
+            idleOn = Check("Idle alert", 28, 292, 160, settings.IdleEnabled);
+            Caption("After", 28, 320);
+            Number(idleSeconds, 88, 316, 3, 600, settings.IdleSeconds);
+            Caption("seconds", 172, 320);
+            idleSound = Check("Sound", 500, 316, 84, settings.IdleSound);
+            idleNotify = Check("Notify", 590, 316, 78, settings.IdleNotify);
 
-            hpOn = Check("Low hitpoints", 28, 356, 140, settings.HpEnabled);
-            Caption("Below", 28, 382);
-            Number(hpThreshold, 78, 378, 1, settings.HpPercent ? 99 : 99999, settings.HpThreshold);
-            hpPercent = Check("Percent", 160, 380, 90, settings.HpPercent);
-            hpSound = Check("Sound", 250, 380, 90, settings.HpSound);
-            hpNotify = Check("Notify", 350, 380, 100, settings.HpNotify);
+            hpOn = Check("Low hitpoints", 28, 356, 180, settings.HpEnabled);
+            Caption("Below", 28, 384);
+            Number(hpThreshold, 88, 380, 1, settings.HpPercent ? 999 : 9999999, settings.HpThreshold);
+            hpPercent = Check("Percent", 176, 380, 120, settings.HpPercent);
+            hpSound = Check("Sound", 500, 380, 84, settings.HpSound);
+            hpNotify = Check("Notify", 590, 380, 78, settings.HpNotify);
 
-            prayerOn = Check("Low prayer", 28, 420, 140, settings.PrayerEnabled);
-            Caption("Below", 28, 446);
-            Number(prayerThreshold, 78, 442, 1, settings.PrayerPercent ? 99 : 99999, settings.PrayerThreshold);
-            prayerPercent = Check("Percent", 160, 444, 90, settings.PrayerPercent);
-            prayerSound = Check("Sound", 250, 444, 90, settings.PrayerSound);
-            prayerNotify = Check("Notify", 350, 444, 100, settings.PrayerNotify);
+            prayerOn = Check("Low prayer", 28, 420, 180, settings.PrayerEnabled);
+            Caption("Below", 28, 448);
+            Number(prayerThreshold, 88, 444, 1, settings.PrayerPercent ? 999 : 9999999, settings.PrayerThreshold);
+            prayerPercent = Check("Percent", 176, 444, 120, settings.PrayerPercent);
+            prayerSound = Check("Sound", 500, 444, 84, settings.PrayerSound);
+            prayerNotify = Check("Notify", 590, 444, 78, settings.PrayerNotify);
 
-            potionOn = Check("Potion running out", 28, 484, 200, settings.PotionEnabled);
-            Caption("Below", 28, 510);
-            Number(potionSeconds, 78, 506, 1, 600, settings.PotionSeconds);
-            Caption("seconds", 150, 510);
-            potionSound = Check("Sound", 250, 508, 90, settings.PotionSound);
-            potionNotify = Check("Notify", 350, 508, 100, settings.PotionNotify);
+            potionOn = Check("Potion running out", 28, 484, 220, settings.PotionEnabled);
+            Caption("Below", 28, 512);
+            Number(potionSeconds, 88, 508, 1, 600, settings.PotionSeconds);
+            Caption("seconds", 172, 512);
+            potionSound = Check("Sound", 500, 508, 84, settings.PotionSound);
+            potionNotify = Check("Notify", 590, 508, 78, settings.PotionNotify);
 
-            afkOn = Check("AFK teleport warning", 28, 548, 200, settings.AfkEnabled);
-            Caption("Timer", 28, 574);
-            Number(afkSeconds, 78, 570, 60, 1800, settings.AfkSeconds);
-            Caption("lead", 160, 574);
-            Number(afkLead, 200, 570, 5, Math.Max(5, settings.AfkSeconds - 5), settings.AfkLeadSeconds);
-            Caption("sec", 272, 574);
-            afkSound = Check("Sound", 320, 572, 80, settings.AfkSound);
-            afkNotify = Check("Notify", 400, 572, 90, settings.AfkNotify);
+            afkOn = Check("AFK teleport warning", 28, 548, 240, settings.AfkEnabled);
+            Caption("Timer", 28, 576);
+            Number(afkSeconds, 88, 572, 60, 1800, settings.AfkSeconds);
+            Caption("lead", 176, 576);
+            Number(afkLead, 220, 572, 5, Math.Max(5, settings.AfkSeconds - 5), settings.AfkLeadSeconds);
+            Caption("sec", 304, 576);
+            afkSound = Check("Sound", 500, 572, 84, settings.AfkSound);
+            afkNotify = Check("Notify", 590, 572, 78, settings.AfkNotify);
 
-            soundMaster = Check("Play sounds", 28, 660, 140, settings.SoundMaster);
-            notifyMaster = Check("Show notifications", 190, 660, 180, settings.NotifyMaster);
-            Caption("Cooldown", 28, 694);
-            Number(cooldown, 100, 690, 0, 600, settings.CooldownSeconds);
-            Caption("sec", 172, 694);
-            Caption("Stays", 230, 694);
-            Number(banner, 276, 690, 2, 120, settings.BannerSeconds);
-            Caption("sec", 348, 694);
-            Caption("Volume", 28, 728);
-            volume.SetBounds(100, 724, 200, 22);
+            soundMaster = Check("Play sounds", 28, 700, 160, settings.SoundMaster);
+            notifyMaster = Check("Show notifications", 210, 700, 200, settings.NotifyMaster);
+            Caption("Cooldown", 28, 734);
+            Number(cooldown, 112, 730, 0, 600, settings.CooldownSeconds);
+            Caption("sec", 196, 734);
+            Caption("Stays", 250, 734);
+            Number(banner, 310, 730, 2, 120, settings.BannerSeconds);
+            Caption("sec", 394, 734);
+            Caption("Volume", 28, 768);
+            volume.SetBounds(112, 764, 250, 22);
             volume.SetValue(settings.Volume);
             volume.ValueChanged += delegate { if (!loading) { sound.Volume = volume.Value; Save(); } };
             Controls.Add(volume);
-            updates = Check("Check for updates at startup", 320, 726, 160, settings.CheckForUpdates);
-            saveDebug = Check("Save debug capture", 28, 796, 200, settings.SaveDebug);
-            AddButton("Pin hitpoints", 28, 764, 108, ButtonTone.Secondary, delegate { Pin(0); });
-            AddButton("Pin prayer", 144, 764, 100, ButtonTone.Secondary, delegate { Pin(1); });
-            AddButton("Pin buff bar", 252, 764, 120, ButtonTone.Secondary, delegate { Pin(2); });
-            AddButton("Clear pins", 380, 764, 104, ButtonTone.Secondary, delegate { settings.HpPinW = 0; settings.PrayerPinW = 0; settings.BuffPinW = 0; Save(); SetStatus("Pins cleared. Automatic search is on."); });
+            updates = Check("Check for updates at startup", 28, 800, 320, settings.CheckForUpdates);
+            saveDebug = Check("Save debug capture", 360, 800, 240, settings.SaveDebug);
+            AddButton("Pin hitpoints", 28, 840, 120, ButtonTone.Secondary, delegate { Pin(0); });
+            AddButton("Pin prayer", 156, 840, 110, ButtonTone.Secondary, delegate { Pin(1); });
+            AddButton("Pin buff bar", 274, 840, 130, ButtonTone.Secondary, delegate { Pin(2); });
+            AddButton("Clear pins", 412, 840, 110, ButtonTone.Secondary, delegate { settings.HpPinW = 0; settings.PrayerPinW = 0; settings.BuffPinW = 0; Save(); SetStatus("Pins cleared. Automatic search is on."); });
 
-            AddButton("Test notification", 28, 824, 150, ButtonTone.Primary, delegate { popup.Present(SampleAlert(), (int)banner.Value); });
-            AddButton("Test sound", 186, 824, 110, ButtonTone.Secondary, delegate { sound.Play("hp"); });
-            AddButton("Check for updates", 304, 824, 160, ButtonTone.Secondary, delegate { AppUpdates.Check(this, true, SetStatus); });
-            status.SetBounds(28, 864, 456, 36);
+            AddButton("Test notification", 28, 888, 160, ButtonTone.Primary, delegate { popup.Present(SampleAlert(), (int)banner.Value); });
+            AddButton("Test sound", 198, 888, 120, ButtonTone.Secondary, delegate { sound.Play("hp"); });
+            AddButton("Check for updates", 328, 888, 170, ButtonTone.Secondary, delegate { AppUpdates.Check(this, true, SetStatus); });
+            status.SetBounds(28, 928, 620, 40);
             status.ForeColor = KavrosTheme.TextSoft;
             status.BackColor = KavrosTheme.Bg;
             status.Font = KavrosTheme.Ui(8.5F, false);
             status.Text = "Live alerts obey the switches above. Test buttons always play.";
             Controls.Add(status);
 
-            hpPercent.CheckedChanged += delegate { if (!loading) hpThreshold.Maximum = hpPercent.Checked ? 99 : 99999; };
-            prayerPercent.CheckedChanged += delegate { if (!loading) prayerThreshold.Maximum = prayerPercent.Checked ? 99 : 99999; };
+            hpPercent.CheckedChanged += delegate { if (!loading) hpThreshold.Maximum = hpPercent.Checked ? 999 : 9999999; };
+            prayerPercent.CheckedChanged += delegate { if (!loading) prayerThreshold.Maximum = prayerPercent.Checked ? 999 : 9999999; };
             Wire(pause, idleOn, hpOn, prayerOn, afkOn, potionOn, hpPercent, prayerPercent, soundMaster, notifyMaster, idleSound, idleNotify, hpSound, hpNotify, prayerSound, prayerNotify, afkSound, afkNotify, potionSound, potionNotify, updates, saveDebug);
             idleSeconds.ValueChanged += delegate { if (!loading) Save(); };
             hpThreshold.ValueChanged += delegate { if (!loading) Save(); };
@@ -475,9 +480,9 @@ namespace KavrosAfkWarden
             updates.Checked = settings.CheckForUpdates;
             saveDebug.Checked = settings.SaveDebug;
             idleSeconds.SetValue(Clamp(settings.IdleSeconds, idleSeconds), false);
-            hpThreshold.Maximum = settings.HpPercent ? 99 : 99999;
+            hpThreshold.Maximum = settings.HpPercent ? 999 : 9999999;
             hpThreshold.SetValue(Clamp(settings.HpThreshold, hpThreshold), false);
-            prayerThreshold.Maximum = settings.PrayerPercent ? 99 : 99999;
+            prayerThreshold.Maximum = settings.PrayerPercent ? 999 : 9999999;
             prayerThreshold.SetValue(Clamp(settings.PrayerThreshold, prayerThreshold), false);
             afkSeconds.SetValue(Clamp(settings.AfkSeconds, afkSeconds), false);
             afkLead.Maximum = Math.Max(5, (int)afkSeconds.Value - 5);
@@ -520,7 +525,8 @@ namespace KavrosAfkWarden
         {
             Label label = new Label();
             label.Text = text;
-            label.SetBounds(x, y, 70, 20);
+            label.AutoSize = true;
+            label.Location = new Point(x, y);
             label.ForeColor = KavrosTheme.TextSoft;
             label.BackColor = KavrosTheme.Panel;
             label.Font = KavrosTheme.Ui(8.5F, false);
@@ -529,7 +535,7 @@ namespace KavrosAfkWarden
 
         private void Number(NumberField number, int x, int y, int min, int max, int value)
         {
-            number.SetBounds(x, y, 64, 24);
+            number.SetBounds(x, y, 72, 24);
             number.SetRange(min, max, value);
             Controls.Add(number);
         }
@@ -549,10 +555,10 @@ namespace KavrosAfkWarden
         {
             using (Brush brush = new SolidBrush(KavrosTheme.Panel)) g.FillRectangle(brush, label.ClientRectangle);
             string text = label.Text ?? "";
-            PillTone tone = text.StartsWith("Game found", StringComparison.Ordinal) ? PillTone.Ok : text.StartsWith("Waiting", StringComparison.Ordinal) ? PillTone.Warn : PillTone.Bad;
-            string pill = tone == PillTone.Ok ? "Game found" : tone == PillTone.Warn ? "Waiting" : "Not found";
+            PillTone tone = text.StartsWith("GAME DETECTED", StringComparison.Ordinal) ? PillTone.Ok : text.StartsWith("Waiting", StringComparison.Ordinal) ? PillTone.Warn : PillTone.Bad;
+            string pill = tone == PillTone.Ok ? "GAME DETECTED" : tone == PillTone.Warn ? "Waiting" : "Not found";
             int width = KavrosTheme.DrawPill(g, 0, label.Height / 2, pill, tone, KavrosTheme.Panel);
-            string rest = text.StartsWith("Game found: ", StringComparison.Ordinal) ? text.Substring(12) : text;
+            string rest = text.StartsWith("GAME DETECTED: ", StringComparison.Ordinal) ? text.Substring(15) : text;
             TextRenderer.DrawText(g, rest, KavrosTheme.Ui(8.5F, false), new Rectangle(width + 8, 0, Math.Max(1, label.Width - width - 8), label.Height), KavrosTheme.TextSoft, KavrosTheme.Panel, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
         }
 
@@ -589,9 +595,9 @@ namespace KavrosAfkWarden
             body.Dock = DockStyle.Fill;
             body.AutoScroll = true;
             body.AutoScrollMinSize = new Size(0, original.Height);
-            body.Cards.Add(new MainSurface.Card { Label = "WATCH", Bounds = new Rectangle(16, 96, 484, 136) });
-            body.Cards.Add(new MainSurface.Card { Label = "ALERTS", Bounds = new Rectangle(16, 248, 484, 360) });
-            body.Cards.Add(new MainSurface.Card { Label = "CHANNELS", Bounds = new Rectangle(16, 624, 484, 284) });
+            body.Cards.Add(new MainSurface.Card { Label = "WATCH", Bounds = new Rectangle(16, 96, 648, 140) });
+            body.Cards.Add(new MainSurface.Card { Label = "ALERTS", Bounds = new Rectangle(16, 248, 648, 390) });
+            body.Cards.Add(new MainSurface.Card { Label = "CHANNELS", Bounds = new Rectangle(16, 652, 648, 340) });
             Control[] controls = new Control[Controls.Count];
             Controls.CopyTo(controls, 0);
             Controls.Clear();
@@ -750,7 +756,7 @@ namespace KavrosAfkWarden
                 loading = true;
                 windows.SelectedItem = found[i];
                 loading = false;
-                connection.Text = "Game found: " + found[i].Title;
+                connection.Text = "GAME DETECTED: " + found[i].Title;
                 connection.Invalidate();
                 Save();
                 SetStatus("Watching " + found[i].Title + ".");
@@ -796,7 +802,7 @@ namespace KavrosAfkWarden
             }
             loading = false;
             if (choice == null) connection.Text = "Waiting for Kavros";
-            else connection.Text = "Game found: " + choice.Title;
+            else connection.Text = "GAME DETECTED: " + choice.Title;
             connection.Invalidate();
         }
 
@@ -805,7 +811,7 @@ namespace KavrosAfkWarden
             GameWindow window = windows.SelectedItem as GameWindow;
             selected = window == null ? IntPtr.Zero : window.Handle;
             if (window != null) { clientTitle = window.Title; settings.ClientTitle = clientTitle; if (!loading) Save(); }
-            connection.Text = window == null ? "Waiting for Kavros" : "Game found: " + window.Title;
+            connection.Text = window == null ? "Waiting for Kavros" : "GAME DETECTED: " + window.Title;
             connection.Invalidate();
         }
 
@@ -823,7 +829,7 @@ namespace KavrosAfkWarden
             grab.Tick(selected, settings, !panel.IsDragging && !minimized);
             FollowPanel();
             bool pixels = grab.Reading != null && (grab.Image != null || grab.Reading.StripFound || grab.Reading.BuffBarFound || grab.Reading.Hp != null);
-            bool moving = grab.Moving;
+            bool moving = grab.Moving || activity.Tick(grab.Image, lastHud);
             if (grab.Reading != null && (grab.Image != null || grab.Reading.StripFound || grab.Reading.BuffBarFound)) lastHud = grab.Reading;
             if (settings.SaveDebug) SaveDebugFrame();
             int? hp = pixels ? hpStable.Push(lastHud.Hp) : hpStable.Push(null);
@@ -903,7 +909,21 @@ namespace KavrosAfkWarden
             }
             Rectangle client = NativeMethods.ClientBounds(selected);
             string caption = which == 2 ? "DRAG THE BUFF BAR TIMERS" : "DRAG THE HITPOINT OR PRAYER NUMBER";
-            using (RegionPicker picker = new RegionPicker(client, caption))
+            Bitmap frozen = null;
+            try
+            {
+                if (client.Width >= 80 && client.Height >= 80 && client.Width <= 4096 && client.Height <= 4096)
+                {
+                    frozen = new Bitmap(client.Width, client.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    using (Graphics graphics = Graphics.FromImage(frozen))
+                        graphics.CopyFromScreen(client.Location, Point.Empty, client.Size, CopyPixelOperation.SourceCopy);
+                }
+            }
+            catch (Exception) { if (frozen != null) frozen.Dispose(); frozen = null; }
+            timer.Stop();
+            try
+            {
+            using (RegionPicker picker = new RegionPicker(client, frozen, caption))
             {
                 if (picker.ShowDialog(this) != DialogResult.OK) return;
                 Rectangle picked = picker.Selection;
@@ -919,6 +939,27 @@ namespace KavrosAfkWarden
                 Save();
                 SetStatus(done);
             }
+            }
+            finally
+            {
+                if (frozen != null) frozen.Dispose();
+                if (!timer.Enabled) timer.Start();
+            }
+        }
+
+        private void DrawWindowItem(object sender, DrawItemEventArgs e)
+        {
+            if (e.Index < 0) return;
+            bool selectedItem = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            Color fill = selectedItem ? KavrosTheme.BgRaise : KavrosTheme.Input;
+            Color ink = selectedItem ? KavrosTheme.Gold : KavrosTheme.Text;
+            using (Brush brush = new SolidBrush(fill)) e.Graphics.FillRectangle(brush, e.Bounds);
+            if (selectedItem)
+            {
+                using (Pen pen = new Pen(KavrosTheme.Gold)) e.Graphics.DrawRectangle(pen, e.Bounds.X, e.Bounds.Y, e.Bounds.Width - 1, e.Bounds.Height - 1);
+            }
+            string text = windows.Items[e.Index].ToString();
+            TextRenderer.DrawText(e.Graphics, text, KavrosTheme.Ui(9F, false), new Rectangle(e.Bounds.X + 8, e.Bounds.Y, e.Bounds.Width - 12, e.Bounds.Height), ink, fill, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.Left | TextFormatFlags.SingleLine);
         }
 
         private static AlertEvent SampleAlert()
@@ -952,37 +993,57 @@ namespace KavrosAfkWarden
         private Rectangle selection;
         private bool drag;
         internal Rectangle Selection;
-
         private readonly string caption;
+        private readonly Bitmap frozen;
 
-        internal RegionPicker(Rectangle client, string caption)
+        internal RegionPicker(Rectangle client, Bitmap frozen, string caption)
         {
             this.caption = caption;
+            this.frozen = frozen;
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.Manual;
             Bounds = client;
-            Opacity = 0.35;
             BackColor = KavrosTheme.BgDeep;
             Cursor = Cursors.Cross;
             TopMost = true;
             KeyPreview = true;
-            MouseDown += delegate(object sender, MouseEventArgs e) { drag = true; origin = e.Location; selection = new Rectangle(e.Location, Size.Empty); };
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            UpdateStyles();
+            MouseDown += delegate(object sender, MouseEventArgs e)
+            {
+                drag = true;
+                origin = e.Location;
+                ReplaceSelection(new Rectangle(e.Location, Size.Empty));
+            };
             MouseMove += delegate(object sender, MouseEventArgs e)
             {
                 if (!drag) return;
-                selection = Rectangle.FromLTRB(Math.Min(origin.X, e.X), Math.Min(origin.Y, e.Y), Math.Max(origin.X, e.X), Math.Max(origin.Y, e.Y));
-                Invalidate();
+                ReplaceSelection(Rectangle.FromLTRB(Math.Min(origin.X, e.X), Math.Min(origin.Y, e.Y), Math.Max(origin.X, e.X), Math.Max(origin.Y, e.Y)));
             };
             MouseUp += delegate { drag = false; Selection = selection; DialogResult = DialogResult.OK; Close(); };
             KeyDown += delegate(object sender, KeyEventArgs e) { if (e.KeyCode == Keys.Escape) { DialogResult = DialogResult.Cancel; Close(); } };
         }
 
+        private void ReplaceSelection(Rectangle next)
+        {
+            Rectangle previous = selection;
+            selection = next;
+            Invalidate(Rectangle.Inflate(previous, 4, 4));
+            Invalidate(Rectangle.Inflate(selection, 4, 4));
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
-            base.OnPaint(e);
+            if (frozen != null) e.Graphics.DrawImage(frozen, ClientRectangle);
+            else using (Brush fill = new SolidBrush(KavrosTheme.BgDeep)) e.Graphics.FillRectangle(fill, ClientRectangle);
+            using (Brush bar = new SolidBrush(Color.FromArgb(210, KavrosTheme.BgDeep))) e.Graphics.FillRectangle(bar, 0, 0, Width, 36);
             using (Brush gold = new SolidBrush(KavrosTheme.Gold)) e.Graphics.FillRectangle(gold, 0, 0, Width, 2);
-            TextRenderer.DrawText(e.Graphics, caption, KavrosTheme.Display(8F), new Rectangle(12, 10, Width - 24, 24), KavrosTheme.Gold, KavrosTheme.BgDeep, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
-            if (selection.Width > 0) using (Pen pen = new Pen(KavrosTheme.Gold, 2)) e.Graphics.DrawRectangle(pen, selection);
+            TextRenderer.DrawText(e.Graphics, caption, KavrosTheme.Display(8F), new Rectangle(12, 8, Width - 24, 24), KavrosTheme.Gold, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+            if (selection.Width > 0 && selection.Height > 0)
+            {
+                using (Brush wash = new SolidBrush(Color.FromArgb(48, KavrosTheme.Gold))) e.Graphics.FillRectangle(wash, selection);
+                using (Pen pen = new Pen(KavrosTheme.Gold, 2)) e.Graphics.DrawRectangle(pen, selection);
+            }
         }
     }
 }
