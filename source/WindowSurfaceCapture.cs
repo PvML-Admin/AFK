@@ -1,7 +1,5 @@
 using System;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.WindowsRuntime;
-using Windows.Foundation;
 using Windows.Graphics;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
@@ -26,12 +24,6 @@ namespace KavrosAfkWarden
         private GraphicsCaptureItem item;
         private Direct3D11CaptureFramePool pool;
         private GraphicsCaptureSession session;
-        private readonly TypedEventHandler<GraphicsCaptureItem, object> onClosed;
-        private readonly TypedEventHandler<Direct3D11CaptureFramePool, object> onFrame;
-        private EventRegistrationToken closedToken;
-        private EventRegistrationToken frameToken;
-        private bool closedHooked;
-        private bool frameHooked;
         private IntPtr target = IntPtr.Zero;
         private readonly object gate = new object();
         private ImageBuffer latest;
@@ -39,34 +31,29 @@ namespace KavrosAfkWarden
         private string failure = "";
         private bool unsupported;
 
-        internal WindowSurfaceCapture()
-        {
-            // Keep the delegates rooted for the life of this object. WinRT does
-            // not keep a managed method-group conversion alive by itself.
-            onClosed = OnClosed;
-            onFrame = OnFrame;
-        }
-
         internal bool Available { get { return !unsupported && failure.Length == 0; } }
         internal string Failure { get { return unsupported ? "Window capture is not supported on this Windows build." : failure; } }
 
         internal void Ensure(IntPtr hwnd)
         {
             if (unsupported || hwnd == IntPtr.Zero) return;
-            if (hwnd == target && session != null) return;
+            if (hwnd == target && session != null)
+            {
+                Pump();
+                return;
+            }
             Stop();
             try
             {
                 if (!GraphicsCaptureSession.IsSupported()) { unsupported = true; return; }
                 EnsureDevice();
                 item = CreateItem(hwnd);
-                // The .NET Framework C# 5 compiler cannot subscribe to these WinRT
-                // events with += (CS1545). Call the accessors it names instead.
-                closedToken = item.add_Closed(onClosed);
-                closedHooked = true;
-                pool = Direct3D11CaptureFramePool.CreateFreeThreaded(device, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, item.Size);
-                frameToken = pool.add_FrameArrived(onFrame);
-                frameHooked = true;
+                // Do not subscribe to Closed or FrameArrived. The .NET Framework
+                // C# 5 compiler cannot use those WinRT events, and EventRegistrationToken
+                // is defined in both mscorlib and System.Runtime.WindowsRuntime.
+                // Frames are pulled with TryGetNextFrame instead.
+                SizeInt32 itemSize = item.Size;
+                pool = Direct3D11CaptureFramePool.CreateFreeThreaded(device, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, itemSize);
                 session = pool.CreateCaptureSession(item);
                 try { session.IsCursorCaptureEnabled = false; } catch (Exception) { }
                 session.StartCapture();
@@ -82,6 +69,7 @@ namespace KavrosAfkWarden
 
         internal ImageBuffer Copy(int cropX, int cropY, int cropW, int cropH)
         {
+            Pump();
             lock (gate)
             {
                 if (latest == null) return null;
@@ -94,44 +82,52 @@ namespace KavrosAfkWarden
 
         public void Dispose() { Stop(); ReleaseDevice(); }
 
-        private void OnClosed(GraphicsCaptureItem sender, object args) { Stop(); }
-
-        private void OnFrame(Direct3D11CaptureFramePool sender, object args)
+        // Drain every buffered frame and keep the newest. A closed item or a
+        // lost device throws, which drops back to the screen path.
+        private void Pump()
         {
+            if (pool == null || session == null) return;
+            Direct3D11CaptureFrame frame = null;
             try
             {
-                using (Direct3D11CaptureFrame frame = sender.TryGetNextFrame())
+                while (true)
                 {
-                    if (frame == null) return;
-                    ImageBuffer image = ReadFrame(frame.Surface, frame.ContentSize.Width, frame.ContentSize.Height);
-                    if (image == null) return;
+                    Direct3D11CaptureFrame next = pool.TryGetNextFrame();
+                    if (next == null) break;
+                    if (frame != null) frame.Dispose();
+                    frame = next;
+                }
+                if (frame == null) return;
+                SizeInt32 content = frame.ContentSize;
+                ImageBuffer image = ReadFrame(frame.Surface, content.Width, content.Height);
+                if (image != null)
+                {
                     lock (gate)
                     {
                         latest = image;
                         latestAt = DateTime.UtcNow;
                     }
-                    SizeInt32 size = item == null ? frame.ContentSize : item.Size;
-                    if (size.Width != frame.ContentSize.Width || size.Height != frame.ContentSize.Height)
-                        sender.Recreate(device, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, size);
                 }
+                SizeInt32 size = content;
+                if (item != null) size = item.Size;
+                if (size.Width != content.Width || size.Height != content.Height)
+                    pool.Recreate(device, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, size);
             }
-            catch (Exception ex) { failure = ex.Message; }
+            catch (Exception ex)
+            {
+                failure = ex.Message;
+                Stop();
+            }
+            finally
+            {
+                if (frame != null) frame.Dispose();
+            }
         }
 
         private void Stop()
         {
             target = IntPtr.Zero;
             lock (gate) { latest = null; latestAt = DateTime.MinValue; }
-            if (closedHooked)
-            {
-                closedHooked = false;
-                try { if (item != null) item.remove_Closed(closedToken); } catch (Exception) { }
-            }
-            if (frameHooked)
-            {
-                frameHooked = false;
-                try { if (pool != null) pool.remove_FrameArrived(frameToken); } catch (Exception) { }
-            }
             try { if (session != null) session.Dispose(); } catch (Exception) { }
             try { if (pool != null) pool.Dispose(); } catch (Exception) { }
             session = null;
