@@ -54,6 +54,20 @@ namespace KavrosAfkWarden
             return (255 << 24) | ((r & 255) << 16) | ((g & 255) << 8) | (b & 255);
         }
 
+        public static bool MostlyBlack(ImageBuffer image)
+        {
+            if (image == null) return true;
+            int dark = 0, n = 0;
+            for (int y = 0; y < image.Height; y += 8)
+                for (int x = 0; x < image.Width; x += 8)
+                {
+                    int c = image.Argb(x, y);
+                    n++;
+                    if (R(c) + G(c) + B(c) < 30) dark++;
+                }
+            return n > 0 && dark * 100 / n >= 92;
+        }
+
         public static int R(int c) { return (c >> 16) & 255; }
         public static int G(int c) { return (c >> 8) & 255; }
         public static int B(int c) { return c & 255; }

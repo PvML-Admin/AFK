@@ -28,6 +28,34 @@ namespace KavrosAfkWarden
             return world || dot;
         }
 
+        public bool MovedCrop(ImageBuffer crop)
+        {
+            if (crop == null) return false;
+            int columns = Math.Max(1, crop.Width / 4);
+            int rows = Math.Max(1, crop.Height / 4);
+            int[] next = new int[columns * rows];
+            int n = 0;
+            for (int y = 0; y < rows; y++)
+                for (int x = 0; x < columns; x++)
+                    next[n++] = crop.Argb(x * 4, y * 4);
+            bool moved = false;
+            if (sample != null && sample.Length == next.Length)
+            {
+                int changed = 0;
+                for (int i = 0; i < next.Length; i++)
+                {
+                    int a = sample[i], b = next[i];
+                    if (Math.Abs(ImageBuffer.R(a) - ImageBuffer.R(b)) > 28 || Math.Abs(ImageBuffer.G(a) - ImageBuffer.G(b)) > 28 || Math.Abs(ImageBuffer.B(a) - ImageBuffer.B(b)) > 28)
+                        changed++;
+                }
+                moved = changed >= 12 && changed > next.Length * 0.018;
+            }
+            sample = next;
+            sampleWidth = crop.Width;
+            sampleHeight = crop.Height;
+            return moved;
+        }
+
         private bool WorldChanged(ImageBuffer image)
         {
             IntRect world = WorldRect(image.Width, image.Height);

@@ -17,7 +17,11 @@ namespace KavrosAfkWarden
         public int PotionCount;
         public string PotionHow = "";
         public bool BuffBarFound;
+        public bool StripFound;
+        public IntRect LifeText;
+        public IntRect PrayerText;
         public List<BuffIcon> Buffs = new List<BuffIcon>();
+        public List<IntRect> BuffRects = new List<IntRect>();
     }
 
     internal struct InkBlob
@@ -98,6 +102,20 @@ namespace KavrosAfkWarden
 
     public static class HudReader
     {
+        public static void ReadBox(ImageBuffer box, bool life, HudReading reading)
+        {
+            if (box == null || reading == null) return;
+            NumberRead number = ReadNumber(box, new IntRect(0, 0, box.Width, box.Height), WhiteInk);
+            Apply(reading, life, number, "bar");
+        }
+
+        public static BuffIcon ReadBuffCrop(ImageBuffer icon, int x)
+        {
+            BuffIcon read = icon == null ? new BuffIcon() : ReadIconTime(icon, new IntRect(0, 0, icon.Width, icon.Height));
+            read.X = x;
+            return read;
+        }
+
         public static HudReading Read(ImageBuffer image, WardenSettings settings)
         {
             HudReading reading = new HudReading();
@@ -137,14 +155,20 @@ namespace KavrosAfkWarden
                     int score = redSpan.Width + purpleSpan.Width;
                     if (!pair || score > best) { pair = true; best = score; red = redSpan; purple = purpleSpan; }
                 }
-            if (wantLife && pair)
+            if (!pair) return;
+            reading.StripFound = true;
+            IntRect lifeText = Above(image, red);
+            IntRect prayerText = Above(image, purple);
+            reading.LifeText = lifeText;
+            reading.PrayerText = prayerText;
+            if (wantLife)
             {
-                NumberRead number = ReadNumber(image, Above(image, red), WhiteInk);
+                NumberRead number = ReadNumber(image, lifeText, WhiteInk);
                 Apply(reading, true, number, "bar");
             }
-            if (wantPrayer && pair)
+            if (wantPrayer)
             {
-                NumberRead number = ReadNumber(image, Above(image, purple), WhiteInk);
+                NumberRead number = ReadNumber(image, prayerText, WhiteInk);
                 Apply(reading, false, number, "bar");
             }
         }
@@ -175,6 +199,7 @@ namespace KavrosAfkWarden
                 : new IntRect(0, 0, image.Width, image.Height);
             List<IntRect> icons = FindBuffIcons(image, region);
             reading.Buffs = new List<BuffIcon>();
+            reading.BuffRects = new List<IntRect>();
             if (icons.Count == 0)
             {
                 reading.PotionHow = "none";
@@ -186,6 +211,7 @@ namespace KavrosAfkWarden
             {
                 BuffIcon icon = ReadIconTime(image, icons[i]);
                 reading.Buffs.Add(icon);
+                reading.BuffRects.Add(icons[i]);
                 if (icon.HasTime) reading.PotionCount++;
             }
         }
@@ -200,21 +226,25 @@ namespace KavrosAfkWarden
         {
             List<IntRect> found = new List<IntRect>();
             region = Clamp(image, region.X, region.Y, region.Width, region.Height);
-            for (int size = 40; size >= 28; size -= 4)
+            for (int y = region.Y; y < region.Bottom; y += 2)
             {
-                for (int y = region.Y; y + size <= region.Bottom; y += 2)
-                    for (int x = region.X; x + size <= region.Right; x += 2)
+                int x = region.X;
+                while (x < region.Right)
+                {
+                    if (!BorderGreen(image.Argb(x, y))) { x += 2; continue; }
+                    int start = x;
+                    while (x < region.Right && x - start < 48 && BorderGreen(image.Argb(x, y))) x++;
+                    int span = x - start;
+                    if (span < 26 || span > 46) continue;
+                    if (!IconAt(image, start, y, span)) continue;
+                    bool overlap = false;
+                    for (int i = 0; i < found.Count; i++)
                     {
-                        if (!IconAt(image, x, y, size)) continue;
-                        bool overlap = false;
-                        for (int i = 0; i < found.Count; i++)
-                        {
-                            IntRect old = found[i];
-                            if (x < old.Right && x + size > old.X && y < old.Bottom && y + size > old.Y) overlap = true;
-                        }
-                        if (overlap) continue;
-                        found.Add(new IntRect(x, y, size, size));
+                        IntRect old = found[i];
+                        if (start < old.Right && start + span > old.X && y < old.Bottom && y + span > old.Y) overlap = true;
                     }
+                    if (!overlap) found.Add(new IntRect(start, y, span, span));
+                }
             }
             if (found.Count == 0) return found;
             found.Sort(delegate(IntRect a, IntRect b) { return a.X.CompareTo(b.X); });
@@ -352,7 +382,7 @@ namespace KavrosAfkWarden
             int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
             int low = Math.Min(r, Math.Min(g, b));
             int high = Math.Max(r, Math.Max(g, b));
-            return low >= 165 && high - low <= 50;
+            return low >= 145 && high - low <= 60;
         }
 
         private static bool GreenInk(int c)
@@ -370,13 +400,13 @@ namespace KavrosAfkWarden
         private static bool RedBar(int c)
         {
             int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
-            return r >= 150 && r > g + 50 && r > b + 50 && b < 110;
+            return r >= 120 && r > g + 35 && r > b + 35 && b < 130;
         }
 
         private static bool PurpleBar(int c)
         {
             int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
-            return b >= 120 && r >= 80 && b > g + 30 && r > g + 15 && b + 40 > r && g < 140;
+            return b >= 90 && r >= 60 && b > g + 20 && r > g + 8 && b + 50 > r && g < 160;
         }
 
         private static bool RedOrb(int c)

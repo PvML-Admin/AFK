@@ -380,7 +380,7 @@ namespace KavrosAfkWarden
             TextRenderer.DrawText(g, rest, KavrosTheme.Ui(8.5F, false), new Rectangle(w + 9, 0, Math.Max(1, label.Width - w - 9), label.Height), KavrosTheme.TextSoft, surface, TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
         }
 
-        private static readonly string[] WaitingStarts = { "Waiting", "Rechecking", "Keep the puzzle", "Reading", "Looking", "Searching" };
+        private static readonly string[] WaitingStarts = { "Waiting", "Rechecking", "Keep watching", "Reading", "Looking", "Searching" };
 
         // The detection line becomes a status strip: amber accent while
         // waiting or not recognised, green once something was read.
@@ -392,8 +392,8 @@ namespace KavrosAfkWarden
             var pills = new List<KeyValuePair<string, PillTone>>();
             string rest = "";
             bool found;
-            if (text == "Game captured / puzzle not recognised")
-            { pills.Add(new KeyValuePair<string, PillTone>("Game captured", PillTone.Ok)); pills.Add(new KeyValuePair<string, PillTone>("Puzzle not recognised", PillTone.Warn)); found = false; }
+            if (text == "Game captured / stats unread")
+            { pills.Add(new KeyValuePair<string, PillTone>("Game captured", PillTone.Ok)); pills.Add(new KeyValuePair<string, PillTone>("Stats unread", PillTone.Warn)); found = false; }
             else if (WaitingStarts.Any(w => text.StartsWith(w, StringComparison.OrdinalIgnoreCase)))
             { pills.Add(new KeyValuePair<string, PillTone>(text.StartsWith("Reading", StringComparison.OrdinalIgnoreCase) ? "Reading" : text.StartsWith("Waiting", StringComparison.OrdinalIgnoreCase) ? "Waiting" : "Searching", PillTone.Warn)); rest = text; found = false; }
             else

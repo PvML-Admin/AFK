@@ -112,56 +112,142 @@ namespace KavrosAfkWarden
         private readonly WindowSurfaceCapture surface = new WindowSurfaceCapture();
         private Point lastCursor;
         private bool haveCursor;
+        private Bitmap scratch;
+        private int[] scratchPixels;
+        private byte[] scratchRaw;
+        private IntRect lifeBox;
+        private IntRect prayerBox;
+        private readonly List<IntRect> buffBoxes = new List<IntRect>();
+        private bool haveBoxes;
+        private DateTime nextFullSearch = DateTime.MinValue;
+        internal int LastTickMs;
+        internal HudReading Reading = new HudReading();
 
-        internal void Tick(IntPtr hwnd)
+        internal void Tick(IntPtr hwnd, WardenSettings settings, bool capture)
         {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
             Image = null;
             Input = false;
             Focused = false;
+            Reading = new HudReading();
             if (hwnd == IntPtr.Zero || !NativeMethods.IsWindow(hwnd))
             {
                 Route = CaptureRoute.Missing;
                 Note = "Waiting for the Kavros window.";
                 haveCursor = false;
+                haveBoxes = false;
+                LastTickMs = (int)clock.ElapsedMilliseconds;
                 return;
             }
             bool iconic = NativeMethods.IsIconic(hwnd);
             Focused = WindowLocator.IsForeground(hwnd);
             Rectangle client = iconic ? Rectangle.Empty : NativeMethods.ClientBounds(hwnd);
+            if (!capture || iconic)
+            {
+                Route = iconic ? CaptureRoute.Minimized : Route;
+                Input = PollInput(hwnd, client, iconic);
+                Note = iconic ? Describe() : "Paused while the panel is dragged.";
+                LastTickMs = (int)clock.ElapsedMilliseconds;
+                return;
+            }
+            // Windows Graphics Capture draws a yellow border unless IsBorderRequired
+            // can be cleared. That property is not on the Windows 10 2004 contract
+            // this build uses, so capture stays on the screen path.
+            surface.Ensure(hwnd);
+            bool surfaceReady = surface.Available;
             Rectangle desktop = System.Windows.Forms.SystemInformation.VirtualScreen;
             bool onScreen = !client.IsEmpty && Rectangle.Intersect(client, desktop).Width >= 80 && Rectangle.Intersect(client, desktop).Height >= 80;
-            bool occluded = onScreen && !AnySample(hwnd, client);
-            bool surfaceReady = false;
-            if (!iconic)
-            {
-                surface.Ensure(hwnd);
-                surfaceReady = surface.Available;
-            }
+            bool occluded = false;
             Route = CapturePolicy.Choose(true, iconic, onScreen, occluded, surfaceReady);
-            if (Route == CaptureRoute.WindowSurface)
+            try
             {
-                Rectangle window = NativeMethods.WindowBounds(hwnd);
-                int cropX = client.X - window.X;
-                int cropY = client.Y - window.Y;
-                ImageBuffer frame = surface.Copy(cropX, cropY, client.Width, client.Height);
-                if (frame == null && onScreen && !occluded) Route = CaptureRoute.Screen;
-                else Image = frame;
-                if (Image == null && Route == CaptureRoute.WindowSurface) Route = CaptureRoute.Covered;
-            }
-            if (Route == CaptureRoute.Screen)
-            {
-                try
+                if (Route == CaptureRoute.WindowSurface)
                 {
-                    try { NativeMethods.DwmFlush(); } catch (DllNotFoundException) { }
-                    Image = CopyScreen(client);
+                    Rectangle window = NativeMethods.WindowBounds(hwnd);
+                    ImageBuffer frame = surface.Copy(client.X - window.X, client.Y - window.Y, client.Width, client.Height);
+                    if (frame == null || ImageBuffer.MostlyBlack(frame)) Route = onScreen ? CaptureRoute.Screen : CaptureRoute.Covered;
+                    else Image = frame;
                 }
-                catch (Exception) { Image = null; Route = CaptureRoute.Covered; }
+                if (Route == CaptureRoute.Screen || Image == null)
+                {
+                    bool full = !haveBoxes || DateTime.UtcNow >= nextFullSearch;
+                    if (full)
+                    {
+                        Image = client.Width >= 80 && client.Height >= 80 ? CopyScreen(client) : null;
+                        if (Image != null && !ImageBuffer.MostlyBlack(Image))
+                        {
+                            Reading = HudReader.Read(Image, settings);
+                            RememberBoxes(Reading);
+                            nextFullSearch = DateTime.UtcNow.AddSeconds(haveBoxes ? (settings.SaveDebug ? 2 : 4) : 1);
+                        }
+                        else
+                        {
+                            nextFullSearch = DateTime.UtcNow.AddSeconds(1);
+                            Note = "The captured frame is black. Pin the bars, or turn on Save debug capture.";
+                        }
+                    }
+                    else Reading = ReadLocked(client);
+                }
+                else if (Image != null)
+                {
+                    Reading = HudReader.Read(Image, settings);
+                    RememberBoxes(Reading);
+                }
             }
+            catch (Exception) { Image = null; Route = CaptureRoute.Covered; }
+            IntRect world = MotionDetector.WorldRect(Math.Max(client.Width, 1), Math.Max(client.Height, 1));
+            ImageBuffer crop = CopyScreen(new Rectangle(client.X + world.X, client.Y + world.Y, Math.Min(world.Width, 220), Math.Min(world.Height, 140)));
+            motionMoved = crop != null && motion.MovedCrop(crop);
+            Moving = motionMoved;
             Input = PollInput(hwnd, client, iconic);
             Note = Describe();
+            LastTickMs = (int)clock.ElapsedMilliseconds;
         }
 
-        internal void Dispose() { surface.Dispose(); }
+        private readonly MotionDetector motion = new MotionDetector();
+        internal bool Moving;
+        private bool motionMoved;
+
+        private void RememberBoxes(HudReading reading)
+        {
+            if (reading != null && reading.StripFound && reading.LifeText.Width > 8 && reading.PrayerText.Width > 8)
+            {
+                lifeBox = reading.LifeText;
+                prayerBox = reading.PrayerText;
+                buffBoxes.Clear();
+                if (reading.BuffRects != null)
+                    for (int i = 0; i < reading.BuffRects.Count; i++) buffBoxes.Add(reading.BuffRects[i]);
+                haveBoxes = true;
+            }
+        }
+
+        private HudReading ReadLocked(Rectangle client)
+        {
+            HudReading reading = new HudReading();
+            reading.StripFound = true;
+            reading.Buffs = new List<BuffIcon>();
+            reading.BuffRects = buffBoxes;
+            ImageBuffer life = CopyScreen(ScreenOf(client, lifeBox));
+            if (life != null) HudReader.ReadBox(life, true, reading);
+            ImageBuffer prayer = CopyScreen(ScreenOf(client, prayerBox));
+            if (prayer != null) HudReader.ReadBox(prayer, false, reading);
+            reading.BuffBarFound = buffBoxes.Count > 0;
+            for (int i = 0; i < buffBoxes.Count; i++)
+            {
+                ImageBuffer icon = CopyScreen(ScreenOf(client, buffBoxes[i]));
+                if (icon == null) continue;
+                reading.Buffs.Add(HudReader.ReadBuffCrop(icon, buffBoxes[i].X));
+            }
+            if (reading.Hp == null && reading.Prayer == null) haveBoxes = false;
+            return reading;
+        }
+
+        private static Rectangle ScreenOf(Rectangle client, IntRect box)
+        {
+            return new Rectangle(client.X + box.X, client.Y + box.Y, box.Width, box.Height);
+        }
+
+        internal void Dispose() { surface.Dispose(); if (scratch != null) scratch.Dispose(); }
 
         private static bool AnySample(IntPtr game, Rectangle client)
         {
@@ -203,29 +289,34 @@ namespace KavrosAfkWarden
             return "Waiting for the Kavros window.";
         }
 
-        private static ImageBuffer CopyScreen(Rectangle bounds)
+        private ImageBuffer CopyScreen(Rectangle bounds)
         {
-            if (bounds.Width < 80 || bounds.Height < 80) return null;
-            using (Bitmap bitmap = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb))
+            if (bounds.Width < 4 || bounds.Height < 4 || bounds.Width > 4096 || bounds.Height > 4096) return null;
+            if (scratch == null || scratch.Width != bounds.Width || scratch.Height != bounds.Height)
             {
-                using (Graphics graphics = Graphics.FromImage(bitmap))
-                    graphics.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size, CopyPixelOperation.SourceCopy);
-                BitmapData data = bitmap.LockBits(new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
-                try
-                {
-                    int[] pixels = new int[bitmap.Width * bitmap.Height];
-                    byte[] raw = new byte[Math.Abs(data.Stride) * bitmap.Height];
-                    System.Runtime.InteropServices.Marshal.Copy(data.Scan0, raw, 0, raw.Length);
-                    for (int y = 0; y < bitmap.Height; y++)
-                        for (int x = 0; x < bitmap.Width; x++)
-                        {
-                            int i = y * data.Stride + x * 4;
-                            pixels[y * bitmap.Width + x] = ImageBuffer.Pack(raw[i + 2], raw[i + 1], raw[i]);
-                        }
-                    return new ImageBuffer(bitmap.Width, bitmap.Height, pixels);
-                }
-                finally { bitmap.UnlockBits(data); }
+                if (scratch != null) scratch.Dispose();
+                scratch = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
+                scratchPixels = new int[bounds.Width * bounds.Height];
+                scratchRaw = null;
             }
+            using (Graphics graphics = Graphics.FromImage(scratch))
+                graphics.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size, CopyPixelOperation.SourceCopy);
+            BitmapData data = scratch.LockBits(new Rectangle(0, 0, scratch.Width, scratch.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            try
+            {
+                int bytes = Math.Abs(data.Stride) * scratch.Height;
+                if (scratchRaw == null || scratchRaw.Length != bytes) scratchRaw = new byte[bytes];
+                System.Runtime.InteropServices.Marshal.Copy(data.Scan0, scratchRaw, 0, bytes);
+                int[] pixels = new int[scratch.Width * scratch.Height];
+                for (int y = 0; y < scratch.Height; y++)
+                    for (int x = 0; x < scratch.Width; x++)
+                    {
+                        int i = y * data.Stride + x * 4;
+                        pixels[y * scratch.Width + x] = ImageBuffer.Pack(scratchRaw[i + 2], scratchRaw[i + 1], scratchRaw[i]);
+                    }
+                return new ImageBuffer(scratch.Width, scratch.Height, pixels);
+            }
+            finally { scratch.UnlockBits(data); }
         }
     }
 }

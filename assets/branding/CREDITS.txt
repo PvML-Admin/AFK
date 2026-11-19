@@ -1,4 +1,4 @@
-Kavros crest and splash: the Companion branding used by Kavros Clue Helper.
+Kavros crest and splash: Companion branding for Kavros AFK Warden.
 
 Cinzel and Outfit fonts: SIL Open Font License 1.1. See FONTS.txt.
-The font files are the same OFL instances Clue Helper embeds.
+The font files are the OFL instances embedded with this module.

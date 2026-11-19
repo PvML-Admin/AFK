@@ -1,4 +1,4 @@
-KAVROS AFK WARDEN v0.2.0
+KAVROS AFK WARDEN v0.2.1
 =========================
 
 Close the previous copy with Exit. Extract the WHOLE ZIP into a new folder,
@@ -42,17 +42,16 @@ Prayer: on, below 20 percent.
 Potions: on, below 15 seconds left on any buff-bar timer.
 AFK teleport: on, 300 second timer, warn 30 seconds before.
 Cooldown: 20 seconds. Popup: 8 seconds.
-Keep panel on top: on. The alert popup is always on top either way.
+The panel follows the chosen client and hides only while that client is minimized. The alert popup stays on top.
 
 HOW IT READS KAVROS
-There is no hitpoint, prayer, or countdown value to query. The same rule as
-Clue Helper applies: pixels only, no process memory, no game input.
+There is no hitpoint, prayer, or countdown value to query. Pixels only,
+no process memory, no game input.
 CopyFromScreen reads a client that is actually on a monitor. It does not
-need the game to be focused. That is the path Clue Helper uses, and Clue
-Helper will not read a minimized window or a client another window covers,
-because those screen pixels are not the game.
-When Windows Graphics Capture is available, AFK Warden reads the window
-surface instead, so a client behind other windows still updates.
+need the game to be focused. A minimized window, or a client another
+window covers, is not readable, because those screen pixels are not the game.
+Windows Graphics Capture is not started unless its yellow system border can
+be turned off. This build does not start it, so the game has no capture border.
 A minimized window is not composed. Hitpoints, prayer, and idle cannot be
 read until you restore it. The AFK timer does not need those pixels, so it
 keeps running and can still notify you.

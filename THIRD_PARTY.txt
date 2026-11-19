@@ -14,10 +14,10 @@ Newtonsoft.Json 13.0.4
 Cinzel and Outfit
   Embedded UI fonts. SIL Open Font License 1.1.
   See assets/branding/FONTS.txt, OFL-Cinzel.txt, and OFL-Outfit.txt.
-  These are the same static instances Kavros Clue Helper embeds.
+  Embedded as CinzelKavros-Regular.ttf and OutfitKavros-Regular.ttf.
 
 Kavros crest and splash
-  Companion branding shared with Kavros Clue Helper.
+  Companion branding for Kavros AFK Warden.
   See assets/branding/CREDITS.txt.
 
 AFK Warden reads the Kavros window locally. It does not send game input

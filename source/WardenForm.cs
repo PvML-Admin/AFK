@@ -88,7 +88,6 @@ namespace KavrosAfkWarden
         private readonly OpaqueButton settings = new OpaqueButton();
         private readonly OpaqueButton collapse = new OpaqueButton();
         private bool collapsed;
-        private Point dragStart, windowStart;
         private bool dragging;
         internal event Action SettingsRequested;
         internal event Action ExitRequested;
@@ -112,20 +111,8 @@ namespace KavrosAfkWarden
             title.MouseDown += delegate(object sender, MouseEventArgs e)
             {
                 if (e.Button != MouseButtons.Left) return;
-                dragging = true;
-                dragStart = Cursor.Position;
-                windowStart = Location;
-            };
-            title.MouseMove += delegate
-            {
-                if (!dragging) return;
-                Location = new Point(windowStart.X + Cursor.Position.X - dragStart.X, windowStart.Y + Cursor.Position.Y - dragStart.Y);
-            };
-            title.MouseUp += delegate
-            {
-                if (!dragging) return;
-                dragging = false;
-                if (Moved != null) Moved();
+                NativeMethods.ReleaseCapture();
+                NativeMethods.SendMessage(Handle, 0xA1, new IntPtr(2), IntPtr.Zero);
             };
             Controls.Add(title);
             settings.Text = "Settings";
@@ -211,6 +198,17 @@ namespace KavrosAfkWarden
             TextRenderer.DrawText(g, gameName, KavrosTheme.Ui(8.5F, false), new Rectangle(width + 8, 0, Math.Max(1, label.Width - width - 8), label.Height), KavrosTheme.Text, KavrosTheme.Bg, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
         }
 
+        protected override void WndProc(ref Message message)
+        {
+            if (message.Msg == 0x0231) dragging = true;
+            if (message.Msg == 0x0232)
+            {
+                dragging = false;
+                if (Moved != null) Moved();
+            }
+            base.WndProc(ref message);
+        }
+
         protected override bool ShowWithoutActivation { get { return true; } }
         protected override CreateParams CreateParams { get { CreateParams parameters = base.CreateParams; parameters.ExStyle |= 0x80; return parameters; } }
 
@@ -247,6 +245,7 @@ namespace KavrosAfkWarden
         private KavrosCheckBox potionSound = new KavrosCheckBox();
         private KavrosCheckBox potionNotify = new KavrosCheckBox();
         private KavrosCheckBox updates = new KavrosCheckBox();
+        private KavrosCheckBox saveDebug = new KavrosCheckBox();
         private readonly NumberField idleSeconds = new NumberField();
         private readonly NumberField hpThreshold = new NumberField();
         private readonly NumberField prayerThreshold = new NumberField();
@@ -262,7 +261,9 @@ namespace KavrosAfkWarden
         private readonly AlertSound sound = new AlertSound();
         private readonly SystemToast toast = new SystemToast();
         private readonly FrameGrab grab = new FrameGrab();
-        private readonly MotionDetector motion = new MotionDetector();
+        private Rectangle dockedGame;
+        private bool haveDockedGame;
+        private DateTime lastDebugSave = DateTime.MinValue;
         private readonly StableValue hpStable = new StableValue();
         private readonly StableValue hpMaxStable = new StableValue();
         private readonly StableValue prayerStable = new StableValue();
@@ -339,7 +340,7 @@ namespace KavrosAfkWarden
                 if (!closing && e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); ShowPanel(); }
             };
             FormClosed += delegate { closing = true; timer.Stop(); Save(); CompanionStatus.Write("stopped", settings.Paused); grab.Dispose(); tray.Visible = false; tray.Dispose(); panel.Dispose(); popup.Dispose(); };
-            timer.Interval = 250;
+            timer.Interval = 400;
             timer.Tick += delegate { Tick(); };
             timer.Start();
             RefreshWindows();
@@ -420,6 +421,7 @@ namespace KavrosAfkWarden
             volume.ValueChanged += delegate { if (!loading) { sound.Volume = volume.Value; Save(); } };
             Controls.Add(volume);
             updates = Check("Check for updates at startup", 320, 726, 160, settings.CheckForUpdates);
+            saveDebug = Check("Save debug capture", 28, 796, 200, settings.SaveDebug);
             AddButton("Pin hitpoints", 28, 764, 108, ButtonTone.Secondary, delegate { Pin(0); });
             AddButton("Pin prayer", 144, 764, 100, ButtonTone.Secondary, delegate { Pin(1); });
             AddButton("Pin buff bar", 252, 764, 120, ButtonTone.Secondary, delegate { Pin(2); });
@@ -437,7 +439,7 @@ namespace KavrosAfkWarden
 
             hpPercent.CheckedChanged += delegate { if (!loading) hpThreshold.Maximum = hpPercent.Checked ? 99 : 99999; };
             prayerPercent.CheckedChanged += delegate { if (!loading) prayerThreshold.Maximum = prayerPercent.Checked ? 99 : 99999; };
-            Wire(pause, idleOn, hpOn, prayerOn, afkOn, potionOn, hpPercent, prayerPercent, soundMaster, notifyMaster, idleSound, idleNotify, hpSound, hpNotify, prayerSound, prayerNotify, afkSound, afkNotify, potionSound, potionNotify, updates);
+            Wire(pause, idleOn, hpOn, prayerOn, afkOn, potionOn, hpPercent, prayerPercent, soundMaster, notifyMaster, idleSound, idleNotify, hpSound, hpNotify, prayerSound, prayerNotify, afkSound, afkNotify, potionSound, potionNotify, updates, saveDebug);
             idleSeconds.ValueChanged += delegate { if (!loading) Save(); };
             hpThreshold.ValueChanged += delegate { if (!loading) Save(); };
             prayerThreshold.ValueChanged += delegate { if (!loading) Save(); };
@@ -471,6 +473,7 @@ namespace KavrosAfkWarden
             potionSound.Checked = settings.PotionSound;
             potionNotify.Checked = settings.PotionNotify;
             updates.Checked = settings.CheckForUpdates;
+            saveDebug.Checked = settings.SaveDebug;
             idleSeconds.SetValue(Clamp(settings.IdleSeconds, idleSeconds), false);
             hpThreshold.Maximum = settings.HpPercent ? 99 : 99999;
             hpThreshold.SetValue(Clamp(settings.HpThreshold, hpThreshold), false);
@@ -641,6 +644,7 @@ namespace KavrosAfkWarden
             settings.CooldownSeconds = (int)cooldown.Value;
             settings.BannerSeconds = (int)banner.Value;
             settings.CheckForUpdates = updates.Checked;
+            settings.SaveDebug = saveDebug.Checked;
             settings.Clamp();
             try { SettingsText.Save(settingsPath, settings); } catch (IOException) { }
             panel.TopMost = false;
@@ -648,6 +652,34 @@ namespace KavrosAfkWarden
         }
 
         private void SetStatus(string text) { if (!status.IsDisposed) status.Text = text; }
+
+        private void SaveDebugFrame()
+        {
+            if (grab.Image == null) return;
+            if ((DateTime.UtcNow - lastDebugSave).TotalSeconds < 2) return;
+            lastDebugSave = DateTime.UtcNow;
+            try
+            {
+                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KavrosAfkWarden");
+                Directory.CreateDirectory(dir);
+                using (Bitmap bitmap = new Bitmap(grab.Image.Width, grab.Image.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+                {
+                    for (int y = 0; y < grab.Image.Height; y++)
+                        for (int x = 0; x < grab.Image.Width; x++)
+                            bitmap.SetPixel(x, y, Color.FromArgb(grab.Image.Argb(x, y)));
+                    using (Graphics g = Graphics.FromImage(bitmap))
+                    {
+                        using (Pen pen = new Pen(Color.OrangeRed, 2))
+                        {
+                            g.DrawRectangle(pen, grab.Reading.LifeText.X, grab.Reading.LifeText.Y, grab.Reading.LifeText.Width, grab.Reading.LifeText.Height);
+                            g.DrawRectangle(pen, grab.Reading.PrayerText.X, grab.Reading.PrayerText.Y, grab.Reading.PrayerText.Width, grab.Reading.PrayerText.Height);
+                        }
+                    }
+                    bitmap.Save(Path.Combine(dir, "debug-capture.png"), System.Drawing.Imaging.ImageFormat.Png);
+                }
+            }
+            catch (Exception) { }
+        }
 
         private void ShowSettings()
         {
@@ -683,7 +715,18 @@ namespace KavrosAfkWarden
             Rectangle desk = Screen.FromRectangle(game).WorkingArea;
             int x, y;
             PanelDock.Place(game.X, game.Y, game.Width, game.Height, panel.Width, panel.Height, settings.PanelOffsetX, settings.PanelOffsetY, desk.X, desk.Y, desk.Width, desk.Height, out x, out y);
-            if (!panel.IsDragging && (panel.Left != x || panel.Top != y)) panel.Location = new Point(x, y);
+            if (panel.IsDragging)
+            {
+                if (!panel.Visible) panel.Show();
+                return;
+            }
+            Rectangle now = game;
+            if (!haveDockedGame || dockedGame != now)
+            {
+                haveDockedGame = true;
+                dockedGame = now;
+                if (panel.Left != x || panel.Top != y) panel.Location = new Point(x, y);
+            }
             if (!panel.Visible) panel.Show();
         }
 
@@ -775,11 +818,14 @@ namespace KavrosAfkWarden
                 nextUpdateCheck = DateTime.UtcNow.AddHours(3);
                 AppUpdates.Check(this, false, SetStatus);
             }
-            grab.Tick(selected);
+            bool minimized = selected != IntPtr.Zero && NativeMethods.IsIconic(selected);
+            timer.Interval = minimized || selected == IntPtr.Zero ? 1000 : 400;
+            grab.Tick(selected, settings, !panel.IsDragging && !minimized);
             FollowPanel();
-            bool pixels = grab.Image != null;
-            bool moving = pixels && motion.Moved(grab.Image);
-            if (pixels) lastHud = HudReader.Read(grab.Image, settings);
+            bool pixels = grab.Reading != null && (grab.Image != null || grab.Reading.StripFound || grab.Reading.BuffBarFound || grab.Reading.Hp != null);
+            bool moving = grab.Moving;
+            if (grab.Reading != null && (grab.Image != null || grab.Reading.StripFound || grab.Reading.BuffBarFound)) lastHud = grab.Reading;
+            if (settings.SaveDebug) SaveDebugFrame();
             int? hp = pixels ? hpStable.Push(lastHud.Hp) : hpStable.Push(null);
             int? hpMax = pixels ? hpMaxStable.Push(lastHud.HpMax) : hpMaxStable.Push(null);
             int? prayer = pixels ? prayerStable.Push(lastHud.Prayer) : prayerStable.Push(null);

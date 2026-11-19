@@ -44,6 +44,7 @@ namespace KavrosAfkWarden
             Line(text, "banner-seconds", settings.BannerSeconds);
             Line(text, "paused", settings.Paused);
             Line(text, "check-updates", settings.CheckForUpdates);
+            Line(text, "save-debug", settings.SaveDebug);
             Line(text, "panel-topmost", settings.PanelTopMost);
             text.Append("panel\t").Append(settings.PanelX.ToString(CultureInfo.InvariantCulture)).Append('\t').Append(settings.PanelY.ToString(CultureInfo.InvariantCulture)).Append("\r\n");
             Pin(text, "hp-pin", settings.HpPinX, settings.HpPinY, settings.HpPinW, settings.HpPinH);
@@ -96,6 +97,7 @@ namespace KavrosAfkWarden
                 else if (parts[0] == "banner-seconds" && int.TryParse(parts[1], out number)) settings.BannerSeconds = number;
                 else if (parts[0] == "paused" && bool.TryParse(parts[1], out flag)) settings.Paused = flag;
                 else if (parts[0] == "check-updates" && bool.TryParse(parts[1], out flag)) settings.CheckForUpdates = flag;
+                else if (parts[0] == "save-debug" && bool.TryParse(parts[1], out flag)) settings.SaveDebug = flag;
                 else if (parts[0] == "panel-topmost" && bool.TryParse(parts[1], out flag)) settings.PanelTopMost = flag;
                 else if (parts[0] == "panel" && parts.Length >= 3)
                 {

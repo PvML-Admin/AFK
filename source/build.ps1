@@ -18,7 +18,7 @@ function Get-PinnedPackage($packages, $id, $version, $dllRelativePath) {
 }
 
 function Find-WindowsMetadata($windowsDirectory, $kitRoots) {
-    # Clue Helper references only the winmd files shipped in System32\WinMetadata
+    # Prefer the winmd files shipped in System32\WinMetadata
     # (Windows.Foundation, Windows.Graphics, Windows.Media, and so on). Graphics
     # Capture and Direct3D11 are not separate files there, and the toast types
     # live in Windows.UI.winmd rather than Windows.UI.Notifications.winmd.
@@ -162,7 +162,7 @@ try {
     if (-not (Test-Path -LiteralPath $icon)) { throw "Missing $icon." }
     if (-not (Test-Path -LiteralPath $crest)) { throw "Missing $crest." }
     $resources = @("/win32icon:$icon", "/resource:$icon,Kavros.Branding.afk-warden.ico", "/resource:$crest,Kavros.Branding.kavros-crest.png")
-    # Same Cinzel and Outfit instances Clue Helper embeds (SIL OFL 1.1).
+    # Cinzel and Outfit (SIL OFL 1.1).
     foreach ($fontFile in @('CinzelKavros-Regular.ttf','OutfitKavros-Regular.ttf','OutfitKavros-Semibold.ttf')) {
         $resources += "/resource:$(Join-Path $art $fontFile),Kavros.Branding.$fontFile"
     }

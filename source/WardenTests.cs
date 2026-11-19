@@ -282,7 +282,7 @@ namespace KavrosAfkWarden
             PanelDock.Place(100, 80, 900, 600, 400, 262, 12, 72, 0, 0, 1920, 1080, out px, out py);
             Check(px == 112 && py == 152, "the panel keeps its offset inside the chosen client");
             Check(!PanelDock.Visible(true, true, true, true, false, false), "a minimized client hides the panel");
-            Check(!PanelDock.Visible(true, true, false, false, false, false), "the panel does not stay up over another application");
+            Check(PanelDock.Visible(true, true, false, false, false, false), "tabbing out keeps the panel owned by the game instead of hiding it");
             Check(PanelDock.Visible(true, true, false, true, false, false), "the panel shows while the chosen client is in front");
             Check(PanelDock.Visible(true, false, false, false, false, true), "settings keeps the panel available while it is focused");
         }
@@ -461,6 +461,13 @@ namespace KavrosAfkWarden
             DrawBuffIcon(bar, 64, 24, "11m");
             DrawBuffIcon(bar, 112, 24, "4");
             DrawBuffIcon(bar, 160, 24, "");
+            var readClock = System.Diagnostics.Stopwatch.StartNew();
+            ImageBuffer wide = ImageBuffer.Blank(1920, 1080, ImageBuffer.Pack(12, 18, 28));
+            DrawBuffIcon(wide, 40, 40, "11m");
+            HudReading wideRead = HudReader.Read(wide, new WardenSettings());
+            readClock.Stop();
+            Check(wideRead.BuffBarFound && wideRead.Buffs.Count >= 1 && readClock.ElapsedMilliseconds < 250, "a 1080p buff search stays under 250 ms, took " + readClock.ElapsedMilliseconds.ToString() + " ms");
+            Console.WriteLine("hud-read-1080p-ms=" + readClock.ElapsedMilliseconds.ToString());
             HudReading icons = HudReader.Read(bar, new WardenSettings());
             Check(icons.BuffBarFound && icons.Buffs.Count == 4, "green-bordered buff icons are found in a row, got " + icons.Buffs.Count.ToString());
             Check(icons.Buffs.Count > 0 && icons.Buffs[0].HasTime && !icons.Buffs[0].Minutes && icons.Buffs[0].Value == 60, "a plain buff number is seconds");
@@ -516,7 +523,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.0" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.1" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -527,10 +534,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.0\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.1\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.0.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.1.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

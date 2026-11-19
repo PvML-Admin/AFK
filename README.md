@@ -1,16 +1,16 @@
 # AFK Warden
 
-AFK Warden is a Companion module for Kavros. It watches the game window and warns you when you have gone idle, when hitpoints or prayer run low, and shortly before the inactivity timer would send you to AFK. Version 0.2.0 is a Windows .NET Framework 4.8 application, built and packaged the same way as [Kavros Clue Helper](https://github.com/Zenity-sys/kavros-clue-helper) 0.6.10.
+AFK Warden is a Companion module for Kavros. It watches the game window and warns you when you have gone idle, when hitpoints or prayer run low, and shortly before the inactivity timer would send you to AFK. Version 0.2.1 is a Windows .NET Framework 4.8 application.
 
-The public module record is [`companion.module.json`](companion.module.json). The Companion panel can read it from this repository's `main` branch. While the program is running it also writes `%LocalAppData%\Kavros\Companion\modules\afk-warden.json` with `Running · v0.2.0`.
+The public module record is [`companion.module.json`](companion.module.json). The Companion panel can read it from this repository's `main` branch. While the program is running it also writes `%LocalAppData%\Kavros\Companion\modules\afk-warden.json` with `Running · v0.2.1`.
 
-The window uses Clue Helper's theme directly: `source/KavrosTheme.cs`, `OpaqueButton`, `KavrosCheckBox`, the Cinzel and Outfit fonts, the crest, the navy panels, the gold primary button, the dark secondary buttons, and the status pills.
+The window uses the shared Companion theme: `source/KavrosTheme.cs`, `OpaqueButton`, `KavrosCheckBox`, the Cinzel and Outfit fonts, the crest, the navy panels, the gold primary button, the dark secondary buttons, and the status pills.
 
 ## Install
 
 Requires Windows 10 or 11 and .NET Framework 4.8.
 
-A release tag `v0.2.0` (the first three parts of `source/app.manifest`) builds with `source/build.ps1`, packs with Velopack 1.2.161, and publishes:
+A release tag `v0.2.1` (the first three parts of `source/app.manifest`) builds with `source/build.ps1`, packs with Velopack 1.2.161, and publishes:
 
 - `KavrosAfkWarden-win-Setup.exe`
 - `KavrosAfkWarden-win-Portable.zip`
@@ -23,7 +23,7 @@ Settings has **Check for updates at startup** and **Check for updates**. Both ta
 
 ## What you see
 
-The small panel is owned by the Kavros window you picked. It moves with that window and hides when that window is minimized or another application is in front. It is not kept above other applications. Drag the header to change where it sits on the client. **Settings** and **−** are in the header. **−** collapses the panel to the header; **+** opens it again. **Pause** is the gold button. **Exit** is the dark button. A green **GAME DETECTED** pill names the client. **Pick client** waits for you to click the Kavros window to watch. Alert popups stay on top so they can be seen while the game is in the background. Settings stays open until you close it.
+The small panel is owned by the Kavros window you picked. It moves with that window and hides only when that window is minimized. Other applications cover it by normal window order. It is not kept above other applications. Drag the header to change where it sits on the client. **Settings** and **−** are in the header. **−** collapses the panel to the header; **+** opens it again. **Pause** is the gold button. **Exit** is the dark button. A green **GAME DETECTED** pill names the client. **Pick client** waits for you to click the Kavros window to watch. Alert popups stay on top so they can be seen while the game is in the background. Settings stays open until you close it.
 
 **Settings** is the large window: crest, Cinzel "AFK WARDEN" title, and three cards (Watch, Alerts, Channels). Closing that window returns to the panel.
 
@@ -53,11 +53,9 @@ Pin hitpoints or Pin prayer if the automatic search is looking at the wrong numb
 
 ## How the game is read
 
-Kavros does not give this program a hitpoint value, a prayer value, or an inactivity countdown. Clue Helper's rule is the same one used here: read pixels from the window, do not read process memory, and do not send mouse or keyboard input into the game.
+Kavros does not give this program a hitpoint value, a prayer value, or an inactivity countdown. The rule is: read pixels from the window, do not read process memory, and do not send mouse or keyboard input into the game.
 
-Clue Helper captures with `Graphics.CopyFromScreen` on the client rectangle. That call does not need the game to be the foreground window. Its own capture checks say an unobstructed background client is readable. It refuses the frame when the window is minimized, and it refuses the frame when another window covers the sample points, because those screen pixels are no longer the game.
-
-AFK Warden keeps that screen path for a client that is actually on a monitor, focused or not. When Windows Graphics Capture is available it prefers the window's own surface instead, which still updates while the client is behind other windows and while another application has focus. The cursor is not included, and the frame is cropped back to the client area so a pinned rectangle means the same thing on both paths.
+Capture uses `Graphics.CopyFromScreen` on the client, focused or not, as long as the client is actually on a monitor. A full search runs about every four seconds. Between searches only the locked hitpoint, prayer, buff, and a small motion crop are copied. Windows Graphics Capture is not started unless its yellow system border can be turned off. On the Windows 10 contract this build uses, that switch is missing, so the border never appears and the screen path is used. A minimized window has no frame. A window covered by another application may not be readable, because those screen pixels are no longer the game.
 
 A minimized Kavros window is not composed. Neither the screen nor the window surface has a frame. Hitpoints, prayer, and idle cannot be read until you restore it (it can stay behind other windows). The inactivity timer does not need those pixels, so it keeps running and can still notify you. The panel says so while the window is minimized.
 
@@ -84,7 +82,7 @@ KavrosAfkWarden.exe --self-test results.txt
 
 The headless test checks the alert gates, the per-alert sound and notification switches, the settings file, idle versus the AFK clock, minimized and covered capture decisions, digit and bar reading, and that `companion.module.json` matches `source/app.manifest`. It does not open a window and it does not capture the desktop.
 
-Tag `v0.2.0` to publish a release. The tag must match the first three parts of the version in `source/app.manifest`. While **Check for updates at startup** is on, an installed copy also checks GitHub Releases every three hours. A folder copy that was not installed with Setup cannot update itself.
+Tag `v0.2.1` to publish a release. The tag must match the first three parts of the version in `source/app.manifest`. While **Check for updates at startup** is on, an installed copy also checks GitHub Releases every three hours. A folder copy that was not installed with Setup cannot update itself.
 
 ## What was not verified
 

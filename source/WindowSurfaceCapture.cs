@@ -46,6 +46,14 @@ namespace KavrosAfkWarden
             try
             {
                 if (!GraphicsCaptureSession.IsSupported()) { unsupported = true; return; }
+                // The yellow border is a Graphics Capture system border. The
+                // Windows 10 2004 contract this program is built against has no
+                // IsBorderRequired property, so do not create a session at all.
+                if (typeof(GraphicsCaptureSession).GetProperty("IsBorderRequired") == null)
+                {
+                    unsupported = true;
+                    return;
+                }
                 EnsureDevice();
                 item = CreateItem(hwnd);
                 // Do not subscribe to Closed or FrameArrived. The .NET Framework
@@ -56,6 +64,12 @@ namespace KavrosAfkWarden
                 pool = Direct3D11CaptureFramePool.CreateFreeThreaded(device, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, itemSize);
                 session = pool.CreateCaptureSession(item);
                 try { session.IsCursorCaptureEnabled = false; } catch (Exception) { }
+                if (!TryDisableBorder(session))
+                {
+                    unsupported = true;
+                    Stop();
+                    return;
+                }
                 session.StartCapture();
                 target = hwnd;
                 failure = "";
@@ -122,6 +136,19 @@ namespace KavrosAfkWarden
             {
                 if (frame != null) frame.Dispose();
             }
+        }
+
+        private static bool TryDisableBorder(GraphicsCaptureSession session)
+        {
+            try
+            {
+                System.Reflection.PropertyInfo property = session.GetType().GetProperty("IsBorderRequired");
+                if (property == null || !property.CanWrite) return false;
+                property.SetValue(session, false, null);
+                object value = property.GetValue(session, null);
+                return value is bool && (bool)value == false;
+            }
+            catch (Exception) { return false; }
         }
 
         private void Stop()

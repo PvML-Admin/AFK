@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+- The installer splash says Kavros AFK Warden.
+- The panel stays with the chosen client when you tab out and hides only while that client is minimized. Dragging the header uses the window manager.
+- Capture no longer flushes the desktop compositor or scans the whole client on every tick. Windows Graphics Capture is not started unless its yellow border can be turned off, so the game has no capture border.
+- Settings can save a debug capture of the frame and the detected regions under %LocalAppData%\KavrosAfkWarden.
+
 ## 0.2.0
 
 - Life and prayer are read from the movable HUD strip: the red bar is life points and the purple bar is prayer, including comma separators and a current value above the maximum.

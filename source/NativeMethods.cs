@@ -30,6 +30,8 @@ namespace KavrosAfkWarden
         [DllImport("user32.dll")] internal static extern bool ClientToScreen(IntPtr window, ref PointStruct point);
         [DllImport("user32.dll")] internal static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] internal static extern IntPtr WindowFromPoint(PointStruct point);
+        [DllImport("user32.dll")] internal static extern bool ReleaseCapture();
+        [DllImport("user32.dll")] internal static extern IntPtr SendMessage(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
         [DllImport("user32.dll")] internal static extern bool GetCursorPos(out PointStruct point);
         [DllImport("user32.dll")] internal static extern short GetAsyncKeyState(int virtualKey);
         [DllImport("user32.dll")] internal static extern bool SetProcessDPIAware();
@@ -77,7 +79,7 @@ namespace KavrosAfkWarden
         [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")]
         private static extern IntPtr SetWindowLongPtr64(IntPtr window, int index, IntPtr value);
 
-        // GWLP_HWNDPARENT. Clue Helper uses this so the floating card is owned
+        // GWLP_HWNDPARENT. The floating card is owned
         // by the game window: it follows that window's z-order and is not a
         // topmost window over other applications.
         internal static void SetOwner(IntPtr child, IntPtr owner)

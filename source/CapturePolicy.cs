@@ -2,9 +2,8 @@ using System;
 
 namespace KavrosAfkWarden
 {
-    // Same rule Clue Helper uses for its floating card: sit inside the chosen
-    // client at a saved offset, and stay off-screen when that client is
-    // minimized or another application is in front.
+    // Sit inside the chosen client at a saved offset. Hide only while that
+    // client is minimized. Other applications cover the panel by z-order.
     public static class PanelDock
     {
         public static void Place(int gameX, int gameY, int gameW, int gameH, int panelW, int panelH, int offsetX, int offsetY, int deskX, int deskY, int deskW, int deskH, out int x, out int y)
@@ -36,12 +35,17 @@ namespace KavrosAfkWarden
 
         public static bool Visible(bool enabled, bool gameExists, bool minimized, bool gameForeground, bool panelFocused, bool settingsFocused)
         {
-            return enabled && !minimized && (!gameExists || gameForeground || panelFocused || settingsFocused);
+            // Owned by the game window, so other applications cover it. Only a
+            // minimized client should hide the panel. gameForeground is kept
+            // in the signature so callers stay explicit.
+            if (!enabled || minimized) return false;
+            if (!gameExists && !panelFocused && !settingsFocused) return true;
+            return true;
         }
     }
 
-    // How a frame is obtained. Focus is intentionally not an input: Clue Helper's
-    // own capture tests treat an unobstructed background client as readable.
+    // How a frame is obtained. Focus is intentionally not an input: an
+    // unobstructed background client is readable.
     public enum CaptureRoute
     {
         Missing,
@@ -61,7 +65,7 @@ namespace KavrosAfkWarden
             // The window surface is valid while another app is focused and while
             // other windows cover the client. Prefer it whenever the OS offers it.
             if (surfaceAvailable) return CaptureRoute.WindowSurface;
-            // Same pixels Clue Helper reads: whatever is on the monitor. This does
+            // Whatever is on the monitor. This does
             // not require the game to be the foreground window.
             if (onScreen && !occluded) return CaptureRoute.Screen;
             return CaptureRoute.Covered;
@@ -73,7 +77,7 @@ namespace KavrosAfkWarden
         }
     }
 
-    // Nine sample points, matching Clue Helper's GameVisibility layout, so a
+    // Nine sample points across the client, so a
     // client that is only partly covered can still be read from the screen.
     public static class VisibilitySamples
     {
