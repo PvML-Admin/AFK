@@ -1,0 +1,24 @@
+THIRD-PARTY NOTICES
+====================
+
+Velopack 1.2.161
+  Setup.exe, the portable package, and update checks.
+  https://github.com/velopack/velopack
+  MIT License
+
+Newtonsoft.Json 13.0.4
+  Used by Velopack.
+  https://www.newtonsoft.com/json
+  MIT License
+
+Cinzel and Outfit
+  Embedded UI fonts. SIL Open Font License 1.1.
+  See assets/branding/FONTS.txt, OFL-Cinzel.txt, and OFL-Outfit.txt.
+  These are the same static instances Kavros Clue Helper embeds.
+
+Kavros crest and splash
+  Companion branding shared with Kavros Clue Helper.
+  See assets/branding/CREDITS.txt.
+
+AFK Warden reads the Kavros window locally. It does not send game input
+and it does not bundle game client files.

@@ -1,0 +1,402 @@
+using System;
+using System.Collections.Generic;
+
+namespace KavrosAfkWarden
+{
+    public sealed class WardenSettings
+    {
+        public bool IdleEnabled = true;
+        public int IdleSeconds = 12;
+        public bool HpEnabled = true;
+        public int HpThreshold = 30;
+        public bool HpPercent = true;
+        public bool PrayerEnabled = true;
+        public int PrayerThreshold = 20;
+        public bool PrayerPercent = true;
+        public bool AfkEnabled = true;
+        public int AfkSeconds = 300;
+        public int AfkLeadSeconds = 30;
+        public bool SoundMaster = true;
+        public bool NotifyMaster = true;
+        public bool IdleSound = true;
+        public bool IdleNotify = true;
+        public bool HpSound = true;
+        public bool HpNotify = true;
+        public bool PrayerSound = true;
+        public bool PrayerNotify = true;
+        public bool AfkSound = true;
+        public bool AfkNotify = true;
+        public int CooldownSeconds = 20;
+        public int BannerSeconds = 8;
+        public bool Paused;
+        public bool CheckForUpdates = true;
+        public bool PanelTopMost = true;
+        public int PanelX = int.MinValue;
+        public int PanelY = int.MinValue;
+        public double HpPinX = -1, HpPinY, HpPinW, HpPinH;
+        public double PrayerPinX = -1, PrayerPinY, PrayerPinW, PrayerPinH;
+
+        public bool HasHpPin { get { return HpPinW > 0.005 && HpPinH > 0.005; } }
+        public bool HasPrayerPin { get { return PrayerPinW > 0.005 && PrayerPinH > 0.005; } }
+
+        public void Clamp()
+        {
+            IdleSeconds = ClampInt(IdleSeconds, 3, 600);
+            HpThreshold = ClampInt(HpThreshold, 1, HpPercent ? 99 : 99999);
+            PrayerThreshold = ClampInt(PrayerThreshold, 1, PrayerPercent ? 99 : 99999);
+            AfkSeconds = ClampInt(AfkSeconds, 60, 1800);
+            AfkLeadSeconds = ClampInt(AfkLeadSeconds, 5, AfkSeconds - 5);
+            CooldownSeconds = ClampInt(CooldownSeconds, 0, 600);
+            BannerSeconds = ClampInt(BannerSeconds, 2, 120);
+        }
+
+        public bool AllowsSound(string kind)
+        {
+            if (!SoundMaster) return false;
+            if (kind == "idle") return IdleSound;
+            if (kind == "hp") return HpSound;
+            if (kind == "prayer") return PrayerSound;
+            if (kind == "afk") return AfkSound;
+            return false;
+        }
+
+        public bool AllowsNotify(string kind)
+        {
+            if (!NotifyMaster) return false;
+            if (kind == "idle") return IdleNotify;
+            if (kind == "hp") return HpNotify;
+            if (kind == "prayer") return PrayerNotify;
+            if (kind == "afk") return AfkNotify;
+            return false;
+        }
+
+        // A percent threshold needs a maximum, unless the orb already is a percent.
+        // An absolute threshold cannot be applied to an orb fill.
+        public static bool Comparable(bool percentMode, bool fromOrb, bool hasMax)
+        {
+            if (fromOrb) return percentMode;
+            if (percentMode) return hasMax;
+            return true;
+        }
+
+        private static int ClampInt(int value, int lo, int hi)
+        {
+            if (value < lo) return lo;
+            if (value > hi) return hi;
+            return value;
+        }
+    }
+
+    public sealed class AlertGate
+    {
+        private bool armed = true;
+        private DateTime lastFired = DateTime.MinValue;
+
+        public bool Armed { get { return armed; } }
+
+        // Fires once while the condition holds. After it clears, it can fire
+        // again only once the cooldown since the last fire has also elapsed.
+        public bool ShouldFire(bool condition, DateTime now, TimeSpan cooldown)
+        {
+            if (!condition)
+            {
+                armed = true;
+                return false;
+            }
+            if (!armed) return false;
+            if (lastFired != DateTime.MinValue && now - lastFired < cooldown) return false;
+            armed = false;
+            lastFired = now;
+            return true;
+        }
+    }
+
+    public static class Thresholds
+    {
+        public static bool TryMeasure(int current, int? max, bool percentMode, out int value)
+        {
+            if (!percentMode)
+            {
+                value = current;
+                return current > 0;
+            }
+            if (max == null || max.Value <= 0)
+            {
+                value = 0;
+                return false;
+            }
+            value = (int)Math.Round(100.0 * current / max.Value);
+            return true;
+        }
+
+        public static bool IsLow(int current, int? max, bool percentMode, int threshold)
+        {
+            int value;
+            if (!TryMeasure(current, max, percentMode, out value)) return false;
+            return value < threshold;
+        }
+
+        public static bool IsRecovered(int current, int? max, bool percentMode, int threshold)
+        {
+            int value;
+            if (!TryMeasure(current, max, percentMode, out value)) return false;
+            int margin = percentMode ? 3 : Math.Max(10, threshold / 20);
+            return value >= threshold + margin;
+        }
+    }
+
+    public sealed class LevelWatch
+    {
+        private readonly AlertGate gate = new AlertGate();
+        private bool have;
+        public bool Low;
+
+        public bool Tick(int? current, int? max, bool percentMode, int threshold, bool enabled, DateTime now, TimeSpan cooldown)
+        {
+            if (!enabled)
+            {
+                have = false;
+                Low = false;
+                gate.ShouldFire(false, now, cooldown);
+                return false;
+            }
+            // A missing frame holds the last condition. It is not a recovery.
+            if (current == null) return false;
+            if (!have)
+            {
+                Low = Thresholds.IsLow(current.Value, max, percentMode, threshold);
+                have = true;
+            }
+            else if (Low)
+            {
+                if (Thresholds.IsRecovered(current.Value, max, percentMode, threshold)) Low = false;
+            }
+            else if (Thresholds.IsLow(current.Value, max, percentMode, threshold)) Low = true;
+            return gate.ShouldFire(Low, now, cooldown);
+        }
+    }
+
+    public sealed class StillnessClock
+    {
+        private DateTime? since;
+        private DateTime hold;
+        private bool started;
+        private TimeSpan frozen;
+
+        public TimeSpan StillFor(bool moving, DateTime now, bool running)
+        {
+            if (!started)
+            {
+                started = true;
+                hold = now;
+            }
+            if (!running)
+            {
+                // Drop the gap so a minimized or covered client is not treated as idle time.
+                if (since != null) since = since.Value + (now - hold);
+                hold = now;
+                return frozen;
+            }
+            hold = now;
+            if (moving)
+            {
+                since = null;
+                frozen = TimeSpan.Zero;
+                return TimeSpan.Zero;
+            }
+            if (since == null) since = now;
+            TimeSpan span = now - since.Value;
+            if (span < TimeSpan.Zero) span = TimeSpan.Zero;
+            frozen = span;
+            return span;
+        }
+    }
+
+    public sealed class InactivityClock
+    {
+        private DateTime mark;
+        private DateTime frozenAt;
+        private bool started;
+
+        public void Observe(bool activity, DateTime now, bool running)
+        {
+            if (!started)
+            {
+                started = true;
+                mark = now;
+                frozenAt = now;
+                return;
+            }
+            if (!running)
+            {
+                mark = mark + (now - frozenAt);
+                frozenAt = now;
+                return;
+            }
+            frozenAt = now;
+            if (activity) mark = now;
+        }
+
+        public TimeSpan Remaining(DateTime now, TimeSpan duration)
+        {
+            if (!started) return duration;
+            TimeSpan elapsed = now - mark;
+            if (elapsed < TimeSpan.Zero || elapsed >= duration) return elapsed >= duration ? TimeSpan.Zero : duration;
+            return duration - elapsed;
+        }
+    }
+
+    public sealed class StableValue
+    {
+        private int value;
+        private bool have;
+        private int hits;
+
+        public int? Push(int? next)
+        {
+            if (next == null)
+            {
+                hits = 0;
+                have = false;
+                return null;
+            }
+            if (have && Math.Abs(next.Value - value) <= Math.Max(8, value / 5)) hits++;
+            else hits = 1;
+            have = true;
+            value = next.Value;
+            return hits >= 2 ? next : (int?)null;
+        }
+    }
+
+    public sealed class WatchSample
+    {
+        public DateTime Time;
+        public bool GameAttached;
+        public bool PixelsFresh;
+        public bool CharacterMoving;
+        public bool InputActivity;
+        public int? Hp;
+        public int? HpMax;
+        public int? Prayer;
+        public int? PrayerMax;
+    }
+
+    public sealed class AlertEvent
+    {
+        public string Kind;
+        public string Title;
+        public string Detail;
+        public bool Sound;
+        public bool Notify;
+    }
+
+    public sealed class WardenEngine
+    {
+        private readonly StillnessClock stillness = new StillnessClock();
+        private readonly InactivityClock inactivity = new InactivityClock();
+        private readonly AlertGate idleGate = new AlertGate();
+        private readonly AlertGate afkGate = new AlertGate();
+        private readonly LevelWatch hp = new LevelWatch();
+        private readonly LevelWatch prayer = new LevelWatch();
+
+        public TimeSpan StillFor;
+        public TimeSpan AfkRemaining = TimeSpan.FromMinutes(5);
+        public bool IdleLatched;
+        public bool HpLatched;
+        public bool PrayerLatched;
+        public bool AfkLatched;
+
+        public List<AlertEvent> Tick(WatchSample sample, WardenSettings settings)
+        {
+            settings.Clamp();
+            List<AlertEvent> events = new List<AlertEvent>();
+            bool attached = sample.GameAttached && !settings.Paused;
+            // Idle, hitpoints and prayer need a picture of the client.
+            // The inactivity timer does not: it keeps running while you are in another app,
+            // including while the client is minimized or covered and cannot be read.
+            bool see = attached && sample.PixelsFresh;
+            StillFor = stillness.StillFor(see && sample.CharacterMoving, sample.Time, see);
+            inactivity.Observe(sample.InputActivity, sample.Time, attached);
+            AfkRemaining = inactivity.Remaining(sample.Time, TimeSpan.FromSeconds(settings.AfkSeconds));
+            if (!attached)
+            {
+                IdleLatched = false;
+                HpLatched = false;
+                PrayerLatched = false;
+                AfkLatched = false;
+                idleGate.ShouldFire(false, sample.Time, TimeSpan.Zero);
+                afkGate.ShouldFire(false, sample.Time, TimeSpan.Zero);
+                hp.Tick(null, null, settings.HpPercent, settings.HpThreshold, false, sample.Time, TimeSpan.Zero);
+                prayer.Tick(null, null, settings.PrayerPercent, settings.PrayerThreshold, false, sample.Time, TimeSpan.Zero);
+                return events;
+            }
+
+            TimeSpan cooldown = TimeSpan.FromSeconds(settings.CooldownSeconds);
+            bool idle = see && settings.IdleEnabled && StillFor >= TimeSpan.FromSeconds(settings.IdleSeconds);
+            IdleLatched = idle;
+            if (idleGate.ShouldFire(idle, sample.Time, cooldown))
+                events.Add(Make(settings, "idle", "You have gone idle", "No animation or movement for " + (int)StillFor.TotalSeconds + "s."));
+
+            int? hpNow = see ? sample.Hp : (int?)null;
+            if (hp.Tick(hpNow, sample.HpMax, settings.HpPercent, settings.HpThreshold, settings.HpEnabled, sample.Time, cooldown))
+                events.Add(Make(settings, "hp", "Hitpoints are low", FormatLevel("Hitpoints", sample.Hp, sample.HpMax, settings.HpPercent)));
+            HpLatched = hp.Low;
+
+            int? prayerNow = see ? sample.Prayer : (int?)null;
+            if (prayer.Tick(prayerNow, sample.PrayerMax, settings.PrayerPercent, settings.PrayerThreshold, settings.PrayerEnabled, sample.Time, cooldown))
+                events.Add(Make(settings, "prayer", "Prayer is low", FormatLevel("Prayer", sample.Prayer, sample.PrayerMax, settings.PrayerPercent)));
+            PrayerLatched = prayer.Low;
+
+            bool afkDue = settings.AfkEnabled && AfkRemaining <= TimeSpan.FromSeconds(settings.AfkLeadSeconds);
+            AfkLatched = afkDue;
+            if (afkGate.ShouldFire(afkDue, sample.Time, cooldown))
+                events.Add(Make(settings, "afk", "AFK teleport soon", "About " + Math.Max(0, (int)AfkRemaining.TotalSeconds) + "s left on the inactivity timer."));
+            return events;
+        }
+
+        private static AlertEvent Make(WardenSettings settings, string kind, string title, string detail)
+        {
+            AlertEvent ev = new AlertEvent();
+            ev.Kind = kind;
+            ev.Title = title;
+            ev.Detail = detail;
+            ev.Sound = settings.AllowsSound(kind);
+            ev.Notify = settings.AllowsNotify(kind);
+            return ev;
+        }
+
+        public static string FormatLevel(string name, int? current, int? max, bool percent)
+        {
+            if (current == null) return name + " unread";
+            if (max != null && max.Value > 0)
+            {
+                int pct = (int)Math.Round(100.0 * current.Value / max.Value);
+                return current.Value.ToString() + " / " + max.Value.ToString() + " (" + pct.ToString() + "%)";
+            }
+            return percent ? current.Value.ToString() + " (maximum unread)" : current.Value.ToString();
+        }
+    }
+
+    public static class InputActivity
+    {
+        public static bool IsActivity(bool iconic, bool foreground, bool cursorOverGame, bool cursorMoved, bool buttonDown, bool keyDown)
+        {
+            if (iconic) return false;
+            if (cursorOverGame && (cursorMoved || buttonDown)) return true;
+            if (foreground && keyDown) return true;
+            return false;
+        }
+    }
+
+    public static class AlertPlacement
+    {
+        public static IntRect Place(int workLeft, int workTop, int workWidth, int workHeight, int width, int height, int index)
+        {
+            int x = workLeft + workWidth - width - 16;
+            int y = workTop + workHeight - height - 16 - index * (height + 8);
+            if (x < workLeft) x = workLeft;
+            if (y < workTop) y = workTop;
+            return new IntRect(x, y, width, height);
+        }
+    }
+}

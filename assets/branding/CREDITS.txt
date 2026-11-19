@@ -1,0 +1,4 @@
+Kavros crest and splash: the Companion branding used by Kavros Clue Helper.
+
+Cinzel and Outfit fonts: SIL Open Font License 1.1. See FONTS.txt.
+The font files are the same OFL instances Clue Helper embeds.

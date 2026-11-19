@@ -1,0 +1,3 @@
+Kavros AFK Warden v0.1.0
+Native Windows .NET Framework build.
+Rebuild with source/build.ps1.
