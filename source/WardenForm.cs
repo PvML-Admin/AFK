@@ -709,8 +709,9 @@ namespace KavrosAfkWarden
             Rectangle client = NativeMethods.ClientBounds(selected);
             using (RegionPicker picker = new RegionPicker(client))
             {
-                if (picker.ShowDialog(this) != DialogResult.OK || picker.Selection.Width < 8) return;
+                if (picker.ShowDialog(this) != DialogResult.OK) return;
                 Rectangle picked = picker.Selection;
+                if (picked.Width < 8) return;
                 if (hp)
                 {
                     settings.HpPinX = picked.X / (double)client.Width;

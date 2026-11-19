@@ -1,5 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.WindowsRuntime;
+using Windows.Foundation;
 using Windows.Graphics;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
@@ -24,12 +26,26 @@ namespace KavrosAfkWarden
         private GraphicsCaptureItem item;
         private Direct3D11CaptureFramePool pool;
         private GraphicsCaptureSession session;
+        private readonly TypedEventHandler<GraphicsCaptureItem, object> onClosed;
+        private readonly TypedEventHandler<Direct3D11CaptureFramePool, object> onFrame;
+        private EventRegistrationToken closedToken;
+        private EventRegistrationToken frameToken;
+        private bool closedHooked;
+        private bool frameHooked;
         private IntPtr target = IntPtr.Zero;
         private readonly object gate = new object();
         private ImageBuffer latest;
         private DateTime latestAt = DateTime.MinValue;
         private string failure = "";
         private bool unsupported;
+
+        internal WindowSurfaceCapture()
+        {
+            // Keep the delegates rooted for the life of this object. WinRT does
+            // not keep a managed method-group conversion alive by itself.
+            onClosed = OnClosed;
+            onFrame = OnFrame;
+        }
 
         internal bool Available { get { return !unsupported && failure.Length == 0; } }
         internal string Failure { get { return unsupported ? "Window capture is not supported on this Windows build." : failure; } }
@@ -44,9 +60,13 @@ namespace KavrosAfkWarden
                 if (!GraphicsCaptureSession.IsSupported()) { unsupported = true; return; }
                 EnsureDevice();
                 item = CreateItem(hwnd);
-                item.Closed += OnClosed;
+                // The .NET Framework C# 5 compiler cannot subscribe to these WinRT
+                // events with += (CS1545). Call the accessors it names instead.
+                closedToken = item.add_Closed(onClosed);
+                closedHooked = true;
                 pool = Direct3D11CaptureFramePool.CreateFreeThreaded(device, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, item.Size);
-                pool.FrameArrived += OnFrame;
+                frameToken = pool.add_FrameArrived(onFrame);
+                frameHooked = true;
                 session = pool.CreateCaptureSession(item);
                 try { session.IsCursorCaptureEnabled = false; } catch (Exception) { }
                 session.StartCapture();
@@ -102,6 +122,16 @@ namespace KavrosAfkWarden
         {
             target = IntPtr.Zero;
             lock (gate) { latest = null; latestAt = DateTime.MinValue; }
+            if (closedHooked)
+            {
+                closedHooked = false;
+                try { if (item != null) item.remove_Closed(closedToken); } catch (Exception) { }
+            }
+            if (frameHooked)
+            {
+                frameHooked = false;
+                try { if (pool != null) pool.remove_FrameArrived(frameToken); } catch (Exception) { }
+            }
             try { if (session != null) session.Dispose(); } catch (Exception) { }
             try { if (pool != null) pool.Dispose(); } catch (Exception) { }
             session = null;
