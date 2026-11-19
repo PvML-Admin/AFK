@@ -106,4 +106,17 @@ namespace KavrosAfkWarden
             return visible >= 7;
         }
     }
+
+    // Steady state copies the locked slots twice a second. A full client
+    // search is only for startup, a lost lock, and a slow refresh.
+    public static class CapturePlan
+    {
+        public const int SampleMilliseconds = 500;
+        public const int FullIntervalSeconds = 12;
+
+        public static bool WantFull(bool locked, DateTime now, DateTime nextFull)
+        {
+            return !locked || now >= nextFull;
+        }
+    }
 }

@@ -60,8 +60,18 @@ namespace KavrosAfkWarden
             string[] lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
             for (int i = 0; i < lines.Length; i++)
             {
-                string[] parts = lines[i].Split('\t');
-                if (parts.Length < 2) continue;
+                try { ReadLine(lines[i], settings); }
+                catch (Exception) { }
+            }
+            try { settings.Clamp(); }
+            catch (Exception) { return new WardenSettings(); }
+            return settings;
+        }
+
+        private static void ReadLine(string line, WardenSettings settings)
+        {
+                string[] parts = line.Split('\t');
+                if (parts.Length < 2) return;
                 bool flag;
                 int number;
                 if (parts[0] == "idle-enabled" && bool.TryParse(parts[1], out flag)) settings.IdleEnabled = flag;
@@ -111,9 +121,6 @@ namespace KavrosAfkWarden
                 else if (parts[0] == "hp-pin") ReadPin(parts, settings, 0);
                 else if (parts[0] == "prayer-pin") ReadPin(parts, settings, 1);
                 else if (parts[0] == "buff-pin") ReadPin(parts, settings, 2);
-            }
-            settings.Clamp();
-            return settings;
         }
 
         public static void Save(string path, WardenSettings settings)
@@ -124,8 +131,15 @@ namespace KavrosAfkWarden
 
         public static WardenSettings Load(string path)
         {
-            if (!File.Exists(path)) return new WardenSettings();
-            return Read(File.ReadAllText(path));
+            try
+            {
+                if (string.IsNullOrEmpty(path) || !File.Exists(path)) return new WardenSettings();
+                return Read(File.ReadAllText(path));
+            }
+            catch (Exception)
+            {
+                return new WardenSettings();
+            }
         }
 
         private static void Line(StringBuilder text, string key, bool value)

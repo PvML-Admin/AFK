@@ -31,6 +31,7 @@ namespace KavrosAfkWarden
                 Potions();
                 LiveCapture(root);
                 Live023(root);
+                LiveRead(root);
                 Manifest(root);
             }
             catch (Exception ex)
@@ -265,11 +266,16 @@ namespace KavrosAfkWarden
 
         private static void Input()
         {
-            Check(InputActivity.IsActivity(false, false, true, true, false, false), "cursor motion over an unfocused game resets the timer");
+            Check(!InputActivity.IsActivity(false, false, true, true, false, false), "cursor motion does not reset idle");
+            Check(!InputActivity.IsActivity(false, true, true, true, false, false), "mouse movement over the focused game is not a click");
             Check(!InputActivity.IsActivity(false, false, false, false, false, true), "keys typed into another app do not reset it");
             Check(InputActivity.IsActivity(false, true, false, false, false, true), "keys reset it while the game is focused");
+            Check(InputActivity.IsActivity(false, true, true, false, true, false), "a click in the focused game resets idle");
             Check(!InputActivity.IsActivity(true, false, true, true, true, true), "a minimized game receives none of this input");
             Check(!InputActivity.IsActivity(false, false, false, true, true, false), "clicks on the window that covers the game do not count");
+            Check(CapturePlan.WantFull(false, DateTime.UtcNow, DateTime.UtcNow.AddSeconds(12)), "a missing lock forces a full search");
+            Check(!CapturePlan.WantFull(true, DateTime.UtcNow, DateTime.UtcNow.AddSeconds(12)), "a locked slot waits out the slow full search");
+            Check(CapturePlan.SampleMilliseconds <= 500 && CapturePlan.FullIntervalSeconds >= 10, "steady capture stays at or under 2 Hz");
         }
 
         private static void Placement()
@@ -519,6 +525,7 @@ namespace KavrosAfkWarden
             image.Fill(x, y, 3, size, green);
             image.Fill(x + size - 3, y, 3, size, green);
             image.Fill(x + 3, y + 3, size - 6, size - 6, dark);
+            image.Fill(x + 8, y + 6, 18, 12, ImageBuffer.Pack(90, 150, 230));
             int tx = x + 4;
             int ty = y + size - 18;
             for (int i = 0; i < text.Length; i++)
@@ -606,11 +613,35 @@ namespace KavrosAfkWarden
             Check(!calm.Tick(trees, new HudReading()), "the first scene is not activity");
             Check(!calm.Tick(sway, new HudReading()), "swaying trees and water are not player activity");
             StableValue steady = new StableValue();
-            steady.Need = 3;
             Check(steady.Push(1040) == null, "one prayer frame is not shown");
-            Check(steady.Push(1040) == null, "two prayer frames are not enough");
-            Check(steady.Push(1040) == 1040, "three consistent prayer reads are shown");
+            Check(steady.Push(1040) == 1040, "two agreeing prayer reads are shown");
             Check(steady.Push(400) == 1040, "a single prayer jump is rejected");
+            Check(steady.Push(400) == 400, "two agreeing new reads replace the old value");
+            SceneActivity xpScene = new SceneActivity();
+            ImageBuffer xpBase = ImageBuffer.Blank(400, 300, ImageBuffer.Pack(20, 24, 28));
+            xpBase.Fill(280, 20, 40, 12, ImageBuffer.Pack(240, 230, 210));
+            Check(!xpScene.Tick(xpBase, new HudReading(), false, false, false), "the first xp sample is not activity");
+            Check(xpScene.Tick(xpBase, new HudReading(), false, true, false) && xpScene.Reason.IndexOf("xp") >= 0, "an xp drop resets idle");
+            ImageBuffer packA = ImageBuffer.Blank(200, 280, ImageBuffer.Pack(12, 14, 16));
+            ImageBuffer packB = ImageBuffer.Blank(200, 280, ImageBuffer.Pack(12, 14, 16));
+            for (int row = 0; row < 7; row++)
+                for (int col = 0; col < 4; col++)
+                {
+                    packA.Fill(20 + col * 30, 20 + row * 30, 28, 28, ImageBuffer.Pack(90, 90, 90));
+                    packA.Fill(24 + col * 30, 24 + row * 30, 20, 20, ImageBuffer.Pack(20, 20, 20));
+                    packB.Fill(20 + col * 30, 20 + row * 30, 28, 28, ImageBuffer.Pack(90, 90, 90));
+                    packB.Fill(24 + col * 30, 24 + row * 30, 20, 20, ImageBuffer.Pack(20, 20, 20));
+                }
+            IntRect grid = SceneActivity.PackWatch.Find(packA);
+            Check(grid.Width > 0, "a 28-slot backpack grid can be located");
+            int before = SceneActivity.PackWatch.Hash(packA, grid);
+            packB.Fill(24, 24, 20, 20, ImageBuffer.Pack(180, 40, 40));
+            Check(SceneActivity.PackWatch.Hash(packB, grid) != before, "a backpack content change changes the slot hash");
+            WardenSettings junk = SettingsText.Read("not-a-key\tidle-seconds\tnope\r\npanel\tnot\tnumbers\r\n");
+            Check(junk.IdleSeconds == 12, "a broken settings line keeps the defaults");
+            int px = -4000, py = 20;
+            ScreenClamp.Place(ref px, ref py, 400, 262, new int[] { 0 }, new int[] { 0 }, new int[] { 1920 }, new int[] { 1080 });
+            Check(px >= 0 && py >= 0, "an off-screen panel is moved onto a visible screen");
         }
 
         private static void Live023(string root)
@@ -633,11 +664,94 @@ namespace KavrosAfkWarden
             Check(reading.BuffBarFound && shown != null, "live023 buff icons expose a timer, got " + (reading.BuffTrace ?? "") + " shown " + (shown == null ? "none" : shown.Value.ToString()));
             HudReading drained = HudReader.Read(PngImage.Load(prayer), new WardenSettings());
             Check(drained.Prayer == 936 && drained.PrayerMax == 990, "drained prayer reads 936/990, got " + (drained.Prayer == null ? "none" : drained.Prayer.Value.ToString()) + "/" + (drained.PrayerMax == null ? "-" : drained.PrayerMax.Value.ToString()) + " trace=" + drained.PrayerTrace + " last=" + HudReader.LastTrace);
+            string v024 = Path.Combine(dir, "game-prayer-936-990-v024.png");
+            if (File.Exists(v024))
+            {
+                HudReading again = HudReader.Read(PngImage.Load(v024), new WardenSettings());
+                Check(again.Prayer == 936 && again.PrayerMax == 990, "v024 prayer crop reads 936/990, got " + (again.Prayer == null ? "none" : again.Prayer.Value.ToString()) + "/" + (again.PrayerMax == null ? "-" : again.PrayerMax.Value.ToString()) + " " + again.PrayerTrace);
+            }
+        }
+
+        private static void LiveRead(string root)
+        {
+            DateTime t = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            ExpectPair(917, 1060, true, "HP 917/1060 is accepted");
+            ExpectPair(99, 1060, true, "HP 99/1060 is accepted");
+            ExpectPair(5, 1060, true, "HP 5/1060 is accepted");
+            ExpectPair(842, 990, false, "prayer 842/990 is accepted");
+            ExpectPair(9, 990, false, "prayer 9/990 is accepted");
+            SlotWatch drain = new SlotWatch();
+            int[] steps = new int[] { 990, 980, 970, 960, 950, 940, 936 };
+            for (int i = 0; i < steps.Length; i++)
+            {
+                ImageBuffer frame = HudFrame(1060, 1060, steps[i], 990);
+                drain.Observe(frame, new WardenSettings(), t.AddMilliseconds(500 * i));
+                drain.Observe(frame, new WardenSettings(), t.AddMilliseconds(500 * i + 200));
+            }
+            Check(drain.Prayer == 936 && drain.PrayerMax == 990, "draining prayer reaches 936/990 through the locked slot, got " + (drain.Prayer == null ? "none" : drain.Prayer.Value.ToString()) + "/" + (drain.PrayerMax == null ? "-" : drain.PrayerMax.Value.ToString()));
+            Check(drain.Hp == 1060 && drain.HpMax == 1060, "locked life stays 1060/1060 while prayer drains");
+            ReadGate gate = new ReadGate();
+            gate.Push(917, 1060, t);
+            gate.Push(917, 1060, t.AddMilliseconds(500));
+            gate.Push(null, 1060, t.AddSeconds(6));
+            Check(gate.Value == 917 && gate.Stale, "a missing read keeps the last current and marks it stale, got " + (gate.Value == null ? "none" : gate.Value.Value.ToString()));
+            gate.Push(50, 60, t.AddSeconds(7));
+            Check(gate.Value == 917, "a read whose maximum does not match the lock is ignored");
+            string dir = string.IsNullOrEmpty(root) ? "" : Path.Combine(root, "verification", "fixtures", "live023");
+            if (dir.Length == 0 || !Directory.Exists(dir)) return;
+            string[] names = new string[] { "buffbar-prayer60-bone5-heart.png", "buffbar-potions-11m-elder-overload.png", "buffbar-potions-12m.png", "panel-potions-60s-wrong.png", "panel-prayer-stuck-990.png", "live-v024-hp-917-unread.png", "live-v024-lagging-values.png", "live-v024-full-layout-lag.png" };
+            for (int i = 0; i < names.Length; i++)
+            {
+                string path = Path.Combine(dir, names[i]);
+                Check(File.Exists(path), "fixture present " + names[i]);
+            }
+            HudReading prayerBar = HudReader.Read(PngImage.Load(Path.Combine(dir, "buffbar-prayer60-bone5-heart.png")), new WardenSettings());
+            Check(BuffClock.ShownSeconds(prayerBar.Buffs) == null, "the purple 60 and the stack of 5 are not potion timers, trace " + (prayerBar.BuffTrace ?? ""));
+            HudReading twelve = HudReader.Read(PngImage.Load(Path.Combine(dir, "buffbar-potions-12m.png")), new WardenSettings());
+            Check(BuffClock.ShownSeconds(twelve.Buffs) == 720, "two flasks at 12m are potion timers, trace " + (twelve.BuffTrace ?? ""));
+            HudReading eleven = HudReader.Read(PngImage.Load(Path.Combine(dir, "buffbar-potions-11m-elder-overload.png")), new WardenSettings());
+            int? potion = BuffClock.ShownSeconds(eleven.Buffs);
+            Check(potion == 660, "elder overload row tracks 11m and ignores the stack of 5, got " + (potion == null ? "none" : potion.Value.ToString()) + " " + (eleven.BuffTrace ?? ""));
+        }
+
+        private static void ExpectPair(int current, int max, bool life, string label)
+        {
+            SlotWatch watch = new SlotWatch();
+            DateTime t = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            ImageBuffer frame = life ? HudFrame(current, max, 990, 990) : HudFrame(1060, 1060, current, max);
+            watch.Observe(frame, new WardenSettings(), t);
+            watch.Observe(frame, new WardenSettings(), t.AddMilliseconds(500));
+            int? got = life ? watch.Hp : watch.Prayer;
+            int? gotMax = life ? watch.HpMax : watch.PrayerMax;
+            Check(got == current && gotMax == max, label + ", got " + (got == null ? "none" : got.Value.ToString()) + "/" + (gotMax == null ? "-" : gotMax.Value.ToString()));
+        }
+
+        private static ImageBuffer HudFrame(int hp, int hpMax, int prayer, int prayerMax)
+        {
+            int white = ImageBuffer.Pack(236, 236, 236);
+            int red = ImageBuffer.Pack(196, 42, 42);
+            int purple = ImageBuffer.Pack(142, 70, 196);
+            int yellow = ImageBuffer.Pack(214, 184, 48);
+            ImageBuffer image = ImageBuffer.Blank(640, 160, ImageBuffer.Pack(10, 16, 22));
+            image.Fill(40, 90, 150, 8, red);
+            DrawLifeNumber(image, 40, 68, DigitsOf(hp), DigitsOf(hpMax), white);
+            image.Fill(230, 90, 80, 8, yellow);
+            image.Fill(340, 90, 140, 8, purple);
+            DrawLifeNumber(image, 340, 68, DigitsOf(prayer), DigitsOf(prayerMax), white);
+            return image;
+        }
+
+        private static int[] DigitsOf(int value)
+        {
+            string text = value.ToString();
+            int[] digits = new int[text.Length];
+            for (int i = 0; i < text.Length; i++) digits[i] = text[i] - '0';
+            return digits;
         }
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.4" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.5" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -648,10 +762,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.4\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.5\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.4.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.5.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

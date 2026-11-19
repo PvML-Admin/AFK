@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.5
+
+- The window opens on the first click. The panel shows Starting immediately. Client search, settings, the update check, and the first full capture run in the background. A second launch brings the existing window forward, or replaces it if it is stuck. Closing exits the process.
+- Capture follows the small locked slots (life, prayer, buff strip, XP) about twice a second. A full client search runs at startup, when a lock is lost, and about every 12 seconds, off the UI thread. Debug images are saved only when that option is on, at most every 30 seconds, as a smaller JPEG.
+- Life and prayer accept a short current value such as 917/1,060 or 9/990. The panel updates when two of the last three reads agree, and it does not show the maximum as the current value. A read with no new sample for five seconds is marked stale.
+- Idle ignores mouse movement. Clicks and keys count only while the game is in front. An XP drop or a change in the backpack also counts. The reason is written to the debug log when that log is on.
+- Potion time comes from potion icons (flasks, overload, antifire-style), not from a prayer buff or a stack count.
+
 ## 0.2.4
 
 - Life and prayer numbers are read from the full bar slot, not the shrinking coloured fill. A good slot is kept, so a short fill on a later frame does not drop the number.

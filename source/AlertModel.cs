@@ -301,39 +301,172 @@ namespace KavrosAfkWarden
 
     public sealed class StableValue
     {
+        private readonly int[] recent = new int[3];
+        private int count;
         private int shown;
-        private int pending;
         private bool have;
-        private bool havePending;
-        private int hits;
-        private int misses;
-        internal int Need = 2;
 
+        // Two of the last three accepted reads. A single different value does not move the panel.
         public int? Push(int? next)
         {
-            if (next == null)
+            if (next == null) return have ? (int?)shown : null;
+            recent[0] = recent[1];
+            recent[1] = recent[2];
+            recent[2] = next.Value;
+            if (count < 3) count++;
+            int agreed;
+            if (Agree(out agreed))
             {
-                misses++;
-                hits = 0;
-                if (misses >= 3) have = false;
-                return have ? (int?)shown : null;
-            }
-            misses = 0;
-            int basis = have ? shown : next.Value;
-            int tolerance = Math.Max(6, Math.Abs(basis) / 12);
-            if (!havePending || Math.Abs(next.Value - pending) > tolerance)
-            {
-                pending = next.Value;
-                havePending = true;
-                hits = 1;
-            }
-            else hits++;
-            if (hits >= Need)
-            {
-                shown = pending;
+                shown = agreed;
                 have = true;
             }
             return have ? (int?)shown : null;
+        }
+
+        private bool Agree(out int value)
+        {
+            value = 0;
+            if (count < 2) return false;
+            int start = 3 - count;
+            for (int i = start; i < 3; i++)
+            {
+                int hits = 0;
+                for (int j = start; j < 3; j++) if (recent[j] == recent[i]) hits++;
+                if (hits >= 2) { value = recent[i]; return true; }
+            }
+            return false;
+        }
+    }
+
+    // A HUD number is shown only when the slash was read and the maximum matches
+    // the maximum already locked from earlier reads. The maximum is never copied
+    // into the current value.
+    public sealed class ReadGate
+    {
+        private readonly StableValue current = new StableValue();
+        private readonly StableValue maximum = new StableValue();
+        private int? lockedMax;
+        private DateTime lastGood;
+        private bool saw;
+        public int? Value;
+        public int? Max;
+        public bool Stale;
+
+        public void Push(int? nowCurrent, int? nowMax, DateTime now)
+        {
+            bool valid = nowCurrent != null && nowMax != null && nowMax.Value > 0;
+            if (valid && lockedMax != null && nowMax.Value != lockedMax.Value) valid = false;
+            if (!valid)
+            {
+                Stale = saw && (now - lastGood).TotalSeconds > 5;
+                Value = current.Push(null);
+                return;
+            }
+            lastGood = now;
+            saw = true;
+            Stale = false;
+            int? maxShown = maximum.Push(nowMax);
+            if (maxShown != null) lockedMax = maxShown;
+            Value = current.Push(nowCurrent);
+            Max = lockedMax != null ? lockedMax : maxShown;
+        }
+    }
+
+    // Full search once, then the same text rectangle. This is the live path the
+    // panel uses after the bars have been found.
+    public sealed class SlotWatch
+    {
+        private IntRect life;
+        private IntRect prayer;
+        private bool haveLife;
+        private bool havePrayer;
+        private readonly ReadGate hp = new ReadGate();
+        private readonly ReadGate prayerGate = new ReadGate();
+        public int? Hp { get { return hp.Value; } }
+        public int? HpMax { get { return hp.Max; } }
+        public int? Prayer { get { return prayerGate.Value; } }
+        public int? PrayerMax { get { return prayerGate.Max; } }
+        public bool HpStale { get { return hp.Stale; } }
+        public bool PrayerStale { get { return prayerGate.Stale; } }
+
+        public void Observe(ImageBuffer image, WardenSettings settings, DateTime now)
+        {
+            int? h = null, hm = null, p = null, pm = null;
+            if (image == null)
+            {
+                hp.Push(null, null, now);
+                prayerGate.Push(null, null, now);
+                return;
+            }
+            if (!haveLife || !havePrayer)
+            {
+                HudReading reading = HudReader.Read(image, settings == null ? new WardenSettings() : settings);
+                if (reading.Hp != null && reading.HpMax != null && reading.LifeText.Width > 8)
+                {
+                    life = Pad(reading.LifeText);
+                    haveLife = true;
+                }
+                if (reading.Prayer != null && reading.PrayerMax != null && reading.PrayerText.Width > 8)
+                {
+                    prayer = Pad(reading.PrayerText);
+                    havePrayer = true;
+                }
+                if (reading.Hp != null && reading.HpMax != null) { h = reading.Hp; hm = reading.HpMax; }
+                if (reading.Prayer != null && reading.PrayerMax != null) { p = reading.Prayer; pm = reading.PrayerMax; }
+            }
+            else
+            {
+                HudReading lifeRead = new HudReading();
+                ImageBuffer lifeCrop = Crop(image, life);
+                if (lifeCrop != null) HudReader.ReadBox(lifeCrop, true, lifeRead);
+                if (lifeRead.Hp != null && lifeRead.HpMax != null) { h = lifeRead.Hp; hm = lifeRead.HpMax; }
+                HudReading prayerRead = new HudReading();
+                ImageBuffer prayerCrop = Crop(image, prayer);
+                if (prayerCrop != null) HudReader.ReadBox(prayerCrop, false, prayerRead);
+                if (prayerRead.Prayer != null && prayerRead.PrayerMax != null) { p = prayerRead.Prayer; pm = prayerRead.PrayerMax; }
+            }
+            hp.Push(h, hm, now);
+            prayerGate.Push(p, pm, now);
+        }
+
+        private static IntRect Pad(IntRect box)
+        {
+            return new IntRect(box.X - 4, box.Y - 2, box.Width + 8, box.Height + 4);
+        }
+
+        private static ImageBuffer Crop(ImageBuffer image, IntRect box)
+        {
+            int x = box.X;
+            int y = box.Y;
+            int w = box.Width;
+            int h = box.Height;
+            if (x < 0) { w += x; x = 0; }
+            if (y < 0) { h += y; y = 0; }
+            if (x + w > image.Width) w = image.Width - x;
+            if (y + h > image.Height) h = image.Height - y;
+            if (w < 4 || h < 4) return null;
+            return image.Crop(x, y, w, h);
+        }
+    }
+
+    public static class ScreenClamp
+    {
+        public static void Place(ref int x, ref int y, int width, int height, int[] screenX, int[] screenY, int[] screenW, int[] screenH)
+        {
+            if (screenX == null || screenX.Length == 0)
+            {
+                x = 24;
+                y = 24;
+                return;
+            }
+            for (int i = 0; i < screenX.Length; i++)
+            {
+                int overlapW = Math.Min(x + width, screenX[i] + screenW[i]) - Math.Max(x, screenX[i]);
+                int overlapH = Math.Min(y + height, screenY[i] + screenH[i]) - Math.Max(y, screenY[i]);
+                if (overlapW >= 48 && overlapH >= 48) return;
+            }
+            x = screenX[0] + 24;
+            y = screenY[0] + 24;
         }
     }
 
@@ -343,6 +476,7 @@ namespace KavrosAfkWarden
         public bool HasTime;
         public bool Minutes;
         public int Value;
+        public string Kind;
     }
 
     // A plain number on a buff icon can be a stack count. It becomes a potion
@@ -376,6 +510,7 @@ namespace KavrosAfkWarden
                 {
                     BuffIcon icon = icons[i];
                     if (!icon.HasTime) continue;
+                    if (icon.Kind != null && icon.Kind.Length > 0 && icon.Kind != "potion") continue;
                     int index = -1;
                     for (int s = 0; s < slots.Count; s++)
                         if (Math.Abs(slots[s].X - icon.X) <= 18) { index = s; break; }
@@ -405,8 +540,8 @@ namespace KavrosAfkWarden
             return best < 0 ? (int?)null : best;
         }
 
-        // What the panel shows. Minute marks count immediately. A plain number
-        // counts when it is too large to be a stack such as 4 or 8.
+        // Lowest potion timer. Only icons classified as potions count, including
+        // a plain seconds value once the flask has counted down past a minute.
         public static int? ShownSeconds(List<BuffIcon> icons)
         {
             int best = -1;
@@ -414,9 +549,8 @@ namespace KavrosAfkWarden
             for (int i = 0; i < icons.Count; i++)
             {
                 BuffIcon icon = icons[i];
-                if (!icon.HasTime || icon.Value <= 0) continue;
+                if (icon.Kind != "potion" || !icon.HasTime || icon.Value <= 0) continue;
                 int seconds = icon.Minutes ? icon.Value * 60 : icon.Value;
-                if (!icon.Minutes && icon.Value < 10) continue;
                 if (best < 0 || seconds < best) best = seconds;
             }
             return best < 0 ? (int?)null : best;
@@ -549,10 +683,8 @@ namespace KavrosAfkWarden
     {
         public static bool IsActivity(bool iconic, bool foreground, bool cursorOverGame, bool cursorMoved, bool buttonDown, bool keyDown)
         {
-            if (iconic) return false;
-            if (cursorOverGame && (cursorMoved || buttonDown)) return true;
-            if (foreground && keyDown) return true;
-            return false;
+            if (iconic || !foreground) return false;
+            return buttonDown || keyDown;
         }
     }
 

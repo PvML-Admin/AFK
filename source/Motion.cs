@@ -143,10 +143,17 @@ namespace KavrosAfkWarden
         // in that bar, a hitsplat, an XP counter, or the HUD numbers is.
         public bool Tick(ImageBuffer image, HudReading reading, bool playerInput)
         {
+            return Tick(image, reading, playerInput, false, false);
+        }
+
+        public bool Tick(ImageBuffer image, HudReading reading, bool playerInput, bool xpChanged, bool packChanged)
+        {
             string reason = "";
-            if (playerInput) reason = Join(reason, "input");
+            if (playerInput) reason = Join(reason, "key");
             string hud = HudChange(reading);
             if (hud.Length > 0) reason = Join(reason, hud);
+            if (xpChanged) reason = Join(reason, "xp");
+            if (packChanged) reason = Join(reason, "pack");
             if (image != null)
             {
                 if (TargetChanged(image, reading)) reason = Join(reason, "target-bar");
@@ -268,6 +275,103 @@ namespace KavrosAfkWarden
             if (!compact && lastXp < 0) lastXp = 0;
             return changed;
         }
+
+    public static class XpWatch
+    {
+        public static IntRect Find(ImageBuffer image)
+        {
+            if (image == null) return new IntRect();
+            int left = image.Width * 55 / 100;
+            int bottom = Math.Max(1, image.Height * 40 / 100);
+            int minX = image.Width, minY = bottom, maxX = 0, maxY = 0, count = 0;
+            int step = image.Width > 900 ? 2 : 1;
+            for (int y = 0; y < bottom; y += step)
+                for (int x = left; x < image.Width; x += step)
+                {
+                    int color = image.Argb(x, y);
+                    int r = ImageBuffer.R(color), g = ImageBuffer.G(color), b = ImageBuffer.B(color);
+                    if (r < 200 || g < 180 || b > 170) continue;
+                    count++;
+                    if (x < minX) minX = x;
+                    if (y < minY) minY = y;
+                    if (x > maxX) maxX = x;
+                    if (y > maxY) maxY = y;
+                }
+            if (count < 12 || maxX <= minX || maxY < minY) return new IntRect();
+            if (maxX - minX > 280 || maxY - minY > 110) return new IntRect();
+            return new IntRect(Math.Max(0, minX - 4), Math.Max(0, minY - 4), Math.Min(image.Width, maxX + 5) - Math.Max(0, minX - 4), Math.Min(image.Height, maxY + 5) - Math.Max(0, minY - 4));
+        }
+
+        public static int Hash(ImageBuffer image, IntRect box)
+        {
+            if (image == null || box.Width < 4 || box.Height < 4) return 0;
+            int hash = 17;
+            int step = Math.Max(1, Math.Min(box.Width, box.Height) / 12);
+            for (int y = box.Y; y < box.Bottom && y < image.Height; y += step)
+                for (int x = box.X; x < box.Right && x < image.Width; x += step)
+                    hash = unchecked(hash * 31 + image.Argb(x, y));
+            return hash;
+        }
+    }
+
+    public static class PackWatch
+    {
+        public static IntRect Find(ImageBuffer image)
+        {
+            if (image == null) return new IntRect();
+            int best = 0;
+            IntRect found = new IntRect();
+            int step = image.Width > 900 ? 20 : 4;
+            for (int cell = 24; cell <= 42; cell += 6)
+            {
+                int gridW = cell * 4;
+                int gridH = cell * 7;
+                if (gridW >= image.Width || gridH >= image.Height) continue;
+                for (int y = 0; y + gridH < image.Height; y += step)
+                    for (int x = 0; x + gridW < image.Width; x += step)
+                    {
+                        int score = Score(image, x, y, cell);
+                        if (score > best) { best = score; found = new IntRect(x, y, gridW, gridH); }
+                    }
+            }
+            if (best < 20) return new IntRect();
+            return found;
+        }
+
+        public static int Hash(ImageBuffer image, IntRect grid)
+        {
+            if (image == null || grid.Width < 16 || grid.Height < 16) return 0;
+            int cellW = grid.Width / 4;
+            int cellH = grid.Height / 7;
+            if (cellW < 4 || cellH < 4) return 0;
+            int hash = 17;
+            for (int row = 0; row < 7; row++)
+                for (int col = 0; col < 4; col++)
+                {
+                    int x = grid.X + col * cellW + cellW / 2;
+                    int y = grid.Y + row * cellH + cellH / 2;
+                    hash = unchecked(hash * 31 + image.Argb(x, y));
+                }
+            return hash;
+        }
+
+        private static int Score(ImageBuffer image, int x, int y, int cell)
+        {
+            int hits = 0;
+            for (int row = 0; row < 7; row++)
+                for (int col = 0; col < 4; col++)
+                {
+                    int cx = x + col * cell + cell / 2;
+                    int cy = y + row * cell + cell / 2;
+                    int center = image.Argb(cx, cy);
+                    int edge = image.Argb(x + col * cell + 1, y + row * cell + 1);
+                    int cr = ImageBuffer.R(center) + ImageBuffer.G(center) + ImageBuffer.B(center);
+                    int er = ImageBuffer.R(edge) + ImageBuffer.G(edge) + ImageBuffer.B(edge);
+                    if (er > cr + 40) hits++;
+                }
+            return hits;
+        }
+    }
 
         // Kept so a future inventory pin can hash one region. Not used for idle:
         // a whole-screen grid treats other players and trees as the user.

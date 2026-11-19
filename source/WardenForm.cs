@@ -2,19 +2,25 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace KavrosAfkWarden
 {
     internal static class Program
     {
-        private static System.Threading.Mutex singleInstance;
+        private static Mutex singleInstance;
+        private static EventWaitHandle activateEvent;
+        private static EventWaitHandle ackEvent;
+        private static WardenForm host;
+        private static Thread activateWaiter;
 
         [STAThread]
         private static int Main(string[] args)
         {
             if (args.Length > 0 && args[0] == "--self-test")
                 return WardenTests.Run(args.Length > 1 ? args[1] : "test-results.txt", FindRoot());
+            CrashLog.Install();
             NetSecurity.EnableModernTls();
             try
             {
@@ -23,22 +29,105 @@ namespace KavrosAfkWarden
                 catch (EntryPointNotFoundException) { NativeMethods.SetProcessDPIAware(); }
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                bool first;
-                singleInstance = new System.Threading.Mutex(true, AppInfo.MutexName, out first);
-                if (!first)
-                {
-                    MessageBox.Show("AFK Warden is already running.", AppInfo.Name);
-                    return 0;
-                }
-                Application.Run(new WardenForm());
-                GC.KeepAlive(singleInstance);
+                Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+                if (!ClaimInstance()) return 0;
+                Application.Run(host);
                 return 0;
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, AppInfo.Name, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                CrashLog.Write(ex);
                 return 1;
             }
+            finally
+            {
+                Environment.Exit(0);
+            }
+        }
+
+        private static bool ClaimInstance()
+        {
+            singleInstance = new Mutex(false, AppInfo.MutexName);
+            activateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, AppInfo.MutexName + ".Activate");
+            ackEvent = new EventWaitHandle(false, EventResetMode.AutoReset, AppInfo.MutexName + ".Ack");
+            bool owned = false;
+            try { owned = singleInstance.WaitOne(0); }
+            catch (AbandonedMutexException) { owned = true; }
+            if (!owned)
+            {
+                try { activateEvent.Set(); } catch (Exception) { }
+                if (ackEvent.WaitOne(800)) return false;
+                if (!InstanceIsFresh())
+                {
+                    KillOther();
+                    try { owned = singleInstance.WaitOne(1500); }
+                    catch (AbandonedMutexException) { owned = true; }
+                }
+            }
+            if (!owned)
+            {
+                MessageBox.Show("AFK Warden is already running.", AppInfo.Name);
+                return false;
+            }
+            try
+            {
+                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KavrosAfkWarden");
+                Directory.CreateDirectory(dir);
+                File.WriteAllText(Path.Combine(dir, "instance.pid"), System.Diagnostics.Process.GetCurrentProcess().Id.ToString());
+            }
+            catch (Exception) { }
+            activateWaiter = new Thread(WaitForActivate);
+            activateWaiter.IsBackground = true;
+            activateWaiter.Start();
+            host = new WardenForm();
+            return true;
+        }
+
+        private static void WaitForActivate()
+        {
+            while (true)
+            {
+                try { if (!activateEvent.WaitOne(500)) continue; }
+                catch (Exception) { return; }
+                WardenForm form = host;
+                if (form == null || !form.IsHandleCreated) continue;
+                try
+                {
+                    form.BeginInvoke(new Action(delegate
+                    {
+                        try { form.BringUp(); } catch (Exception) { }
+                        try { ackEvent.Set(); } catch (Exception) { }
+                    }));
+                }
+                catch (Exception) { }
+            }
+        }
+
+        private static bool InstanceIsFresh()
+        {
+            try
+            {
+                string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KavrosAfkWarden", "instance.pid");
+                if (!File.Exists(path)) return false;
+                return (DateTime.UtcNow - File.GetLastWriteTimeUtc(path)).TotalSeconds < 2.5;
+            }
+            catch (Exception) { return false; }
+        }
+
+        private static void KillOther()
+        {
+            try
+            {
+                string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KavrosAfkWarden", "instance.pid");
+                if (!File.Exists(path)) return;
+                int pid;
+                if (!int.TryParse(File.ReadAllText(path).Trim(), out pid)) return;
+                if (pid == System.Diagnostics.Process.GetCurrentProcess().Id) return;
+                System.Diagnostics.Process other = System.Diagnostics.Process.GetProcessById(pid);
+                other.Kill();
+                other.WaitForExit(1500);
+            }
+            catch (Exception) { }
         }
 
         private static string FindRoot()
@@ -284,13 +373,11 @@ namespace KavrosAfkWarden
         private int? shownPrayer;
         private int? shownPrayerMax;
         private int? shownPotion;
-        private readonly StableValue hpStable = new StableValue();
-        private readonly StableValue hpMaxStable = new StableValue();
-        private readonly StableValue prayerStable = new StableValue();
-        private readonly StableValue prayerMaxStable = new StableValue();
+        private readonly ReadGate hpGate = new ReadGate();
+        private readonly ReadGate prayerGate = new ReadGate();
         private readonly BuffClock buffClock = new BuffClock();
         private readonly WardenEngine engine = new WardenEngine();
-        private readonly Timer timer = new Timer();
+        private readonly System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
         private readonly NotifyIcon tray;
         private readonly string settingsPath;
         private WardenSettings settings = new WardenSettings();
@@ -306,10 +393,8 @@ namespace KavrosAfkWarden
         internal WardenForm()
         {
             settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KavrosAfkWarden", "settings.txt");
-            settings = SettingsText.Load(settingsPath);
-            prayerStable.Need = 3;
-            prayerMaxStable.Need = 3;
-            clientTitle = settings.ClientTitle ?? "";
+            settings = new WardenSettings();
+            clientTitle = "";
             sound.Volume = settings.Volume;
             Text = "AFK Warden";
             Font = KavrosTheme.Ui(9F, false);
@@ -358,15 +443,35 @@ namespace KavrosAfkWarden
             tray.ContextMenuStrip = menu;
             tray.DoubleClick += delegate { ShowPanel(); };
             HandleCreated += delegate { KavrosTheme.ApplyWindowChrome(Handle); };
-            Shown += delegate { Hide(); ShowPanel(); if (settings.CheckForUpdates) AppUpdates.Check(this, false, SetStatus); nextUpdateCheck = DateTime.UtcNow.AddHours(3); CompanionStatus.Write("running", settings.Paused); };
+            Shown += delegate
+            {
+                StartupClock.MarkShown();
+                panel.SetNote("Starting...");
+                Hide();
+                ShowPanel();
+                if (!started)
+                {
+                    started = true;
+                    timer.Interval = CapturePlan.SampleMilliseconds;
+                    timer.Start();
+                    grab.Start();
+                }
+                ThreadPool.QueueUserWorkItem(delegate { Bootstrap(); });
+                try
+                {
+                    string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KavrosAfkWarden");
+                    Directory.CreateDirectory(dir);
+                    File.WriteAllText(Path.Combine(dir, "startup.txt"), "shownMs=" + StartupClock.ShownMs.ToString() + "\r\n");
+                }
+                catch (Exception) { }
+            };
             FormClosing += delegate(object sender, FormClosingEventArgs e)
             {
                 if (!closing && e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); ShowPanel(); }
             };
-            FormClosed += delegate { closing = true; timer.Stop(); Save(); CompanionStatus.Write("stopped", settings.Paused); grab.Dispose(); tray.Visible = false; tray.Dispose(); panel.Dispose(); popup.Dispose(); };
-            timer.Interval = 400;
+            FormClosed += delegate { closing = true; try { timer.Stop(); } catch (Exception) { } try { Save(); } catch (Exception) { } try { CompanionStatus.Write("stopped", settings.Paused); } catch (Exception) { } try { grab.Stop(); } catch (Exception) { } try { tray.Visible = false; tray.Dispose(); } catch (Exception) { } try { panel.Dispose(); } catch (Exception) { } try { popup.Dispose(); } catch (Exception) { } };
+            timer.Interval = CapturePlan.SampleMilliseconds;
             timer.Tick += delegate { Tick(); };
-            Shown += delegate { if (!started) { started = true; timer.Start(); DiscoverClients(); } };
         }
 
         private bool started;
@@ -750,6 +855,7 @@ namespace KavrosAfkWarden
 
         private void WriteDebug(bool pixels, bool moving)
         {
+            if (!settings.SaveDebug) return;
             bool reasonChanged = activity.Reason != lastLoggedReason;
             bool due = (DateTime.UtcNow - lastDebugSave).TotalSeconds >= 2;
             if (!reasonChanged && !due) return;
@@ -784,7 +890,7 @@ namespace KavrosAfkWarden
                     string tail = File.ReadAllText(logPath);
                     if (tail.Length > 80000) File.WriteAllText(logPath, tail.Substring(tail.Length - 80000));
                 }
-                if (due && grab.Image != null) SaveAnnotated(dir, grab.Image, reading);
+                if (due) File.AppendAllText(Path.Combine(dir, "startup.txt"), "captureMs=" + grab.LastTickMs.ToString() + " shownMs=" + StartupClock.ShownMs.ToString() + "\r\n");
             }
             catch (Exception) { }
         }
@@ -922,11 +1028,82 @@ namespace KavrosAfkWarden
             return WindowLocator.ClientLabel(current, Math.Max(0, index - 1));
         }
 
+        private void Bootstrap()
+        {
+            WardenSettings loaded = SettingsText.Load(settingsPath);
+            try
+            {
+                if (!IsDisposed) BeginInvoke(new Action(delegate { ApplyLoaded(loaded); }));
+            }
+            catch (Exception) { }
+        }
+
+        private void ApplyLoaded(WardenSettings loaded)
+        {
+            settings = loaded ?? new WardenSettings();
+            clientTitle = settings.ClientTitle ?? "";
+            sound.Volume = settings.Volume;
+            ApplySettingsToControls();
+            panel.SetPaused(settings.Paused);
+            PlacePanel();
+            nextUpdateCheck = DateTime.UtcNow.AddHours(3);
+            if (settings.CheckForUpdates) AppUpdates.Check(this, false, SetStatus);
+            CompanionStatus.Write("running", settings.Paused);
+            DiscoverClients();
+            panel.SetNote("Waiting for Kavros");
+        }
+
+        private void PlacePanel()
+        {
+            int x = settings.PanelX;
+            int y = settings.PanelY;
+            if (x == int.MinValue)
+            {
+                Rectangle work = Screen.PrimaryScreen == null ? new Rectangle(0, 0, 1920, 1080) : Screen.PrimaryScreen.WorkingArea;
+                x = work.Right - panel.Width - 24;
+                y = work.Top + 72;
+            }
+            try
+            {
+                Screen[] screens = Screen.AllScreens;
+                int[] sx = new int[screens.Length];
+                int[] sy = new int[screens.Length];
+                int[] sw = new int[screens.Length];
+                int[] sh = new int[screens.Length];
+                for (int i = 0; i < screens.Length; i++)
+                {
+                    sx[i] = screens[i].WorkingArea.X;
+                    sy[i] = screens[i].WorkingArea.Y;
+                    sw[i] = screens[i].WorkingArea.Width;
+                    sh[i] = screens[i].WorkingArea.Height;
+                }
+                ScreenClamp.Place(ref x, ref y, panel.Width, panel.Height, sx, sy, sw, sh);
+            }
+            catch (Exception) { }
+            panel.Location = new Point(x, y);
+        }
+
+        internal void BringUp()
+        {
+            ShowPanel();
+            if (panel.IsHandleCreated)
+            {
+                NativeMethods.ShowWindow(panel.Handle, 9);
+                NativeMethods.SetForegroundWindow(panel.Handle);
+            }
+        }
+
         private void Exit()
         {
+            if (closing) return;
             closing = true;
-            CompanionStatus.Write("stopped", settings.Paused);
-            Application.Exit();
+            try { Save(); } catch (Exception) { }
+            try { CompanionStatus.Write("stopped", settings.Paused); } catch (Exception) { }
+            try { timer.Stop(); timer.Dispose(); } catch (Exception) { }
+            try { grab.Stop(); } catch (Exception) { }
+            try { tray.Visible = false; } catch (Exception) { }
+            try { Application.Exit(); } catch (Exception) { }
+            Environment.Exit(0);
         }
 
         private void RefreshWindows()
@@ -972,17 +1149,29 @@ namespace KavrosAfkWarden
                 AppUpdates.Check(this, false, SetStatus);
             }
             bool minimized = selected != IntPtr.Zero && NativeMethods.IsIconic(selected);
-            timer.Interval = minimized || selected == IntPtr.Zero ? 1000 : 400;
+            timer.Interval = minimized || selected == IntPtr.Zero ? 1000 : CapturePlan.SampleMilliseconds;
+            grab.PanelBounds = panel.Visible ? panel.Bounds : Rectangle.Empty;
             grab.Tick(selected, settings, !panel.IsDragging && !windowDragging && !minimized);
             if (!windowDragging) FollowPanel();
-            bool pixels = grab.Reading != null && (grab.Image != null || grab.Reading.StripFound || grab.Reading.BuffBarFound || grab.Reading.Hp != null);
-            bool moving = activity.Tick(grab.Image, grab.Reading, PlayerInput());
-            if (grab.Reading != null && (grab.Image != null || grab.Reading.StripFound || grab.Reading.BuffBarFound)) lastHud = grab.Reading;
+            bool pixels = grab.Reading != null && (grab.Reading.StripFound || grab.Reading.BuffBarFound || grab.Reading.Hp != null || grab.Reading.Prayer != null);
+            if (grab.Reading != null && pixels) lastHud = grab.Reading;
+            bool moving = activity.Tick(null, lastHud, grab.Input, grab.XpActivity, grab.PackActivity);
             WriteDebug(pixels, moving);
-            int? hp = pixels ? hpStable.Push(lastHud.Hp) : hpStable.Push(null);
-            int? hpMax = pixels ? hpMaxStable.Push(lastHud.HpMax) : hpMaxStable.Push(null);
-            int? prayer = pixels ? prayerStable.Push(lastHud.Prayer) : prayerStable.Push(null);
-            int? prayerMax = pixels ? prayerMaxStable.Push(lastHud.PrayerMax) : prayerMaxStable.Push(null);
+            DateTime sampleTime = DateTime.UtcNow;
+            if (pixels)
+            {
+                hpGate.Push(lastHud.Hp, lastHud.HpMax, sampleTime);
+                prayerGate.Push(lastHud.Prayer, lastHud.PrayerMax, sampleTime);
+            }
+            else
+            {
+                hpGate.Push(null, null, sampleTime);
+                prayerGate.Push(null, null, sampleTime);
+            }
+            int? hp = hpGate.Value;
+            int? hpMax = hpGate.Max;
+            int? prayer = prayerGate.Value;
+            int? prayerMax = prayerGate.Max;
             int? potion = pixels && lastHud.BuffBarFound ? BuffClock.ShownSeconds(lastHud.Buffs) : (int?)null;
             bool hpComparable = hp != null && WardenSettings.Comparable(settings.HpPercent, lastHud.HpFromOrb, hpMax != null);
             bool prayerComparable = prayer != null && WardenSettings.Comparable(settings.PrayerPercent, lastHud.PrayerFromOrb, prayerMax != null);
@@ -1035,10 +1224,10 @@ namespace KavrosAfkWarden
             }
             panel.Hp.Pill = engine.HpLatched ? "Low HP" : "Hitpoints";
             panel.Hp.Tone = engine.HpLatched ? PillTone.Bad : !pixels || lastHud.Hp == null ? PillTone.Example : PillTone.Ok;
-            panel.Hp.Value = !pixels ? "No view" : shownHp == null ? "Unread" : Format(shownHp, shownHpMax, lastHud.HpFromOrb);
+            panel.Hp.Value = !pixels ? "No view" : hpGate.Stale ? Stale(shownHp) : shownHp == null ? "Unread" : Format(shownHp, shownHpMax, lastHud.HpFromOrb);
             panel.Prayer.Pill = engine.PrayerLatched ? "Low prayer" : "Prayer";
             panel.Prayer.Tone = engine.PrayerLatched ? PillTone.Warn : !pixels || lastHud.Prayer == null ? PillTone.Example : PillTone.Ok;
-            panel.Prayer.Value = !pixels ? "No view" : shownPrayer == null ? "Unread" : Format(shownPrayer, shownPrayerMax, lastHud.PrayerFromOrb);
+            panel.Prayer.Value = !pixels ? "No view" : prayerGate.Stale ? Stale(shownPrayer) : shownPrayer == null ? "Unread" : Format(shownPrayer, shownPrayerMax, lastHud.PrayerFromOrb);
             panel.Potion.Pill = engine.PotionLatched ? "Potion low" : "Potions";
             panel.Potion.Tone = engine.PotionLatched ? PillTone.Warn : !pixels || lastHud.PotionSeconds == null ? PillTone.Example : PillTone.Ok;
             panel.Potion.Value = !pixels ? "No view" : shownPotion == null ? (lastHud.BuffBarFound && lastHud.Buffs != null ? lastHud.Buffs.Count.ToString() + " icons" : "No buffs") : shownPotion.Value.ToString() + "s left";
@@ -1051,6 +1240,11 @@ namespace KavrosAfkWarden
             panel.Prayer.Invalidate();
             panel.Potion.Invalidate();
             panel.Afk.Invalidate();
+        }
+
+        private static string Stale(int? value)
+        {
+            return value == null ? "?" : value.Value.ToString() + " ?";
         }
 
         private static string Format(int? current, int? max, bool orb)
@@ -1205,6 +1399,44 @@ namespace KavrosAfkWarden
                 using (Brush wash = new SolidBrush(Color.FromArgb(48, KavrosTheme.Gold))) e.Graphics.FillRectangle(wash, selection);
                 using (Pen pen = new Pen(KavrosTheme.Gold, 2)) e.Graphics.DrawRectangle(pen, selection);
             }
+        }
+    }
+
+    internal static class StartupClock
+    {
+        internal static readonly DateTime Began = DateTime.UtcNow;
+        internal static int ShownMs;
+        internal static void MarkShown()
+        {
+            ShownMs = (int)(DateTime.UtcNow - Began).TotalMilliseconds;
+            if (ShownMs < 0) ShownMs = 0;
+        }
+    }
+
+    internal static class CrashLog
+    {
+        internal static void Install()
+        {
+            Application.ThreadException += delegate(object sender, ThreadExceptionEventArgs args) { Write(args.Exception); };
+            AppDomain.CurrentDomain.UnhandledException += delegate(object sender, UnhandledExceptionEventArgs args)
+            {
+                Exception ex = args.ExceptionObject as Exception;
+                Write(ex ?? new Exception("Unhandled error"));
+            };
+        }
+
+        internal static void Write(Exception ex)
+        {
+            if (ex == null) return;
+            try
+            {
+                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KavrosAfkWarden");
+                Directory.CreateDirectory(dir);
+                File.AppendAllText(Path.Combine(dir, "crash.txt"), DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "\r\n" + ex + "\r\n\r\n");
+            }
+            catch (Exception) { }
+            try { MessageBox.Show(ex.Message, AppInfo.Name, MessageBoxButtons.OK, MessageBoxIcon.Error); }
+            catch (Exception) { }
         }
     }
 }

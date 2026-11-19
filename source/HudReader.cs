@@ -150,6 +150,7 @@ namespace KavrosAfkWarden
         public static BuffIcon ReadBuffCrop(ImageBuffer icon, int x)
         {
             BuffIcon read = icon == null ? new BuffIcon() : ReadIconTime(icon, new IntRect(0, 0, icon.Width, icon.Height));
+            if (icon != null) read.Kind = ClassifyBuff(icon, new IntRect(0, 0, icon.Width, icon.Height));
             read.X = x;
             return read;
         }
@@ -346,11 +347,12 @@ namespace KavrosAfkWarden
             for (int i = 0; i < icons.Count; i++)
             {
                 BuffIcon icon = ReadIconTime(image, icons[i]);
+                icon.Kind = ClassifyBuff(image, icons[i]);
                 reading.Buffs.Add(icon);
                 reading.BuffRects.Add(icons[i]);
-                if (icon.HasTime) reading.PotionCount++;
+                if (icon.HasTime && icon.Kind == "potion") reading.PotionCount++;
                 if (buffTrace.Length > 0) buffTrace.Append(" ");
-                buffTrace.Append(icons[i].X).Append(":").Append(LastTrace);
+                buffTrace.Append(icons[i].X).Append(":").Append(icon.Kind).Append(":").Append(LastTrace);
             }
             reading.BuffTrace = buffTrace.ToString();
         }
@@ -444,6 +446,70 @@ namespace KavrosAfkWarden
             result.Minutes = minutes;
             result.Value = number.Current;
             return result;
+        }
+
+        // Potion buffs are flasks, overload crystals, or a ringed antifire/poison
+        // icon. A purple prayer icon and a stack picture are not potions.
+        // Duration is not used: a potion can read 6m, 11m, or 5 seconds.
+        internal static string ClassifyBuff(ImageBuffer image, IntRect icon)
+        {
+            if (image == null || icon.Width < 8 || icon.Height < 8) return "other";
+            int bodyBottom = icon.Y + (icon.Height * 62) / 100;
+            int inset = Math.Max(2, icon.Width / 8);
+            int purple = 0, blue = 0, green = 0, samples = 0;
+            int redEdge = 0, redCore = 0, edgeN = 0, coreN = 0;
+            int topInk = 0, midInk = 0, topN = 0, midN = 0;
+            int midY0 = icon.Y + icon.Height / 5;
+            int midY1 = icon.Y + (icon.Height * 46) / 100;
+            int coreR = Math.Max(3, icon.Width / 5);
+            int cx = icon.X + icon.Width / 2;
+            int cy = icon.Y + icon.Height / 3;
+            for (int y = icon.Y + 2; y < bodyBottom; y++)
+            {
+                for (int x = icon.X + inset; x < icon.Right - inset; x++)
+                {
+                    int color = image.Argb(x, y);
+                    int r = ImageBuffer.R(color), g = ImageBuffer.G(color), b = ImageBuffer.B(color);
+                    if (g >= 80 && g > r + 12 && g > b + 12) continue;
+                    samples++;
+                    bool isPurple = r > 70 && b > 80 && b + 15 >= r && g + 30 < r && g + 20 < b;
+                    bool isBlue = b > 80 && b > r + 20 && b > g + 8;
+                    bool isRed = r > 150 && r > g + 40 && r > b + 40;
+                    bool isGreen = g > 80 && g > r + 20 && g > b + 20;
+                    if (isPurple) purple++;
+                    else if (isBlue) blue++;
+                    if (isGreen) green++;
+                    int dx = x - cx;
+                    int dy = y - cy;
+                    if (dx * dx + dy * dy <= coreR * coreR) { coreN++; if (isRed) redCore++; }
+                    else { edgeN++; if (isRed) redEdge++; }
+                    bool ink = r + g + b > 150;
+                    if (y < midY0) { topN++; if (ink) topInk++; }
+                    else if (y < midY1) { midN++; if (ink) midInk++; }
+                }
+            }
+            if (samples < 8) return "other";
+            if (purple * 100 / samples >= 28 && purple > blue) return "prayer";
+            if (blue * 100 / samples >= 10 && blue > purple) return "potion";
+            int magenta = 0, cork = 0, dark = 0;
+            int topCut = icon.Y + icon.Height * 2 / 5;
+            for (int y = icon.Y + 2; y < icon.Bottom - 2; y++)
+            {
+                for (int x = icon.X + inset; x < icon.Right - inset; x++)
+                {
+                    int color = image.Argb(x, y);
+                    int r = ImageBuffer.R(color), g = ImageBuffer.G(color), b = ImageBuffer.B(color);
+                    if (g >= 80 && g > r + 12 && g > b + 12) continue;
+                    if (r > 100 && b > 60 && r > g + 15 && b > g) magenta++;
+                    if (y < topCut && r > 80 && g > 40 && b < 100 && r > b + 20 && g > b) cork++;
+                    if (r + g + b < 90) dark++;
+                }
+            }
+            if (magenta >= 24) return "potion";
+            if (dark >= 80 && cork >= 8 && cork <= 45) return "potion";
+            bool ring = edgeN > 0 && redEdge * 100 / edgeN >= 25 && (coreN == 0 || redEdge > redCore);
+            if (ring) return "potion";
+            return "other";
         }
 
         private static NumberRead ReadIconLine(ImageBuffer image, IntRect icon, int textH, out bool minutes)
@@ -746,7 +812,7 @@ namespace KavrosAfkWarden
                 int digit = -1;
                 if (ww <= 28 && hh >= minDigit && hh <= 40)
                     digit = DigitFont.Match(Sample(mask, width, blob));
-                bool slash = digit < 0 && hh >= 6 && ww <= 8 && ww * 2 <= hh + 4 && IsDiagonal(mask, width, blob);
+                bool slash = !allowLetter && digit < 0 && hh >= 8 && ww <= 8 && ww * 2 <= hh + 4 && IsDiagonal(mask, width, blob);
                 if (digit >= 0)
                 {
                     trace.Append(" ").Append(digit);
@@ -760,7 +826,7 @@ namespace KavrosAfkWarden
                     inMax = true;
                     digitRight = cursor;
                 }
-                else if (allowLetter && digitRight >= 0 && start + 2 >= digitRight && ww >= 3 && hh >= 5)
+                else if (allowLetter && digitRight >= 0 && start + 2 >= digitRight && ww >= 5 && hh >= 5)
                 {
                     trace.Append(" m");
                     minutes = true;
@@ -778,12 +844,10 @@ namespace KavrosAfkWarden
             result.Ok = true;
             result.Current = value;
             int maxValue;
-            if (TryParse(max, out maxValue))
+            if (TryParse(max, out maxValue) && maxValue > 0)
             {
                 result.Max = maxValue;
                 result.HasMax = true;
-                // 9/990 or 87/990 is a clipped read. 936/990 and 1040/990 are not.
-                if (max.Length >= 3 && current.Length < max.Length) return new NumberRead();
             }
             return result;
         }

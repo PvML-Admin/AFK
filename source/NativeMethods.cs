@@ -29,6 +29,8 @@ namespace KavrosAfkWarden
         [DllImport("user32.dll")] internal static extern bool GetWindowRect(IntPtr window, out Rect rect);
         [DllImport("user32.dll")] internal static extern bool ClientToScreen(IntPtr window, ref PointStruct point);
         [DllImport("user32.dll")] internal static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(IntPtr window);
+        [DllImport("user32.dll")] internal static extern bool ShowWindow(IntPtr window, int command);
         [DllImport("user32.dll")] internal static extern IntPtr WindowFromPoint(PointStruct point);
         [StructLayout(LayoutKind.Sequential)]
         internal struct LastInput { public int Size; public uint Time; }
