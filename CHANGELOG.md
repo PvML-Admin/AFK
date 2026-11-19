@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.3
+
+- The window appears before the client list and the update check. Those run off the UI thread. Capture pauses while a window is dragged, and Settings uses the window manager for the drag.
+- Life numbers are read again when the heart icon sits in the box. Prayer is shown only after three consistent reads, so a single bad frame does not jump the value.
+- Idle ignores swaying trees, water and other people. It resets on input to the foreground client, a change in life, prayer or adrenaline, a target bar, a hitsplat, or a compact XP counter.
+- The panel header is one bar. Settings and the collapse button sit on that bar, and the gold line runs the full width.
+- Each read is appended to `%LocalAppData%\KavrosAfkWarden\debug-log.txt`. A full frame with the detected rectangles is saved as `debug-capture.png` in the same folder.
+
 ## 0.2.2
 
 - Life is the red bar and prayer is the purple bar, wherever the HUD strip sits. Yellow adrenaline and green summoning are not life or prayer. Current may be higher than the cap, with thousands separators and no fixed upper limit.

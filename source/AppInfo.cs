@@ -2,7 +2,7 @@ namespace KavrosAfkWarden
 {
     internal static class AppInfo
     {
-        internal const string Version = "0.2.2";
+        internal const string Version = "0.2.3";
         internal const string Name = "AFK Warden";
         internal const string Author = "Zenity";
         internal const string ModuleId = "afk-warden";

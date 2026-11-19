@@ -301,23 +301,39 @@ namespace KavrosAfkWarden
 
     public sealed class StableValue
     {
-        private int value;
+        private int shown;
+        private int pending;
         private bool have;
+        private bool havePending;
         private int hits;
+        private int misses;
+        internal int Need = 2;
 
         public int? Push(int? next)
         {
             if (next == null)
             {
+                misses++;
                 hits = 0;
-                have = false;
-                return null;
+                if (misses >= 3) have = false;
+                return have ? (int?)shown : null;
             }
-            if (have && Math.Abs(next.Value - value) <= Math.Max(8, value / 5)) hits++;
-            else hits = 1;
-            have = true;
-            value = next.Value;
-            return hits >= 2 ? next : (int?)null;
+            misses = 0;
+            int basis = have ? shown : next.Value;
+            int tolerance = Math.Max(6, Math.Abs(basis) / 12);
+            if (!havePending || Math.Abs(next.Value - pending) > tolerance)
+            {
+                pending = next.Value;
+                havePending = true;
+                hits = 1;
+            }
+            else hits++;
+            if (hits >= Need)
+            {
+                shown = pending;
+                have = true;
+            }
+            return have ? (int?)shown : null;
         }
     }
 

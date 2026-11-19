@@ -120,7 +120,6 @@ namespace KavrosAfkWarden
     // the mouse. Signals are colours and pixel changes, not a fixed layout.
     public sealed class SceneActivity
     {
-        private readonly MotionDetector motion = new MotionDetector();
         private int[] cells;
         private int cellW;
         private int cellH;
@@ -130,15 +129,25 @@ namespace KavrosAfkWarden
         private int lastAdrenaline = -1;
         private bool haveHud;
 
+        private int lastSplat = -1;
+        private int lastXp = -1;
+
         public bool Tick(ImageBuffer image, HudReading reading)
         {
-            bool busy = false;
+            return Tick(image, reading, false);
+        }
+
+        // Player signals only. Swaying trees, water and other people walking
+        // are not activity. Whole-scene motion is intentionally not used.
+        public bool Tick(ImageBuffer image, HudReading reading, bool playerInput)
+        {
+            bool busy = playerInput;
             if (reading != null && HudChanged(reading)) busy = true;
             if (image != null)
             {
-                if (motion.Moved(image)) busy = true;
                 if (HasTargetBar(image, reading)) busy = true;
-                if (PlayfieldChanged(image, reading)) busy = true;
+                if (HitsplatChanged(image)) busy = true;
+                if (XpCounterChanged(image)) busy = true;
             }
             return busy;
         }
@@ -202,8 +211,52 @@ namespace KavrosAfkWarden
             return g >= 160 && b <= 80 && g > r + 30 && g > b + 40;
         }
 
-        // Coarse samples outside the HUD strip and the buff icons. XP drops,
-        // inventory changes and the player animation flip these cells.
+        // A burst of small saturated red pixels in the middle of the view.
+        // The life bar is a long run and is excluded by the size cap.
+        private bool HitsplatChanged(ImageBuffer image)
+        {
+            int count = 0;
+            int left = image.Width / 4;
+            int right = image.Width - left;
+            int top = image.Height / 5;
+            int bottom = image.Height - image.Height / 5;
+            for (int y = top; y < bottom; y += 3)
+                for (int x = left; x < right; x += 3)
+                {
+                    int c = image.Argb(x, y);
+                    int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
+                    if (r > 220 && g < 70 && b < 70) count++;
+                }
+            bool changed = lastSplat >= 0 && count >= 8 && count <= 180 && Math.Abs(count - lastSplat) >= 8;
+            lastSplat = count;
+            return changed;
+        }
+
+        // A compact bright counter, not scattered scenery. Foliage is not near-white.
+        private bool XpCounterChanged(ImageBuffer image)
+        {
+            int minX = image.Width, minY = image.Height, maxX = 0, maxY = 0, count = 0;
+            for (int y = 0; y < image.Height; y += 3)
+                for (int x = 0; x < image.Width; x += 3)
+                {
+                    int c = image.Argb(x, y);
+                    int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
+                    if (r < 190 || g < 170 || b > 140 || g + 30 < r) continue;
+                    count++;
+                    if (x < minX) minX = x;
+                    if (y < minY) minY = y;
+                    if (x > maxX) maxX = x;
+                    if (y > maxY) maxY = y;
+                }
+            bool compact = count >= 8 && count <= 400 && maxX - minX < 200 && maxY - minY < 48;
+            bool changed = lastXp >= 0 && compact && Math.Abs(count - lastXp) >= 8;
+            lastXp = compact ? count : lastXp;
+            if (!compact && lastXp < 0) lastXp = 0;
+            return changed;
+        }
+
+        // Kept so a future inventory pin can hash one region. Not used for idle:
+        // a whole-screen grid treats other players and trees as the user.
         private bool PlayfieldChanged(ImageBuffer image, HudReading reading)
         {
             int columns = Math.Max(1, image.Width / 48);

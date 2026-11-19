@@ -22,6 +22,10 @@ namespace KavrosAfkWarden
         public bool StripFound;
         public IntRect LifeText;
         public IntRect PrayerText;
+        public IntRect LifeBar;
+        public IntRect PrayerBar;
+        public string LifeTrace = "";
+        public string PrayerTrace = "";
         public List<BuffIcon> Buffs = new List<BuffIcon>();
         public List<IntRect> BuffRects = new List<IntRect>();
     }
@@ -211,16 +215,20 @@ namespace KavrosAfkWarden
             reading.StripY = red.Y;
             IntRect lifeText = Above(image, red);
             IntRect prayerText = Above(image, purple);
+            reading.LifeBar = red;
+            reading.PrayerBar = purple;
             reading.LifeText = lifeText;
             reading.PrayerText = prayerText;
             if (wantLife)
             {
-                NumberRead number = ReadNumber(image, lifeText, WhiteInk);
+                NumberRead number = ReadLifeNumber(image, lifeText);
+                reading.LifeTrace = LastTrace;
                 Apply(reading, true, number, "bar");
             }
             if (wantPrayer)
             {
                 NumberRead number = ReadNumber(image, prayerText, WhiteInk);
+                reading.PrayerTrace = LastTrace;
                 Apply(reading, false, number, "bar");
             }
             if (yellow.Width > 0)
@@ -259,8 +267,32 @@ namespace KavrosAfkWarden
 
         private static IntRect Above(ImageBuffer image, IntRect bar)
         {
-            int height = Math.Max(22, bar.Height * 4);
-            return Clamp(image, bar.X - 8, bar.Y - height, Math.Max(bar.Width + 16, 80), height);
+            int height = Math.Max(22, bar.Height * 5);
+            return Clamp(image, bar.X - 4, bar.Y - height, Math.Max(bar.Width + 8, 72), height);
+        }
+
+        // The heart icon sits just left of the life number. If that icon breaks
+        // the read, try the same line again a few pixels further right.
+        private static NumberRead ReadLifeNumber(ImageBuffer image, IntRect box)
+        {
+            NumberRead best = ReadNumber(image, box, WhiteInk);
+            string bestTrace = LastTrace;
+            if (best.Ok && best.HasMax) return best;
+            for (int inset = 6; inset <= 28; inset += 6)
+            {
+                if (box.Width - inset < 24) break;
+                IntRect cut = Clamp(image, box.X + inset, box.Y, box.Width - inset, box.Height);
+                NumberRead alt = ReadNumber(image, cut, WhiteInk);
+                string trace = LastTrace;
+                if (alt.Ok && alt.HasMax && (!best.HasMax || alt.Current > 0))
+                {
+                    best = alt;
+                    bestTrace = trace;
+                    break;
+                }
+            }
+            LastTrace = bestTrace;
+            return best;
         }
 
         private static void ReadBuffBar(ImageBuffer image, WardenSettings settings, HudReading reading)
@@ -304,9 +336,9 @@ namespace KavrosAfkWarden
                 {
                     if (!BorderGreen(image.Argb(x, y))) { x += 2; continue; }
                     int start = x;
-                    while (x < region.Right && x - start < 48 && BorderGreen(image.Argb(x, y))) x++;
+                    while (x < region.Right && x - start < 74 && BorderGreen(image.Argb(x, y))) x++;
                     int span = x - start;
-                    if (span < 22 || span > 46) continue;
+                    if (span < 16 || span > 68) continue;
                     if (!IconAt(image, start, y, span)) continue;
                     bool overlap = false;
                     for (int i = 0; i < found.Count; i++)
@@ -581,7 +613,7 @@ namespace KavrosAfkWarden
             return LastTrace + " => " + (number.Ok ? number.Current.ToString() + "/" + (number.HasMax ? number.Max.ToString() : "-") : "none");
         }
 
-        private static string LastTrace = "";
+        internal static string LastTrace = "";
 
         private static NumberRead ReadNumber(ImageBuffer image, IntRect region, InkTest ink)
         {
@@ -638,7 +670,7 @@ namespace KavrosAfkWarden
                 blob.Bottom = bottom;
                 blob.Area = area;
                 int digit = -1;
-                if (ww <= 16 && hh >= 5 && hh <= 24)
+                if (ww <= 22 && hh >= 5 && hh <= 32)
                     digit = DigitFont.Match(Sample(mask, width, blob));
                 bool slash = digit < 0 && hh >= 6 && ww <= 8 && ww * 2 <= hh + 4 && IsDiagonal(mask, width, blob);
                 if (digit >= 0)

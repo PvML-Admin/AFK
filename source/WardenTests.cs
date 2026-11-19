@@ -570,11 +570,23 @@ namespace KavrosAfkWarden
             Check(reading.BuffBarFound && seconds >= 1 && minutes >= 4, "live buff row reads 60 seconds and four 10 minute icons, got " + seen);
             SceneActivity scene = new SceneActivity();
             Check(scene.Tick(image, reading), "the combat frame is activity, so idle does not start");
+            SceneActivity calm = new SceneActivity();
+            ImageBuffer trees = ImageBuffer.Blank(320, 240, ImageBuffer.Pack(20, 80, 30));
+            ImageBuffer sway = ImageBuffer.Blank(320, 240, ImageBuffer.Pack(30, 110, 40));
+            sway.Fill(40, 40, 200, 120, ImageBuffer.Pack(40, 140, 50));
+            Check(!calm.Tick(trees, new HudReading()), "the first scene is not activity");
+            Check(!calm.Tick(sway, new HudReading()), "swaying trees and water are not player activity");
+            StableValue steady = new StableValue();
+            steady.Need = 3;
+            Check(steady.Push(1040) == null, "one prayer frame is not shown");
+            Check(steady.Push(1040) == null, "two prayer frames are not enough");
+            Check(steady.Push(1040) == 1040, "three consistent prayer reads are shown");
+            Check(steady.Push(400) == 1040, "a single prayer jump is rejected");
         }
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.2" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.3" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -585,10 +597,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.2\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.3\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.2.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.3.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

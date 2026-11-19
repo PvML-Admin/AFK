@@ -178,7 +178,7 @@ namespace KavrosAfkWarden
                         {
                             Reading = HudReader.Read(Image, settings);
                             RememberBoxes(Reading);
-                            nextFullSearch = DateTime.UtcNow.AddSeconds(haveBoxes ? (settings.SaveDebug ? 2 : 4) : 1);
+                            nextFullSearch = DateTime.UtcNow.AddSeconds(haveBoxes ? 4 : 1);
                         }
                         else
                         {
@@ -210,13 +210,13 @@ namespace KavrosAfkWarden
 
         private void RememberBoxes(HudReading reading)
         {
-            if (reading != null && reading.StripFound && reading.LifeText.Width > 8 && reading.PrayerText.Width > 8)
+            if (reading != null && reading.Hp != null && reading.Prayer != null && reading.LifeText.Width > 8 && reading.PrayerText.Width > 8)
             {
-                lifeBox = reading.LifeText;
-                prayerBox = reading.PrayerText;
+                lifeBox = Pad(reading.LifeText, 6);
+                prayerBox = Pad(reading.PrayerText, 6);
                 buffBoxes.Clear();
                 if (reading.BuffRects != null)
-                    for (int i = 0; i < reading.BuffRects.Count; i++) buffBoxes.Add(reading.BuffRects[i]);
+                    for (int i = 0; i < reading.BuffRects.Count; i++) buffBoxes.Add(Pad(reading.BuffRects[i], 2));
                 haveBoxes = true;
             }
         }
@@ -240,6 +240,11 @@ namespace KavrosAfkWarden
             }
             if (reading.Hp == null && reading.Prayer == null) haveBoxes = false;
             return reading;
+        }
+
+        private static IntRect Pad(IntRect box, int pad)
+        {
+            return new IntRect(box.X - pad, box.Y - pad, box.Width + pad * 2, box.Height + pad * 2);
         }
 
         private static Rectangle ScreenOf(Rectangle client, IntRect box)
