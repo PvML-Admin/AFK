@@ -13,6 +13,8 @@ namespace KavrosAfkWarden
             StringBuilder text = new StringBuilder();
             Line(text, "idle-enabled", settings.IdleEnabled);
             Line(text, "idle-seconds", settings.IdleSeconds);
+            Line(text, "skilling-mode", settings.SkillingMode);
+            Line(text, "skilling-idle-seconds", settings.SkillingIdleSeconds);
             Line(text, "hp-enabled", settings.HpEnabled);
             Line(text, "hp-threshold", settings.HpThreshold);
             Line(text, "hp-percent", settings.HpPercent);
@@ -77,6 +79,8 @@ namespace KavrosAfkWarden
                 int number;
                 if (parts[0] == "idle-enabled" && bool.TryParse(parts[1], out flag)) settings.IdleEnabled = flag;
                 else if (parts[0] == "idle-seconds" && int.TryParse(parts[1], out number)) settings.IdleSeconds = number;
+                else if (parts[0] == "skilling-mode" && bool.TryParse(parts[1], out flag)) settings.SkillingMode = flag;
+                else if (parts[0] == "skilling-idle-seconds" && int.TryParse(parts[1], out number)) settings.SkillingIdleSeconds = number;
                 else if (parts[0] == "hp-enabled" && bool.TryParse(parts[1], out flag)) settings.HpEnabled = flag;
                 else if (parts[0] == "hp-threshold" && int.TryParse(parts[1], out number)) settings.HpThreshold = number;
                 else if (parts[0] == "hp-percent" && bool.TryParse(parts[1], out flag)) settings.HpPercent = flag;

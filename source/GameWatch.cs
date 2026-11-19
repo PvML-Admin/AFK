@@ -145,8 +145,10 @@ namespace KavrosAfkWarden
         private bool havePackHash;
         private DateTime nextFullSearch = DateTime.MinValue;
         private DateTime nextDebugImage = DateTime.MinValue;
-        private readonly Bitmap[] pads = new Bitmap[5];
-        private readonly int[][] pixelsBySlot = new int[5][];
+        private readonly Bitmap[] pads = new Bitmap[6];
+        private readonly int[][] pixelsBySlot = new int[6][];
+        private int failedFull;
+        private int lockedSamples;
         private IntPtr lastClient;
         private Size lastSize;
         private WardenSettings lastSettings;
@@ -242,14 +244,25 @@ namespace KavrosAfkWarden
             pollForeground = true;
             lastInputStamp = last.Time;
             bool edge = false;
+            bool click = false;
             for (int vk = 1; vk < 256; vk++)
             {
                 if (!WatchKey(vk)) continue;
-                bool pressed = (NativeMethods.GetAsyncKeyState(vk) & 0x8000) != 0;
-                if (pressed && !keyDown[vk] && foreground) edge = true;
+                short state = NativeMethods.GetAsyncKeyState(vk);
+                bool pressed = (state & 0x8000) != 0;
+                // Bit 0 catches a press that went down and up between two polls.
+                bool tapped = (state & 1) != 0;
+                if (((pressed && !keyDown[vk]) || tapped) && foreground)
+                {
+                    edge = true;
+                    if (vk <= 6) click = true;
+                }
                 keyDown[vk] = pressed;
             }
-            if (edge && wasForeground) lock (gate) { publishedInput = true; }
+            // Keys only count once the game was already in front, so typing in
+            // another app right before switching does not. A mouse click that
+            // brings the game to the front is a click on the game and counts.
+            if (edge && (wasForeground || click)) lock (gate) { publishedInput = true; }
         }
 
         private static bool WatchKey(int vk)
@@ -308,18 +321,19 @@ namespace KavrosAfkWarden
             bool full = CapturePlan.WantFull(haveBoxes, DateTime.UtcNow, nextFullSearch);
             HudReading reading;
             if (full) reading = FullSearch(client, settings, panel);
-            else reading = haveBoxes ? LockedSearch(client) : new HudReading();
+            else reading = haveBoxes ? LockedSearch(client, settings) : new HudReading();
             string note = focused ? "Watching the visible Kavros window." : "Watching Kavros. The window is visible but not focused.";
             Publish(reading, CaptureRoute.Screen, focused, note);
         }
 
         private HudReading FullSearch(Rectangle client, WardenSettings settings, Rectangle panel)
         {
-            nextFullSearch = DateTime.UtcNow.AddSeconds(3);
+            nextFullSearch = DateTime.UtcNow.AddSeconds(CapturePlan.NextFullSeconds(false, false, failedFull + 1));
             ImageBuffer image = CopyScreen(client, 0);
             if (image == null || ImageBuffer.MostlyBlack(image))
             {
                 haveBoxes = false;
+                failedFull++;
                 return new HudReading();
             }
             BlankPanel(image, client, panel);
@@ -341,21 +355,40 @@ namespace KavrosAfkWarden
             IntRect pack = SceneActivity.PackWatch.Find(image);
             if (pack.Width > 8) packBox = pack;
             haveBoxes = lifeBox.Width > 8 || prayerBox.Width > 8 || buffStrip.Width>8;
-            nextFullSearch=DateTime.UtcNow.AddSeconds(reading.HpMax.HasValue && reading.PrayerMax.HasValue ? (buffStrip.Width>8 ? CapturePlan.FullIntervalSeconds : 8) : 3);
+            bool complete = reading.HpMax.HasValue && reading.PrayerMax.HasValue;
+            failedFull = complete ? 0 : failedFull + 1;
+            nextFullSearch=DateTime.UtcNow.AddSeconds(CapturePlan.NextFullSeconds(complete, buffStrip.Width>8, failedFull));
             NoteActivity(image);
             MaybeDebug(image, settings, reading);
             return reading;
         }
 
-        private HudReading LockedSearch(Rectangle client)
+        private HudReading LockedSearch(Rectangle client, WardenSettings settings)
         {
             HudReading reading = new HudReading();
             reading.StripFound = lifeBox.Width>8 || prayerBox.Width>8;
-            ImageBuffer life = CopyScreen(ScreenOf(client, lifeBox), 1);
+            lockedSamples++;
+            bool slow = lockedSamples % CapturePlan.SlowSlotEvery == 0;
+            ImageBuffer life = null, prayer = null;
+            if (CapturePlan.ShareGrab(lifeBox, prayerBox))
+            {
+                // Life and prayer share the HUD row: one screen copy for both.
+                IntRect both = Union(lifeBox, prayerBox);
+                ImageBuffer row = CopyScreen(ScreenOf(client, both), 1);
+                if (row != null)
+                {
+                    life = Slice(row, lifeBox.X - both.X, lifeBox.Y - both.Y, lifeBox.Width, lifeBox.Height);
+                    prayer = Slice(row, prayerBox.X - both.X, prayerBox.Y - both.Y, prayerBox.Width, prayerBox.Height);
+                }
+            }
+            else
+            {
+                life = CopyScreen(ScreenOf(client, lifeBox), 1);
+                prayer = CopyScreen(ScreenOf(client, prayerBox), 2);
+            }
             if (life != null) HudReader.ReadBox(life, true, reading);
-            ImageBuffer prayer = CopyScreen(ScreenOf(client, prayerBox), 2);
             if (prayer != null) HudReader.ReadBox(prayer, false, reading);
-            if (buffStrip.Width > 8)
+            if (buffStrip.Width > 8 && slow)
             {
                 ImageBuffer strip = CopyScreen(ScreenOf(client, buffStrip), 3);
                 if (strip != null)
@@ -374,13 +407,14 @@ namespace KavrosAfkWarden
                     reading.PotionCount = buffs.PotionCount;
                 }
             }
-            if (reading.HpMax == null || reading.PrayerMax == null || (buffStrip.Width>8 && !reading.BuffBarFound))
+            if (reading.HpMax == null || reading.PrayerMax == null || (buffStrip.Width>8 && slow && !reading.BuffBarFound))
             {
                 missedLocks++;
                 if (missedLocks == 3 && nextFullSearch>DateTime.UtcNow.AddSeconds(3))
                     nextFullSearch=DateTime.UtcNow.AddSeconds(3);
             }
             else missedLocks = 0;
+            if (!slow) return reading;
             ImageBuffer xp = xpBox.Width > 8 ? CopyScreen(ScreenOf(client, xpBox), 4) : null;
             if (xp != null)
             {
@@ -389,7 +423,33 @@ namespace KavrosAfkWarden
                 lastXpHash = hash;
                 haveXpHash = true;
             }
+            // Skilling mode also watches the backpack between full searches:
+            // a new log, ore or fish in a slot is progress.
+            ImageBuffer pack = settings.SkillingMode && packBox.Width > 8 ? CopyScreen(ScreenOf(client, packBox), 5) : null;
+            if (pack != null)
+            {
+                int hash = SceneActivity.PackWatch.Hash(pack, new IntRect(0, 0, pack.Width, pack.Height));
+                if (havePackHash && hash != lastPackHash) lock (gate) { publishedPack = true; }
+                lastPackHash = hash;
+                havePackHash = true;
+            }
             return reading;
+        }
+
+        private static IntRect Union(IntRect a, IntRect b)
+        {
+            int x = Math.Min(a.X, b.X), y = Math.Min(a.Y, b.Y);
+            return new IntRect(x, y, Math.Max(a.Right, b.Right) - x, Math.Max(a.Bottom, b.Bottom) - y);
+        }
+
+        private static ImageBuffer Slice(ImageBuffer image, int x, int y, int w, int h)
+        {
+            if (x < 0) { w += x; x = 0; }
+            if (y < 0) { h += y; y = 0; }
+            if (x + w > image.Width) w = image.Width - x;
+            if (y + h > image.Height) h = image.Height - y;
+            if (w < 4 || h < 4) return null;
+            return image.Crop(x, y, w, h);
         }
 
         private void NoteActivity(ImageBuffer image)

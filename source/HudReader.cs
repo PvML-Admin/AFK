@@ -216,6 +216,7 @@ namespace KavrosAfkWarden
                 }
             if (!pair)
             {
+                if (InferStrip(image, reading, reds, yellows, purples, greens, wantLife, wantPrayer)) return;
                 if (wantLife) ReadLoneBar(image, reading, reds, true);
                 if (wantPrayer) ReadLoneBar(image, reading, purples, false);
                 return;
@@ -255,6 +256,94 @@ namespace KavrosAfkWarden
                 NumberRead adrenaline = ReadLine(image, Above(image, yellow), WhiteInk, out ignored);
                 if (adrenaline.Ok && adrenaline.Current > 0 && adrenaline.Current <= 200) reading.Adrenaline = adrenaline.Current;
             }
+        }
+
+        // A fill shorter than a findable bar (life or prayer under about a
+        // third) or an empty one breaks the red/purple pair. The four HUD
+        // slots (life, adrenaline, prayer, summoning) share one pitch, so the
+        // missing slot is placed from any two other fills on the same row. A
+        // placed slot is kept only when a current/max number is read above it.
+        private static bool InferStrip(ImageBuffer image, HudReading reading, List<IntRect> reds, List<IntRect> yellows, List<IntRect> purples, List<IntRect> greens, bool wantLife, bool wantPrayer)
+        {
+            List<IntRect>[] sets = new List<IntRect>[] { reds, yellows, purples, greens };
+            int attempts = 0;
+            for (int a = 0; a < 4; a++)
+                for (int b = a + 1; b < 4; b++)
+                    for (int i = 0; i < sets[a].Count; i++)
+                    {
+                        IntRect left = sets[a][i];
+                        if (left.Height > 9) continue;
+                        for (int j = 0; j < sets[b].Count; j++)
+                        {
+                            IntRect right = sets[b][j];
+                            if (right.Height > 9) continue;
+                            if (Math.Abs(left.Y - right.Y) > 4 || Math.Abs(left.Height - right.Height) > 3) continue;
+                            int steps = b - a;
+                            int dx = right.X - left.X;
+                            int pitch = (int)Math.Round(dx / (double)steps);
+                            if (pitch < 60 || pitch > 260) continue;
+                            if (left.Width > pitch || right.Width > pitch) continue;
+                            if (++attempts > 8) return false;
+                            if (ReadInferred(image, reading, reds, purples, left.X - a * pitch, left.Y, Math.Max(left.Height, right.Height), pitch, wantLife, wantPrayer)) return true;
+                        }
+                    }
+            return false;
+        }
+
+        private static bool ReadInferred(ImageBuffer image, HudReading reading, List<IntRect> reds, List<IntRect> purples, int lifeX, int y, int barHeight, int pitch, bool wantLife, bool wantPrayer)
+        {
+            // The pitch between fills varies by a few pixels per slot, so the box
+            // starts a little left of the predicted fill and the reader skips the
+            // slot icon the same way it does for the paired bars.
+            int margin = Math.Max(6, pitch / 12);
+            int textW = pitch - 16 + margin;
+            int textH = Math.Max(26, barHeight * 6);
+            int prayerX = lifeX + 2 * pitch;
+            // A fill that is still there is the exact slot edge; use it.
+            int lifeEdge = FillNear(reds, lifeX, y, pitch);
+            int prayerEdge = FillNear(purples, prayerX, y, pitch);
+            IntRect lifeText = lifeEdge >= 0
+                ? Clamp(image, lifeEdge - 2, y - textH, pitch - 16, textH)
+                : Clamp(image, lifeX - 2 - margin, y - textH, textW, textH);
+            IntRect prayerText = prayerEdge >= 0
+                ? Clamp(image, prayerEdge - 2, y - textH, pitch - 16, textH)
+                : Clamp(image, prayerX - 2 - margin, y - textH, textW, textH);
+            bool any = false;
+            if (wantLife && lifeText.Width > 24)
+            {
+                NumberRead number = ReadResource(image, lifeText, true);
+                if (number.Ok && number.HasMax && ReadGate.Plausible(number.Current, number.Max))
+                {
+                    reading.LifeText = lifeText;
+                    reading.LifeBar = new IntRect(lifeEdge >= 0 ? lifeEdge : lifeX, y, Math.Max(1, pitch - 36), barHeight);
+                    reading.LifeTrace = "slot " + LastTrace;
+                    Apply(reading, true, number, "slot");
+                    any = true;
+                }
+            }
+            if (wantPrayer && prayerText.Width > 24)
+            {
+                NumberRead number = ReadResource(image, prayerText, false);
+                if (number.Ok && number.HasMax && ReadGate.Plausible(number.Current, number.Max))
+                {
+                    reading.PrayerText = prayerText;
+                    reading.PrayerBar = new IntRect(prayerEdge >= 0 ? prayerEdge : prayerX, y, Math.Max(1, pitch - 36), barHeight);
+                    reading.PrayerTrace = "slot " + LastTrace;
+                    Apply(reading, false, number, "slot");
+                    any = true;
+                }
+            }
+            if (!any) return false;
+            reading.StripFound = true;
+            reading.StripY = y;
+            return true;
+        }
+
+        private static int FillNear(List<IntRect> bars, int x, int y, int pitch)
+        {
+            for (int i = 0; i < bars.Count; i++)
+                if (bars[i].Height <= 9 && Math.Abs(bars[i].Y - y) <= 4 && Math.Abs(bars[i].X - x) <= pitch / 4) return bars[i].X;
+            return -1;
         }
 
         private static IntRect BarBetween(List<IntRect> bars, int left, int right, int y)
@@ -620,6 +709,8 @@ namespace KavrosAfkWarden
         {
             if (!number.Ok || number.Current < 0 || (number.Current == 0 && !number.HasMax)) return;
             if (number.HasMax && number.Max <= 0) number.HasMax = false;
+            // Above the cap is fine (boosts), at more than double it is a misread.
+            if (number.HasMax && !ReadGate.Plausible(number.Current, number.Max)) return;
             if (life)
             {
                 reading.Hp = number.Current;

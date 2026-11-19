@@ -14,6 +14,11 @@ namespace KavrosAfkWarden
         public int PrayerThreshold = 20;
         public bool PrayerPercent = true;
         public bool AfkEnabled = true;
+        // Skilling mode: idle means no XP drop, no backpack change and no
+        // click or key for SkillingIdleSeconds. Combat stats do not count.
+        public bool SkillingMode;
+        public int SkillingIdleSeconds = 45;
+        public int ActiveIdleSeconds { get { return SkillingMode ? SkillingIdleSeconds : IdleSeconds; } }
         public bool Grandmaster;
         public bool TreePerk;
         public int AfkSeconds { get { return ((Grandmaster ? 50 : 25) + (TreePerk ? 15 : 0)) * 60; } }
@@ -63,6 +68,7 @@ namespace KavrosAfkWarden
         public void Clamp()
         {
             IdleSeconds = ClampInt(IdleSeconds, 3, 600);
+            SkillingIdleSeconds = ClampInt(SkillingIdleSeconds, 3, 600);
             HpThreshold = ClampInt(HpThreshold, 1, HpPercent ? 999 : 9999999);
             PrayerThreshold = ClampInt(PrayerThreshold, 1, PrayerPercent ? 999 : 9999999);
             AfkLeadSeconds = ClampInt(AfkLeadSeconds, 5, AfkSeconds - 5);
@@ -352,6 +358,13 @@ namespace KavrosAfkWarden
     // into the current value.
     public sealed class ReadGate
     {
+        // Boosted life and prayer can sit above the cap (the live capture shows
+        // 1,633/1,060), but never at double it. Anything beyond is a misread.
+        public static bool Plausible(int current, int max)
+        {
+            return max >= 1 && max <= 10000000 && current >= 0 && current <= max * 2;
+        }
+
         private StableValue current = new StableValue();
         private readonly StableValue maximum = new StableValue();
         private int? lockedMax;
@@ -365,7 +378,7 @@ namespace KavrosAfkWarden
 
         public void Push(int? nowCurrent, int? nowMax, DateTime now)
         {
-            bool valid = nowCurrent != null && nowMax != null && nowMax.Value > 0;
+            bool valid = nowCurrent != null && nowMax != null && Plausible(nowCurrent.Value, nowMax.Value);
             if (valid && lockedMax.HasValue && nowMax != lockedMax)
             {
                 maxCount = candidateMax==nowMax ? maxCount+1 : 1;
@@ -394,6 +407,9 @@ namespace KavrosAfkWarden
             // travelling in one direction corroborate each other at the same cap.
             bool trend=lockedMax==nowMax && direction!=0 && direction==previousDirection && Math.Abs(delta)<=Math.Max(5,nowMax.Value/8);
             if(trend || (previous==value && lockedMax==nowMax)) Value=value;
+            // Two of the last three reads agree on the newest value (A, B, A):
+            // one odd frame in between does not hold the panel back.
+            else if(agreed==value && lockedMax==nowMax) Value=value;
             else if(!Value.HasValue && agreed.HasValue) Value=agreed;
             previousDirection=Math.Abs(delta)<=Math.Max(5,nowMax.Value/8)?direction:0;
             previous=value;
@@ -586,26 +602,153 @@ namespace KavrosAfkWarden
         }
     }
 
-    // Keep an already observed potion through a brief OCR gap. Only actual
-    // observations can trigger an alert. Never estimate beyond the grace period.
+    // Follows the shortest potion timer between reads. Once a timer has been
+    // read it keeps counting down on the clock while icons blink, scenery
+    // hides the digits, or another interface covers the buff bar, and each
+    // new read re-anchors it. A minute value ("11m") is a one-minute band; the
+    // read where it ticks down to the next minute pins the exact time. A read
+    // that disagrees with the clock has to repeat before the clock moves.
     public sealed class PotionDisplay
     {
-        private DateTime seen;
-        private int? seconds;
+        public const double FreshSeconds = 1.0;
+        public const int AlertableSeconds = 120;
+        public const int ClearAfterSeconds = 60;
+        public const int ShorterHoldSeconds = 8;
+
+        private bool tracking;
+        private double anchor;
+        private DateTime anchorTime;
+        private DateTime lastConfirmed;
+        private int confirmations;
+        private int lastMinuteRead = -1;
+        private int? pending;
+        private int pendingCount;
+        private DateTime pendingTime;
+        private DateTime clearSince = DateTime.MinValue;
+        private DateTime zeroSince = DateTime.MinValue;
+
+        // True when the shown value comes from the clock rather than this frame.
         public bool Estimated { get; private set; }
-        public int? Observe(int? fresh, DateTime now)
+        public bool Tracking { get { return tracking; } }
+        // Confirmed by at least two reads, the latest within two minutes.
+        public bool Alertable { get; private set; }
+
+        public int? Observe(int? fresh, DateTime now) { return Observe(fresh, false, now); }
+
+        // fresh: lowest potion timer read this frame, or null when none was read.
+        // barWithoutPotion: the buff bar itself was read and had no potion timer.
+        public int? Observe(int? fresh, bool barWithoutPotion, DateTime now)
         {
-            double age=(now-seen).TotalSeconds;
-            bool within=seconds.HasValue && age>=0 && age<=4;
-            // A second, longer buff can remain readable when the shorter one blinks.
-            if (within && (!fresh.HasValue || fresh.Value>seconds.Value+60))
+            if (fresh.HasValue && fresh.Value > 0)
             {
-                Estimated=true;
-                return Math.Max(0,seconds.Value-(int)age);
+                clearSince = DateTime.MinValue;
+                Take(fresh.Value, now);
             }
-            Estimated=false;seconds=fresh;
-            if(fresh.HasValue)seen=now;
-            return fresh;
+            else if (barWithoutPotion && clearSince == DateTime.MinValue) clearSince = now;
+            return Current(now);
+        }
+
+        public int? Current(DateTime now)
+        {
+            if (!tracking)
+            {
+                Estimated = false;
+                Alertable = false;
+                return null;
+            }
+            double left = Left(now);
+            if (left <= 0)
+            {
+                if (zeroSince == DateTime.MinValue) zeroSince = now;
+                else if ((now - zeroSince).TotalSeconds >= 5) { Reset(); return Current(now); }
+            }
+            else zeroSince = DateTime.MinValue;
+            if (clearSince != DateTime.MinValue && (now - clearSince).TotalSeconds >= ClearAfterSeconds) { Reset(); return Current(now); }
+            double age = (now - lastConfirmed).TotalSeconds;
+            Estimated = age >= FreshSeconds;
+            Alertable = confirmations >= 2 && age <= AlertableSeconds;
+            return (int)Math.Ceiling(left);
+        }
+
+        private double Left(DateTime now)
+        {
+            double left = anchor - (now - anchorTime).TotalSeconds;
+            return left < 0 ? 0 : left;
+        }
+
+        private void Take(int value, DateTime now)
+        {
+            bool minute = value >= 120 && value % 60 == 0;
+            if (!tracking)
+            {
+                Start(value, minute, now, 1);
+                return;
+            }
+            double left = Left(now);
+            bool consistent = minute
+                ? left >= value - 63 && left <= value + 63
+                : Math.Abs(left - value) <= 3;
+            if (consistent)
+            {
+                confirmations++;
+                lastConfirmed = now;
+                pending = null;
+                pendingCount = 0;
+                if (minute)
+                {
+                    // The minute just ticked over, or the clock runs ahead of the
+                    // band: the exact time is this minute value.
+                    if ((lastMinuteRead > 0 && lastMinuteRead > value) || left > value) Anchor(value, now);
+                    lastMinuteRead = value;
+                }
+                else
+                {
+                    Anchor(value, now);
+                    lastMinuteRead = -1;
+                }
+                return;
+            }
+            bool same = pending.HasValue && Math.Abs(pending.Value - value) <= (minute ? 60 : 3) && (now - pendingTime).TotalSeconds <= 6;
+            pendingCount = same ? pendingCount + 1 : 1;
+            pending = value;
+            pendingTime = now;
+            bool shorter = value < left;
+            // A longer timer stays pending while the shorter one is still being
+            // read now and then; a fresh dose shows once the old value is gone.
+            bool oldStillSeen = (now - lastConfirmed).TotalSeconds < ShorterHoldSeconds;
+            if (confirmations < 2 && pendingCount >= 2) Start(value, minute, now, 2);
+            else if (shorter && pendingCount >= 2) Start(value, minute, now, 2);
+            else if (!shorter && pendingCount >= 3 && !oldStillSeen) Start(value, minute, now, 2);
+        }
+
+        private void Start(int value, bool minute, DateTime now, int confirmed)
+        {
+            tracking = true;
+            Anchor(value, now);
+            confirmations = confirmed;
+            lastConfirmed = now;
+            lastMinuteRead = minute ? value : -1;
+            pending = null;
+            pendingCount = 0;
+            zeroSince = DateTime.MinValue;
+            clearSince = DateTime.MinValue;
+        }
+
+        private void Anchor(int value, DateTime now)
+        {
+            anchor = value;
+            anchorTime = now;
+        }
+
+        private void Reset()
+        {
+            tracking = false;
+            confirmations = 0;
+            pending = null;
+            pendingCount = 0;
+            lastMinuteRead = -1;
+            zeroSince = DateTime.MinValue;
+            clearSince = DateTime.MinValue;
         }
     }
 
@@ -615,6 +758,8 @@ namespace KavrosAfkWarden
         public bool GameAttached;
         public bool PixelsFresh;
         public bool CharacterMoving;
+        // Skilling mode: an XP drop or a backpack change this frame.
+        public bool SkillProgress;
         public bool InputActivity;
         public int? Hp;
         public int? HpMax;
@@ -662,7 +807,8 @@ namespace KavrosAfkWarden
             // The inactivity timer does not: it keeps running while you are in another app,
             // including while the client is minimized or covered and cannot be read.
             bool see = attached && sample.PixelsFresh;
-            StillFor = stillness.StillFor(see && sample.CharacterMoving, sample.Time, see);
+            bool active = settings.SkillingMode ? sample.SkillProgress || sample.InputActivity : sample.CharacterMoving;
+            StillFor = stillness.StillFor(see && active, sample.Time, see);
             inactivity.Observe(sample.InputActivity, sample.Time, attached);
             AfkRemaining = inactivity.Remaining(sample.Time, TimeSpan.FromSeconds(settings.AfkSeconds));
             if (!attached)
@@ -680,10 +826,15 @@ namespace KavrosAfkWarden
             }
 
             TimeSpan cooldown = TimeSpan.FromSeconds(settings.CooldownSeconds);
-            bool idle = see && settings.IdleEnabled && StillFor >= TimeSpan.FromSeconds(settings.IdleSeconds);
+            bool idle = see && settings.IdleEnabled && StillFor >= TimeSpan.FromSeconds(settings.ActiveIdleSeconds);
             IdleLatched = idle;
             if (idleGate.ShouldFire(idle, sample.Time, cooldown))
-                events.Add(Make(settings, "idle", "You have gone idle", "No animation or movement for " + (int)StillFor.TotalSeconds + "s."));
+            {
+                if (settings.SkillingMode)
+                    events.Add(Make(settings, "idle", "You stopped skilling", "No XP drop, backpack change or click for " + (int)StillFor.TotalSeconds + "s."));
+                else
+                    events.Add(Make(settings, "idle", "You have gone idle", "No animation or movement for " + (int)StillFor.TotalSeconds + "s."));
+            }
 
             int? hpNow = see ? sample.Hp : (int?)null;
             if (hp.Tick(hpNow, sample.HpMax, settings.HpPercent, settings.HpThreshold, settings.HpEnabled, sample.Time, cooldown))
@@ -695,7 +846,9 @@ namespace KavrosAfkWarden
                 events.Add(Make(settings, "prayer", "Prayer is low", FormatLevel("Prayer", sample.Prayer, sample.PrayerMax, settings.PrayerPercent)));
             PrayerLatched = prayer.Low;
 
-            int? potionNow = see ? sample.PotionSeconds : (int?)null;
+            // The potion clock keeps running from its last confirmed read, so a
+            // covered or unreadable buff bar can still warn.
+            int? potionNow = sample.PotionSeconds;
             bool potionClear = see && sample.PotionClear;
             if (potion.Tick(potionNow, potionClear, settings.PotionEnabled, settings.PotionSeconds, sample.Time, cooldown))
                 events.Add(Make(settings, "potion", "A potion is running out", "About " + (potionNow == null ? 0 : potionNow.Value).ToString() + "s left on a buff timer."));

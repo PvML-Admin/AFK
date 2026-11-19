@@ -33,6 +33,11 @@ namespace KavrosAfkWarden
                 Live023(root);
                 LiveRead(root);
                 Release026(root);
+                ReadFixes(root);
+                PotionClock();
+                CaptureCost();
+                PanelOrder();
+                Skilling();
                 Manifest(root);
             }
             catch (Exception ex)
@@ -61,7 +66,9 @@ namespace KavrosAfkWarden
             Check(clock.Observe(null,now.AddSeconds(2))==15 && clock.Estimated, "temporary missing potion is marked last read");
             Check(clock.Observe(600,now.AddSeconds(3))==14 && clock.Estimated, "longer second buff does not hide a briefly unread shorter buff");
             Check(clock.Observe(13,now.AddSeconds(4))==13 && !clock.Estimated, "short timer confirmed again");
-            Check(clock.Observe(null,now.AddSeconds(10))==null, "unknown potion expires");
+            Check(clock.Observe(null,now.AddSeconds(10))==7 && clock.Estimated, "an unread potion keeps counting down from its last read");
+            Check(clock.Current(now.AddSeconds(17))==0, "the countdown reaches zero");
+            Check(clock.Current(now.AddSeconds(23))==null && !clock.Tracking, "a finished potion is dropped");
             var drain=new ReadGate();
             drain.Push(942,990,now);drain.Push(939,990,now.AddSeconds(1));drain.Push(936,990,now.AddSeconds(2));
             Check(drain.Value==936 && drain.Max==990,"prayer can drain continuously between frames");
@@ -73,6 +80,128 @@ namespace KavrosAfkWarden
                 var due=eng.Tick(Sample(now.AddSeconds(cfg.AfkSeconds-30),true,false,false,false),cfg);
                 Check(Find(early,"afk")==null && Find(due,"afk")!=null,"warning timing for GM="+gm+" tree="+tree);
             }
+        }
+
+        private static void ReadFixes(string root)
+        {
+            Check(ReadGate.Plausible(1633, 1060) && ReadGate.Plausible(1040, 990), "boosted life and prayer above the cap are plausible");
+            Check(!ReadGate.Plausible(6633, 1060) && !ReadGate.Plausible(5, 0), "more than double the cap, or no cap, is a misread");
+            DateTime t = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            ReadGate wild = new ReadGate();
+            wild.Push(900, 1060, t); wild.Push(900, 1060, t.AddMilliseconds(500));
+            wild.Push(6900, 1060, t.AddSeconds(1)); wild.Push(6900, 1060, t.AddSeconds(1.5));
+            Check(wild.Value == 900, "a doubled misread never replaces the shown life, got " + wild.Value);
+            ReadGate odd = new ReadGate();
+            odd.Push(700, 1060, t); odd.Push(700, 1060, t.AddMilliseconds(500));
+            odd.Push(520, 1060, t.AddSeconds(1)); odd.Push(580, 1060, t.AddSeconds(1.5)); odd.Push(520, 1060, t.AddSeconds(2));
+            Check(odd.Value == 520, "two of the last three reads move the value past one odd frame, got " + odd.Value);
+            if (string.IsNullOrEmpty(root)) return;
+            string dir = Path.Combine(root, "verification", "fixtures", "live023");
+            string[] names = new string[] { "debug-capture.png", "live-v024-full-layout-lag.png", "live-v024-hp-917-unread.png", "live-v024-lagging-values.png" };
+            for (int i = 0; i < names.Length; i++)
+            {
+                string path = Path.Combine(dir, names[i]);
+                if (!File.Exists(path)) { Check(false, "fixture present " + names[i]); continue; }
+                HudReading full = HudReader.Read(PngImage.Load(path), new WardenSettings());
+                int dark = ImageBuffer.Pack(18, 18, 22);
+                ImageBuffer noPrayerFill = PngImage.Load(path);
+                noPrayerFill.Fill(full.PrayerBar.X - 2, full.PrayerBar.Y - 1, full.PrayerBar.Width + 4, full.PrayerBar.Height + 3, dark);
+                HudReading a = HudReader.Read(noPrayerFill, new WardenSettings());
+                Check(a.Prayer == full.Prayer && a.PrayerMax == full.PrayerMax && a.Hp == full.Hp, names[i] + ": an empty prayer fill still reads prayer from its slot, got " + a.Prayer + "/" + a.PrayerMax + " " + a.PrayerTrace);
+                ImageBuffer noLifeFill = PngImage.Load(path);
+                noLifeFill.Fill(full.LifeBar.X - 2, full.LifeBar.Y - 1, full.LifeBar.Width + 4, full.LifeBar.Height + 3, dark);
+                HudReading b = HudReader.Read(noLifeFill, new WardenSettings());
+                Check(b.Hp == full.Hp && b.HpMax == full.HpMax && b.Prayer == full.Prayer, names[i] + ": a short life fill still reads life from its slot, got " + b.Hp + "/" + b.HpMax + " " + b.LifeTrace);
+            }
+        }
+
+        private static void PotionClock()
+        {
+            DateTime t = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            PotionDisplay clock = new PotionDisplay();
+            clock.Observe(660, t);
+            clock.Observe(660, t.AddSeconds(0.5));
+            Check(clock.Alertable, "two reads of 11m confirm the potion");
+            Check(clock.Observe(null, t.AddSeconds(60)) == 600 && clock.Estimated, "a buff bar hidden for a minute keeps counting down");
+            Check(clock.Current(t.AddSeconds(240)) == 420, "four minutes later the clock still runs");
+            clock.Observe(420, t.AddSeconds(241));
+            Check(clock.Current(t.AddSeconds(241.2)) == 420 && !clock.Estimated, "7m ticking over from 8m pins seven minutes exactly");
+            Check(clock.Observe(60, t.AddSeconds(242)) == 419, "one odd lower read does not move the clock");
+            Check(clock.Observe(null, true, t.AddSeconds(243)) == 418, "a bar read without a potion icon does not clear it at once");
+            PotionDisplay late = new PotionDisplay();
+            late.Observe(30, t); late.Observe(29, t.AddSeconds(1));
+            Check(late.Alertable && late.Current(t.AddSeconds(20)) == 10, "the clock reaches the warning while the icon is unread");
+            int? stale = late.Current(t.AddSeconds(200));
+            Check(!late.Alertable, "a clock not confirmed for minutes stops warning, shown " + stale);
+            PotionDisplay dose = new PotionDisplay();
+            dose.Observe(40, t); dose.Observe(39, t.AddSeconds(1));
+            for (int i = 0; i < 4; i++) dose.Observe(360, t.AddSeconds(9 + i * 0.5));
+            Check(dose.Current(t.AddSeconds(11)) == 360 - 1 || dose.Current(t.AddSeconds(11)) == 360, "a fresh dose replaces the old timer once the old one is no longer read, got " + dose.Current(t.AddSeconds(11)));
+            PotionDisplay keep = new PotionDisplay();
+            keep.Observe(40, t); keep.Observe(39, t.AddSeconds(1));
+            keep.Observe(600, t.AddSeconds(1.5)); keep.Observe(38, t.AddSeconds(2)); keep.Observe(600, t.AddSeconds(2.5)); keep.Observe(600, t.AddSeconds(3));
+            Check(keep.Current(t.AddSeconds(3)) == 37, "a longer second buff does not hide the shorter one that is still read");
+            WardenEngine engine = new WardenEngine();
+            WardenSettings settings = new WardenSettings();
+            settings.PotionSeconds = 15; settings.CooldownSeconds = 0; settings.IdleEnabled = false; settings.HpEnabled = false; settings.PrayerEnabled = false; settings.AfkEnabled = false;
+            WatchSample hidden = Sample(t, true, false, false, false);
+            hidden.PotionSeconds = 12;
+            Check(Find(engine.Tick(hidden, settings), "potion") != null, "a confirmed countdown warns even while the bar is covered");
+        }
+
+        private static void CaptureCost()
+        {
+            Check(CapturePlan.NextFullSeconds(false, false, 1) == 3 && CapturePlan.NextFullSeconds(false, false, 2) == 6 && CapturePlan.NextFullSeconds(false, false, 4) == 24 && CapturePlan.NextFullSeconds(false, false, 9) == 30,
+                "a HUD that cannot be read backs off 3, 6, 12, 24, 30 seconds between whole-client copies");
+            Check(CapturePlan.NextFullSeconds(true, true, 0) == 30 && CapturePlan.NextFullSeconds(true, false, 0) == 15, "a complete read waits the slow refresh");
+            IntRect life = new IntRect(613, 1116, 108, 36), prayer = new IntRect(851, 1116, 108, 36);
+            Check(CapturePlan.ShareGrab(life, prayer), "life and prayer on one HUD row are copied in one grab");
+            Check(!CapturePlan.ShareGrab(life, new IntRect(1800, 200, 108, 36)), "slots far apart are copied separately");
+            Check(CapturePlan.SlowSlotEvery >= 2, "buffs, XP and the backpack are read at most once a second");
+        }
+
+        private static void PanelOrder()
+        {
+            Check(PanelDock.WantTopMost(true, false, true, false, false), "the panel is topmost while the game is in front");
+            Check(!PanelDock.WantTopMost(true, false, false, false, false), "the panel drops back when another application is in front");
+            Check(PanelDock.WantTopMost(false, false, false, false, true), "an explicit launch lifts the panel before the client is found");
+            Check(PanelDock.WantTopMost(true, false, false, true, false), "the panel stays up while it is being used");
+            Check(!PanelDock.WantTopMost(true, true, true, true, true), "a minimized client never gets a topmost panel");
+        }
+
+        private static void Skilling()
+        {
+            WardenSettings settings = new WardenSettings();
+            settings.SkillingMode = true;
+            settings.SkillingIdleSeconds = 30;
+            settings.IdleSeconds = 12;
+            settings.HpEnabled = false; settings.PrayerEnabled = false; settings.AfkEnabled = false; settings.PotionEnabled = false;
+            Check(settings.ActiveIdleSeconds == 30, "skilling mode uses its own idle time");
+            WardenSettings loaded = SettingsText.Read(SettingsText.Write(settings));
+            Check(loaded.SkillingMode && loaded.SkillingIdleSeconds == 30 && loaded.IdleSeconds == 12, "skilling settings round-trip");
+            DateTime t = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            WardenEngine engine = new WardenEngine();
+            WatchSample start = Sample(t, true, true, false, false);
+            start.SkillProgress = true;
+            engine.Tick(start, settings);
+            engine.Tick(Sample(t.AddSeconds(0.5), true, true, true, false), settings);
+            // Combat-style signals (life changing) do not count while skilling.
+            List<AlertEvent> early = engine.Tick(Sample(t.AddSeconds(20), true, true, true, false), settings);
+            Check(Find(early, "idle") == null, "twenty seconds without XP is not yet idle in skilling mode");
+            List<AlertEvent> stopped = engine.Tick(Sample(t.AddSeconds(31), true, true, true, false), settings);
+            AlertEvent alert = Find(stopped, "idle");
+            Check(alert != null && alert.Title == "You stopped skilling", "no XP or backpack change for the skilling time warns that skilling stopped");
+            WatchSample xp = Sample(t.AddSeconds(32), true, true, false, false);
+            xp.SkillProgress = true;
+            engine.Tick(xp, settings);
+            Check(!engine.IdleLatched && engine.StillFor == TimeSpan.Zero, "an XP drop resets skilling idle");
+            WardenEngine combat = new WardenEngine();
+            WardenSettings normal = new WardenSettings();
+            normal.IdleSeconds = 12; normal.HpEnabled = false; normal.PrayerEnabled = false; normal.AfkEnabled = false;
+            combat.Tick(Sample(t, true, true, false, false), normal);
+            WatchSample onlyXp = Sample(t.AddSeconds(13), true, true, false, false);
+            onlyXp.SkillProgress = true;
+            Check(Find(combat.Tick(onlyXp, normal), "idle") != null, "combat mode keeps its own signals");
         }
 
         private static void Check(bool condition, string message)

@@ -42,6 +42,19 @@ namespace KavrosAfkWarden
             if (!gameExists && !panelFocused && !settingsFocused) return true;
             return true;
         }
+
+        // Topmost only while the player is looking at the game (or at the panel
+        // or Settings themselves), and briefly after an explicit launch so a
+        // Companion start cannot leave it behind a client that is about to be
+        // found. When another application is in front the panel drops back
+        // under it, so it never floats over the browser or Discord.
+        public static bool WantTopMost(bool gameExists, bool minimized, bool gameForeground, bool ownForeground, bool launchGrace)
+        {
+            if (minimized) return false;
+            if (launchGrace) return true;
+            if (ownForeground) return true;
+            return gameExists && gameForeground;
+        }
     }
 
     // How a frame is obtained. Focus is intentionally not an input: an
@@ -113,10 +126,39 @@ namespace KavrosAfkWarden
     {
         public const int SampleMilliseconds = 500;
         public const int FullIntervalSeconds = 30;
+        // Buff timers, the XP counter and the backpack change slowly. They are
+        // copied on every other sample, about once a second.
+        public const int SlowSlotEvery = 2;
 
         public static bool WantFull(bool locked, DateTime now, DateTime nextFull)
         {
             return now >= nextFull;
+        }
+
+        // Seconds until the next whole-client copy. A complete read waits the
+        // slow refresh (shorter while no buff bar is locked). A failed read
+        // backs off 3, 6, 12, 24 then 30 seconds, so a hidden HUD, an empty
+        // prayer bar or a loading screen does not copy the whole client every
+        // three seconds.
+        public static int NextFullSeconds(bool lifeAndPrayerRead, bool buffLocked, int failedInARow)
+        {
+            if (lifeAndPrayerRead) return buffLocked ? FullIntervalSeconds : 15;
+            int wait = 3;
+            for (int i = 1; i < failedInARow && wait < FullIntervalSeconds; i++) wait *= 2;
+            return Math.Min(wait, FullIntervalSeconds);
+        }
+
+        // Copy two HUD slots in one screen grab when they sit on the same row
+        // and the band between them is small. One grab instead of two halves
+        // the screen reads.
+        public static bool ShareGrab(IntRect a, IntRect b)
+        {
+            if (a.Width < 4 || b.Width < 4) return false;
+            int left = Math.Min(a.X, b.X), top = Math.Min(a.Y, b.Y);
+            int right = Math.Max(a.Right, b.Right), bottom = Math.Max(a.Bottom, b.Bottom);
+            long union = (long)(right - left) * (bottom - top);
+            long parts = (long)a.Width * a.Height + (long)b.Width * b.Height;
+            return union <= parts * 3 && bottom - top <= Math.Max(a.Height, b.Height) * 2;
         }
     }
 }

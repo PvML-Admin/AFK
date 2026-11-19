@@ -36,6 +36,7 @@ Saved in `%LocalAppData%\KavrosAfkWarden\settings.txt`. They come back the next 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | Idle alert | On, 12 seconds | Warns when the character view and minimap dot have been still for this long. |
+| Skilling mode | Off, 45 seconds | For AFK skilling. Idle then means no XP drop, no backpack change and no click or key for this long, and the alert says you stopped skilling. Life, prayer and adrenaline changes do not count. The "After" box keeps a separate time for each mode. |
 | Low hitpoints | On, 30 percent | Warns below this percent, or below an absolute number if Percent is off. |
 | Low prayer | On, 20 percent | Same, for prayer. |
 | Potion running out | On, 15 seconds | Warns when any buff-bar timer drops below this. Each alert still has its own Sound and Notify boxes. |
@@ -68,6 +69,8 @@ Two similar frames are required before a number is trusted. A single bad frame d
 **Potions.** The buff bar is the row of small timers along the top of the client. The shortest one is watched. It warns when that time drops below the threshold (15 seconds unless you change it). A plain number is seconds, so `65` is 65 seconds and `15` is 15. `1:05`, or `1m 05s` when the letters sit between the two numbers, is one minute and five seconds. A timer written only as `1m` or `15s` is skipped, so the letter is not read as part of the count and a minute is not turned into one second. The search does not look at the hitpoint and prayer numbers along the bottom. If the buff bar is somewhere else, or the text is too small to separate, use Pin buff bar and drag around the timers. No timers means nothing is running out. A missed frame does not clear an alert that already fired.
 
 **Idle.** The character view is the centre of the client, outside the minimap, the top ribbon, and the bottom bar. Movement is either a clear change in that view or the minimap player dot moving. A skilling animation counts as movement. Moving the mouse does not. Time the window cannot be seen is not counted as stillness.
+
+**Potion clock.** Once a potion timer has been read twice, Warden keeps counting it down between reads, so a blinking icon, bright scenery behind the digits, or an interface over the buff bar does not lose it. The panel shows `left (est.)` while the value comes from the clock. A minute value such as `11m` is pinned to the exact time when it ticks over to `10m`. A reading that disagrees with the clock has to repeat before it replaces it, and a timer that has not been read for two minutes no longer triggers the alert.
 
 **AFK teleport.** The countdown starts when Warden attaches to the client and resets on detected game clicks or keys. The normal timeout is 25 minutes. Enable Grandmaster for 50 minutes, the tree perk for 40 minutes, or both for 65 minutes. A client already idle before Warden opens can teleport sooner than the displayed estimate.
 

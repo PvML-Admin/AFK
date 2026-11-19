@@ -129,8 +129,22 @@ namespace KavrosAfkWarden
             BackColor = KavrosTheme.Bg;
         }
 
+        private string paintedPill, paintedValue;
+        private PillTone paintedTone;
+
+        // Repaint only when the text or tone changed. The panel sits over the
+        // game, so an unchanged row is not redrawn twice a second.
+        internal void Commit()
+        {
+            if (Pill == paintedPill && Value == paintedValue && Tone == paintedTone) return;
+            Invalidate();
+        }
+
         private void Draw(Graphics g, PaintedLabel label)
         {
+            paintedPill = Pill;
+            paintedValue = Value;
+            paintedTone = Tone;
             using (Brush brush = new SolidBrush(KavrosTheme.Bg)) g.FillRectangle(brush, ClientRectangle);
             int width = KavrosTheme.DrawPill(g, 0, Height / 2, Pill, Tone, KavrosTheme.Bg);
             TextRenderer.DrawText(g, Value, KavrosTheme.Ui(9F, false), new Rectangle(width + 10, 0, Math.Max(1, Width - width - 12), Height), KavrosTheme.Text, KavrosTheme.Bg, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
@@ -302,6 +316,7 @@ namespace KavrosAfkWarden
         private readonly PaintedLabel connection = new PaintedLabel();
         private KavrosCheckBox pause = new KavrosCheckBox();
         private KavrosCheckBox idleOn = new KavrosCheckBox();
+        private KavrosCheckBox skillingOn = new KavrosCheckBox();
         private KavrosCheckBox hpOn = new KavrosCheckBox();
         private KavrosCheckBox prayerOn = new KavrosCheckBox();
         private KavrosCheckBox afkOn = new KavrosCheckBox();
@@ -509,8 +524,10 @@ namespace KavrosAfkWarden
             AddButton("Pick client", 210, 196, 120, ButtonTone.Secondary, delegate { picking = true; SetStatus("Click the Kavros window to watch."); });
 
             idleOn = Check("Idle alert", 28, 292, 160, settings.IdleEnabled);
+            skillingOn = Check("Skilling mode (XP and backpack)", 210, 292, 280, settings.SkillingMode);
+            skillingOn.CheckedChanged += delegate { if (!loading) SwitchIdleMode(); };
             Caption("After", 28, 320);
-            Number(idleSeconds, 88, 316, 3, 600, settings.IdleSeconds);
+            Number(idleSeconds, 88, 316, 3, 600, settings.ActiveIdleSeconds);
             Caption("seconds", 172, 320);
             idleSound = Check("Sound", 500, 316, 84, settings.IdleSound);
             idleNotify = Check("Notify", 590, 316, 78, settings.IdleNotify);
@@ -592,6 +609,7 @@ namespace KavrosAfkWarden
         {
             pause.Checked = settings.Paused;
             idleOn.Checked = settings.IdleEnabled;
+            skillingOn.Checked = settings.SkillingMode;
             hpOn.Checked = settings.HpEnabled;
             prayerOn.Checked = settings.PrayerEnabled;
             afkOn.Checked = settings.AfkEnabled;
@@ -612,7 +630,7 @@ namespace KavrosAfkWarden
             potionNotify.Checked = settings.PotionNotify;
             updates.Checked = settings.CheckForUpdates;
             saveDebug.Checked = settings.SaveDebug;
-            idleSeconds.SetValue(Clamp(settings.IdleSeconds, idleSeconds), false);
+            idleSeconds.SetValue(Clamp(settings.ActiveIdleSeconds, idleSeconds), false);
             hpThreshold.Maximum = settings.HpPercent ? 999 : 9999999;
             hpThreshold.SetValue(Clamp(settings.HpThreshold, hpThreshold), false);
             prayerThreshold.Maximum = settings.PrayerPercent ? 999 : 9999999;
@@ -759,7 +777,8 @@ namespace KavrosAfkWarden
             sound.Volume = settings.Volume;
             settings.ClientTitle = clientTitle;
             settings.IdleEnabled = idleOn.Checked;
-            settings.IdleSeconds = (int)idleSeconds.Value;
+            if (settings.SkillingMode) settings.SkillingIdleSeconds = (int)idleSeconds.Value;
+            else settings.IdleSeconds = (int)idleSeconds.Value;
             settings.HpEnabled = hpOn.Checked;
             settings.HpThreshold = (int)hpThreshold.Value;
             settings.HpPercent = hpPercent.Checked;
@@ -792,8 +811,21 @@ namespace KavrosAfkWarden
             settings.SaveDebug = saveDebug.Checked;
             settings.Clamp();
             try { SettingsText.Save(settingsPath, settings); } catch (IOException) { }
-            panel.TopMost = false;
             panel.SetPaused(settings.Paused);
+        }
+
+        // Combat idle and skilling idle keep their own "After N seconds"; the
+        // one field shows whichever mode is on.
+        private void SwitchIdleMode()
+        {
+            if (settings.SkillingMode) settings.SkillingIdleSeconds = (int)idleSeconds.Value;
+            else settings.IdleSeconds = (int)idleSeconds.Value;
+            settings.SkillingMode = skillingOn.Checked;
+            loading = true;
+            try { idleSeconds.SetValue(Clamp(settings.ActiveIdleSeconds, idleSeconds), false); }
+            finally { loading = false; }
+            activity = new SceneActivity();
+            Save();
         }
 
         private void SetStatus(string text) { if (!status.IsDisposed) status.Text = text; }
@@ -929,8 +961,36 @@ namespace KavrosAfkWarden
 
         private void ShowPanel()
         {
-            panel.TopMost = false;
             FollowPanel();
+        }
+
+        private bool panelTop;
+        private bool panelTopKnown;
+        private DateTime raiseUntil = DateTime.MinValue;
+
+        // Keep the panel above the game without taking focus. Topmost is set
+        // only while the game (or the panel or Settings) is in front, and for a
+        // few seconds after an explicit launch, then the panel goes back under
+        // whatever application the player switched to. Only a change is sent.
+        private void KeepPanelOnTop(bool exists, bool minimized, bool foreground)
+        {
+            if (!panel.IsHandleCreated || !panel.Visible) { panelTopKnown = false; return; }
+            IntPtr front = NativeMethods.GetForegroundWindow();
+            // Settings in front does not count: the panel must not cover it.
+            bool own = front != IntPtr.Zero && front == panel.Handle;
+            bool want = PanelDock.WantTopMost(exists, minimized, foreground, own, DateTime.UtcNow < raiseUntil);
+            if (panelTopKnown && want == panelTop) return;
+            const uint flags = 0x0001 | 0x0002 | 0x0010; // NOSIZE | NOMOVE | NOACTIVATE
+            if (want) NativeMethods.SetWindowPos(panel.Handle, new IntPtr(-1), 0, 0, 0, 0, flags);
+            else
+            {
+                NativeMethods.SetWindowPos(panel.Handle, new IntPtr(-2), 0, 0, 0, 0, flags);
+                // NOTOPMOST lands above every normal window; tuck the panel under
+                // the application that is now in front.
+                if (front != IntPtr.Zero && !own) NativeMethods.SetWindowPos(panel.Handle, front, 0, 0, 0, 0, flags);
+            }
+            panelTop = want;
+            panelTopKnown = true;
         }
 
         private void FollowPanel()
@@ -958,6 +1018,7 @@ namespace KavrosAfkWarden
             if (panel.IsDragging)
             {
                 if (!panel.Visible) panel.Show();
+                KeepPanelOnTop(exists, minimized, foreground);
                 return;
             }
             Rectangle now = game;
@@ -967,7 +1028,8 @@ namespace KavrosAfkWarden
                 dockedGame = now;
                 if (panel.Left != x || panel.Top != y) panel.Location = new Point(x, y);
             }
-            if (!panel.Visible) panel.Show();
+            if (!panel.Visible) { panel.Show(); panelTopKnown = false; }
+            KeepPanelOnTop(exists, minimized, foreground);
         }
 
         private void TryPickClient()
@@ -1075,15 +1137,14 @@ namespace KavrosAfkWarden
         {
             if(Visible){ShowSettings();return;}
             if(selected!=IntPtr.Zero && NativeMethods.IsIconic(selected)){ShowSettings();return;}
+            // An explicit launch (Companion, the shortcut or a second start)
+            // lifts the panel over everything for a few seconds without taking
+            // keyboard focus from the game. After that it stays topmost while
+            // the game is in front.
+            raiseUntil = DateTime.UtcNow.AddSeconds(8);
+            panelTopKnown = false;
             ShowPanel();
-            if (panel.IsHandleCreated)
-            {
-                if(!panel.Visible)panel.Show();
-                // Raise for this explicit user launch only. Normal gameplay does not steal focus.
-                panel.BringToFront();
-                NativeMethods.SetWindowPos(panel.Handle,IntPtr.Zero,0,0,0,0,0x0001|0x0002|0x0040);
-                NativeMethods.SetForegroundWindow(panel.Handle);
-            }
+            if (panel.IsHandleCreated && !panel.Visible) { panel.Show(); KeepPanelOnTop(selected != IntPtr.Zero, false, false); }
         }
 
         private void Exit()
@@ -1176,6 +1237,7 @@ namespace KavrosAfkWarden
             int? prayer = prayerGate.Value;
             int? prayerMax = prayerGate.Max;
             int? potion = pixels && lastHud.BuffBarFound ? BuffClock.ShownSeconds(lastHud.Buffs) : (int?)null;
+            bool barWithoutPotion = pixels && lastHud.BuffBarFound && potion == null;
             bool hpComparable = hp != null && WardenSettings.Comparable(settings.HpPercent, lastHud.HpFromOrb, hpMax != null);
             bool prayerComparable = prayer != null && WardenSettings.Comparable(settings.PrayerPercent, lastHud.PrayerFromOrb, prayerMax != null);
             WatchSample sample = new WatchSample();
@@ -1183,19 +1245,22 @@ namespace KavrosAfkWarden
             sample.GameAttached = selected != IntPtr.Zero && NativeMethods.IsWindow(selected);
             sample.PixelsFresh = pixels;
             sample.CharacterMoving = moving;
+            sample.SkillProgress = grab.XpActivity || grab.PackActivity;
             sample.InputActivity = grab.Input;
             shownHp = hp;
             shownHpMax = hpMax;
             shownPrayer = prayer;
             shownPrayerMax = prayerMax;
-            if(newCapture || (sampleTime-lastFrame).TotalSeconds>1.5)
-                shownPotion=potionDisplay.Observe(freshFrame ? potion : (int?)null,sampleTime);
+            // The potion clock counts down on every tick; a new frame re-anchors it.
+            shownPotion = freshFrame
+                ? potionDisplay.Observe(potion, barWithoutPotion, sampleTime)
+                : potionDisplay.Current(sampleTime);
             sample.Hp = freshFrame && lastHud.HpMax.HasValue && !hpGate.Stale && hpComparable ? hp : (int?)null;
             sample.HpMax = hpMax;
             sample.Prayer = freshFrame && lastHud.PrayerMax.HasValue && !prayerGate.Stale && prayerComparable ? prayer : (int?)null;
             sample.PrayerMax = prayerMax;
-            sample.PotionSeconds = freshFrame && !potionDisplay.Estimated ? potion : null;
-            sample.PotionClear = freshFrame && lastHud.BuffBarFound && !shownPotion.HasValue;
+            sample.PotionSeconds = potionDisplay.Alertable ? shownPotion : null;
+            sample.PotionClear = freshFrame && lastHud.BuffBarFound && !potionDisplay.Tracking;
             List<AlertEvent> events = engine.Tick(sample, settings);
             for (int i = 0; i < events.Count; i++)
             {
@@ -1222,9 +1287,9 @@ namespace KavrosAfkWarden
             }
             else
             {
-                panel.Idle.Pill = engine.IdleLatched ? "Idle" : "Moving";
+                panel.Idle.Pill = engine.IdleLatched ? "Idle" : settings.SkillingMode ? "Skilling" : "Moving";
                 panel.Idle.Tone = engine.IdleLatched ? PillTone.Bad : PillTone.Ok;
-                panel.Idle.Value = pixels ? ((int)engine.StillFor.TotalSeconds).ToString() + "s still" : "No view";
+                panel.Idle.Value = !pixels ? "No view" : ((int)engine.StillFor.TotalSeconds).ToString() + (settings.SkillingMode ? "s since XP" : "s still");
             }
             panel.Hp.Pill = engine.HpLatched ? "Low HP" : "Hitpoints";
             panel.Hp.Tone = engine.HpLatched ? PillTone.Bad : !pixels || lastHud.Hp == null ? PillTone.Example : PillTone.Ok;
@@ -1233,19 +1298,19 @@ namespace KavrosAfkWarden
             panel.Prayer.Tone = engine.PrayerLatched ? PillTone.Warn : !pixels || lastHud.Prayer == null ? PillTone.Example : PillTone.Ok;
             panel.Prayer.Value = !pixels ? "No view" : prayerGate.Stale ? Stale(shownPrayer) : shownPrayer == null ? "Unread" : Format(shownPrayer, shownPrayerMax, lastHud.PrayerFromOrb);
             panel.Potion.Pill = engine.PotionLatched ? "Potion low" : "Potions";
-            panel.Potion.Tone = engine.PotionLatched ? PillTone.Warn : !pixels || !shownPotion.HasValue || potionDisplay.Estimated ? PillTone.Example : PillTone.Ok;
+            panel.Potion.Tone = engine.PotionLatched ? PillTone.Warn : !shownPotion.HasValue || potionDisplay.Estimated ? PillTone.Example : PillTone.Ok;
             panel.Potion.Value = shownPotion.HasValue && !settings.Paused
-                ? TimeSpan.FromSeconds(shownPotion.Value).ToString(@"m\:ss")+(potionDisplay.Estimated?" (last read)":" left")
+                ? TimeSpan.FromSeconds(shownPotion.Value).ToString(@"m\:ss")+(potionDisplay.Estimated?" left (est.)":" left")
                 : (!pixels ? "No view" : "No potion timer");
             int left = Math.Max(0, (int)engine.AfkRemaining.TotalSeconds);
             panel.Afk.Pill = engine.AfkLatched ? "AFK soon" : "AFK timer";
             panel.Afk.Tone = engine.AfkLatched ? PillTone.Bad : PillTone.Ok;
             panel.Afk.Value = settings.Paused ? "Paused" : selected==IntPtr.Zero ? "Waiting for client" : (left / 60).ToString() + ":" + (left % 60).ToString("00") + " left";
-            panel.Idle.Invalidate();
-            panel.Hp.Invalidate();
-            panel.Prayer.Invalidate();
-            panel.Potion.Invalidate();
-            panel.Afk.Invalidate();
+            panel.Idle.Commit();
+            panel.Hp.Commit();
+            panel.Prayer.Commit();
+            panel.Potion.Commit();
+            panel.Afk.Commit();
         }
 
         private static string Stale(int? value)
