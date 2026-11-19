@@ -1,7 +1,7 @@
 {
   "id": "afk-warden",
   "name": "AFK Warden",
-  "author": "Kavros",
+  "author": "Zenity",
   "version": "0.1.0",
   "summary": "Warns when you go idle, when hitpoints or prayer run low, and shortly before an inactivity teleport.",
   "repository": "https://github.com/Zenity-sys/AFK",

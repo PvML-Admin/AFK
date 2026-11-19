@@ -4,7 +4,7 @@ namespace KavrosAfkWarden
     {
         internal const string Version = "0.1.0";
         internal const string Name = "AFK Warden";
-        internal const string Author = "Kavros";
+        internal const string Author = "Zenity";
         internal const string ModuleId = "afk-warden";
         internal const string Executable = "KavrosAfkWarden.exe";
         internal const string MutexName = @"Local\KavrosAfkWarden";

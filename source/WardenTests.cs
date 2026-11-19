@@ -384,7 +384,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.1.0" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Kavros", "module identity");
+            Check(AppInfo.Version == "0.1.0" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -396,7 +396,7 @@ namespace KavrosAfkWarden
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
             Check(json.IndexOf("\"version\": \"0.1.0\"") >= 0, "public module manifest version");
-            Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Kavros\"") >= 0, "public module manifest name and author");
+            Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
             Check(manifest.IndexOf("version=\"0.1.0.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }

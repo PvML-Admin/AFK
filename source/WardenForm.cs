@@ -516,7 +516,7 @@ namespace KavrosAfkWarden
             }
             Label footer = new Label();
             footer.Name = "BuildCredit";
-            footer.Text = "Kavros  ·  " + AppInfo.DisplayVersion;
+            footer.Text = "Made by Zenity  ·  " + AppInfo.DisplayVersion;
             footer.Dock = DockStyle.Bottom;
             footer.Height = 28;
             footer.TextAlign = ContentAlignment.MiddleCenter;
