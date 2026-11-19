@@ -9,9 +9,11 @@ namespace KavrosAfkWarden
 {
     internal sealed class AlertSound
     {
+        internal int Volume = 100;
+
         internal void Play(string kind)
         {
-            byte[] wav = Build(kind);
+            byte[] wav = Build(kind, Volume);
             System.Threading.ThreadPool.QueueUserWorkItem(delegate
             {
                 try
@@ -24,19 +26,20 @@ namespace KavrosAfkWarden
             });
         }
 
-        private static byte[] Build(string kind)
+        private static byte[] Build(string kind, int volume)
         {
             int rate = 22050;
             double[] tones = kind == "hp" ? new double[] { 880, 660 } : kind == "afk" ? new double[] { 988, 740 } : kind == "prayer" ? new double[] { 660, 520 } : kind == "potion" ? new double[] { 740, 520 } : new double[] { 520, 780 };
             int samples = (int)(rate * 0.42);
             byte[] data = new byte[samples * 2];
+            int level = volume < 0 ? 0 : volume > 100 ? 100 : volume;
             for (int i = 0; i < samples; i++)
             {
                 double t = i / (double)rate;
                 int which = t < 0.18 ? 0 : 1;
                 double local = which == 0 ? t : t - 0.2;
                 double envelope = local < 0 || local > 0.18 ? 0 : Math.Sin(Math.PI * Math.Min(1, local / 0.18));
-                short sample = (short)(Math.Sin(2 * Math.PI * tones[which] * t) * envelope * 14000);
+                short sample = (short)(Math.Sin(2 * Math.PI * tones[which] * t) * envelope * 14000 * level / 100);
                 data[i * 2] = (byte)(sample & 255);
                 data[i * 2 + 1] = (byte)((sample >> 8) & 255);
             }

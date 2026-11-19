@@ -60,16 +60,31 @@ namespace KavrosAfkWarden
             return WindowScore.Score(window.Title, window.ProcessName, window.ClassName, window.Client.Width, window.Client.Height);
         }
 
-        internal static GameWindow Choose(List<GameWindow> windows, IntPtr current)
+        internal static GameWindow Choose(List<GameWindow> windows, IntPtr current, string rememberedTitle)
         {
-            GameWindow best = null;
+            GameWindow currentWindow = null;
+            GameWindow titled = null;
+            GameWindow only = null;
+            int count = 0;
             for (int i = 0; i < windows.Count; i++)
             {
                 if (Score(windows[i]) < 100) continue;
-                if (windows[i].Handle == current) return windows[i];
-                if (best == null) best = windows[i];
+                count++;
+                if (only == null) only = windows[i];
+                if (windows[i].Handle == current) currentWindow = windows[i];
+                if (rememberedTitle != null && rememberedTitle.Length > 0 && string.Equals(windows[i].Title, rememberedTitle, StringComparison.Ordinal)) titled = windows[i];
             }
-            return best;
+            if (currentWindow != null) return currentWindow;
+            if (titled != null) return titled;
+            if (count == 1) return only;
+            return null;
+        }
+
+        internal static string ClientLabel(GameWindow window, int index)
+        {
+            string title = window == null ? "" : window.Title ?? "";
+            if (title.Length > 36) title = title.Substring(0, 36);
+            return "Client " + (index + 1).ToString() + ": " + title;
         }
 
         internal static bool IsForeground(IntPtr game)

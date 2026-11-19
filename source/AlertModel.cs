@@ -30,7 +30,11 @@ namespace KavrosAfkWarden
         public int PotionSeconds = 15;
         public bool PotionSound = true;
         public bool PotionNotify = true;
+        public int Volume = 100;
         public int CooldownSeconds = 20;
+        public int PanelOffsetX = 12;
+        public int PanelOffsetY = 72;
+        public string ClientTitle = "";
         public int BannerSeconds = 8;
         public bool Paused;
         public bool CheckForUpdates = true;
@@ -53,6 +57,7 @@ namespace KavrosAfkWarden
             AfkSeconds = ClampInt(AfkSeconds, 60, 1800);
             AfkLeadSeconds = ClampInt(AfkLeadSeconds, 5, AfkSeconds - 5);
             PotionSeconds = ClampInt(PotionSeconds, 1, 600);
+            Volume = ClampInt(Volume, 0, 100);
             CooldownSeconds = ClampInt(CooldownSeconds, 0, 600);
             BannerSeconds = ClampInt(BannerSeconds, 2, 120);
         }
@@ -312,6 +317,75 @@ namespace KavrosAfkWarden
             have = true;
             value = next.Value;
             return hits >= 2 ? next : (int?)null;
+        }
+    }
+
+    public struct BuffIcon
+    {
+        public int X;
+        public bool HasTime;
+        public bool Minutes;
+        public int Value;
+    }
+
+    // A plain number on a buff icon can be a stack count. It becomes a potion
+    // timer only after that icon has shown minutes, or after the number counts down.
+    public sealed class BuffClock
+    {
+        private struct Slot
+        {
+            public int X;
+            public bool SawMinutes;
+            public bool Fell;
+            public bool Have;
+            public int Last;
+            public bool Seen;
+        }
+
+        private readonly List<Slot> slots = new List<Slot>();
+
+        public int? Tick(List<BuffIcon> icons)
+        {
+            for (int i = 0; i < slots.Count; i++)
+            {
+                Slot slot = slots[i];
+                slot.Seen = false;
+                slots[i] = slot;
+            }
+            int best = -1;
+            if (icons != null)
+            {
+                for (int i = 0; i < icons.Count; i++)
+                {
+                    BuffIcon icon = icons[i];
+                    if (!icon.HasTime) continue;
+                    int index = -1;
+                    for (int s = 0; s < slots.Count; s++)
+                        if (Math.Abs(slots[s].X - icon.X) <= 18) { index = s; break; }
+                    Slot slot = index < 0 ? new Slot() : slots[index];
+                    slot.X = icon.X;
+                    slot.Seen = true;
+                    int seconds;
+                    if (icon.Minutes)
+                    {
+                        slot.SawMinutes = true;
+                        seconds = icon.Value * 60;
+                    }
+                    else
+                    {
+                        if (slot.Have && icon.Value < slot.Last) slot.Fell = true;
+                        slot.Last = icon.Value;
+                        slot.Have = true;
+                        seconds = icon.Value;
+                        if (!slot.SawMinutes && !slot.Fell) seconds = -1;
+                    }
+                    if (index < 0) slots.Add(slot);
+                    else slots[index] = slot;
+                    if (seconds >= 0 && (best < 0 || seconds < best)) best = seconds;
+                }
+            }
+            for (int i = slots.Count - 1; i >= 0; i--) if (!slots[i].Seen) slots.RemoveAt(i);
+            return best < 0 ? (int?)null : best;
         }
     }
 

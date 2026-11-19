@@ -77,7 +77,7 @@ namespace KavrosAfkWarden
     internal sealed class WatchPanel : Form
     {
         private readonly PaintedLabel title = new PaintedLabel();
-        private readonly Label note = new Label();
+        private readonly PaintedLabel note = new PaintedLabel();
         internal readonly StatusRow Idle = new StatusRow();
         internal readonly StatusRow Hp = new StatusRow();
         internal readonly StatusRow Prayer = new StatusRow();
@@ -99,6 +99,7 @@ namespace KavrosAfkWarden
         {
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = false;
+            TopMost = false;
             StartPosition = FormStartPosition.Manual;
             BackColor = KavrosTheme.Bg;
             ForeColor = KavrosTheme.Text;
@@ -143,6 +144,7 @@ namespace KavrosAfkWarden
             note.ForeColor = KavrosTheme.TextSoft;
             note.Font = KavrosTheme.Ui(8.5F, false);
             note.BackColor = KavrosTheme.Bg;
+            note.Renderer = DrawGame;
             Controls.Add(note);
             Place(Idle, 66);
             Place(Hp, 98);
@@ -165,8 +167,18 @@ namespace KavrosAfkWarden
             };
         }
 
+        internal bool IsDragging { get { return dragging; } }
         internal void SetPaused(bool paused) { pause.Text = paused ? "Resume" : "Pause"; }
         internal void SetNote(string text) { note.Text = text; }
+        private bool gameFound;
+        private string gameName = "";
+        internal void SetGame(bool found, string name)
+        {
+            if (gameFound == found && gameName == (name ?? "")) return;
+            gameFound = found;
+            gameName = name ?? "";
+            note.Invalidate();
+        }
 
         private void Place(StatusRow row, int y)
         {
@@ -191,6 +203,17 @@ namespace KavrosAfkWarden
             KavrosTheme.DrawTracked(g, "AFK WARDEN", KavrosTheme.Display(8F), 12, 8, KavrosTheme.Text, KavrosTheme.BgRaise, 1.4F, label.Width - 8);
         }
 
+        private void DrawGame(Graphics g, PaintedLabel label)
+        {
+            using (Brush brush = new SolidBrush(KavrosTheme.Bg)) g.FillRectangle(brush, label.ClientRectangle);
+            string pill = gameFound ? "GAME DETECTED" : "NO GAME";
+            int width = KavrosTheme.DrawPill(g, 0, label.Height / 2, pill, gameFound ? PillTone.Ok : PillTone.Bad, KavrosTheme.Bg);
+            TextRenderer.DrawText(g, gameName, KavrosTheme.Ui(8.5F, false), new Rectangle(width + 8, 0, Math.Max(1, label.Width - width - 8), label.Height), KavrosTheme.Text, KavrosTheme.Bg, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+        }
+
+        protected override bool ShowWithoutActivation { get { return true; } }
+        protected override CreateParams CreateParams { get { CreateParams parameters = base.CreateParams; parameters.ExStyle |= 0x80; return parameters; } }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
@@ -204,7 +227,6 @@ namespace KavrosAfkWarden
         private readonly ComboBox windows = new ComboBox();
         private readonly PaintedLabel connection = new PaintedLabel();
         private KavrosCheckBox pause = new KavrosCheckBox();
-        private KavrosCheckBox topMost = new KavrosCheckBox();
         private KavrosCheckBox idleOn = new KavrosCheckBox();
         private KavrosCheckBox hpOn = new KavrosCheckBox();
         private KavrosCheckBox prayerOn = new KavrosCheckBox();
@@ -225,14 +247,15 @@ namespace KavrosAfkWarden
         private KavrosCheckBox potionSound = new KavrosCheckBox();
         private KavrosCheckBox potionNotify = new KavrosCheckBox();
         private KavrosCheckBox updates = new KavrosCheckBox();
-        private readonly NumericUpDown idleSeconds = new NumericUpDown();
-        private readonly NumericUpDown hpThreshold = new NumericUpDown();
-        private readonly NumericUpDown prayerThreshold = new NumericUpDown();
-        private readonly NumericUpDown afkSeconds = new NumericUpDown();
-        private readonly NumericUpDown afkLead = new NumericUpDown();
-        private readonly NumericUpDown potionSeconds = new NumericUpDown();
-        private readonly NumericUpDown cooldown = new NumericUpDown();
-        private readonly NumericUpDown banner = new NumericUpDown();
+        private readonly NumberField idleSeconds = new NumberField();
+        private readonly NumberField hpThreshold = new NumberField();
+        private readonly NumberField prayerThreshold = new NumberField();
+        private readonly NumberField afkSeconds = new NumberField();
+        private readonly NumberField afkLead = new NumberField();
+        private readonly NumberField potionSeconds = new NumberField();
+        private readonly NumberField cooldown = new NumberField();
+        private readonly NumberField banner = new NumberField();
+        private readonly VolumeSlider volume = new VolumeSlider();
         private readonly Label status = new Label();
         private readonly WatchPanel panel = new WatchPanel();
         private readonly AlertPopup popup = new AlertPopup();
@@ -244,7 +267,7 @@ namespace KavrosAfkWarden
         private readonly StableValue hpMaxStable = new StableValue();
         private readonly StableValue prayerStable = new StableValue();
         private readonly StableValue prayerMaxStable = new StableValue();
-        private readonly StableValue potionStable = new StableValue();
+        private readonly BuffClock buffClock = new BuffClock();
         private readonly WardenEngine engine = new WardenEngine();
         private readonly Timer timer = new Timer();
         private readonly NotifyIcon tray;
@@ -254,12 +277,17 @@ namespace KavrosAfkWarden
         private IntPtr selected = IntPtr.Zero;
         private bool loading = true;
         private bool closing;
+        private bool picking;
+        private string clientTitle = "";
+        private DateTime nextUpdateCheck = DateTime.UtcNow.AddHours(3);
         private HudReading lastHud = new HudReading();
 
         internal WardenForm()
         {
             settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KavrosAfkWarden", "settings.txt");
             settings = SettingsText.Load(settingsPath);
+            clientTitle = settings.ClientTitle ?? "";
+            sound.Volume = settings.Volume;
             Text = "AFK Warden";
             Font = KavrosTheme.Ui(9F, false);
             BackColor = KavrosTheme.Bg;
@@ -276,7 +304,16 @@ namespace KavrosAfkWarden
             panel.SettingsRequested += delegate { ShowSettings(); };
             panel.ExitRequested += Exit;
             panel.PauseRequested += delegate { pause.Checked = !pause.Checked; };
-            panel.Moved += delegate { settings.PanelX = panel.Left; settings.PanelY = panel.Top; Save(); };
+            panel.Moved += delegate
+            {
+                if (selected != IntPtr.Zero && NativeMethods.IsWindow(selected))
+                {
+                    Rectangle game = NativeMethods.ClientBounds(selected);
+                    settings.PanelOffsetX = panel.Left - game.Left;
+                    settings.PanelOffsetY = panel.Top - game.Top;
+                    Save();
+                }
+            };
             panel.SetPaused(settings.Paused);
             if (settings.PanelX != int.MinValue) panel.Location = new Point(settings.PanelX, settings.PanelY);
             else
@@ -284,7 +321,7 @@ namespace KavrosAfkWarden
                 Rectangle work = Screen.PrimaryScreen.WorkingArea;
                 panel.Location = new Point(work.Right - panel.Width - 24, work.Top + 72);
             }
-            panel.TopMost = settings.PanelTopMost;
+            panel.TopMost = false;
             ContextMenuStrip menu = new ContextMenuStrip();
             menu.Items.Add("Open panel", null, delegate { ShowPanel(); });
             menu.Items.Add("Settings", null, delegate { ShowSettings(); });
@@ -295,10 +332,8 @@ namespace KavrosAfkWarden
             tray.Visible = true;
             tray.ContextMenuStrip = menu;
             tray.DoubleClick += delegate { ShowPanel(); };
-            HandleCreated += delegate { KavrosTheme.ApplyWindowChrome(Handle); NativeMethods.ExcludeFromCapture(Handle); };
-            panel.HandleCreated += delegate { NativeMethods.ExcludeFromCapture(panel.Handle); };
-            popup.HandleCreated += delegate { NativeMethods.ExcludeFromCapture(popup.Handle); };
-            Shown += delegate { Hide(); ShowPanel(); if (settings.CheckForUpdates) AppUpdates.Check(this, false, SetStatus); CompanionStatus.Write("running", settings.Paused); };
+            HandleCreated += delegate { KavrosTheme.ApplyWindowChrome(Handle); };
+            Shown += delegate { Hide(); ShowPanel(); if (settings.CheckForUpdates) AppUpdates.Check(this, false, SetStatus); nextUpdateCheck = DateTime.UtcNow.AddHours(3); CompanionStatus.Write("running", settings.Paused); };
             FormClosing += delegate(object sender, FormClosingEventArgs e)
             {
                 if (!closing && e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); ShowPanel(); }
@@ -332,7 +367,7 @@ namespace KavrosAfkWarden
             connection.Text = "Waiting for Kavros";
             Controls.Add(connection);
             pause = Check("Pause watching", 28, 200, 160, settings.Paused);
-            topMost = Check("Keep panel on top", 210, 200, 180, settings.PanelTopMost);
+            AddButton("Pick client", 210, 196, 120, ButtonTone.Secondary, delegate { picking = true; SetStatus("Click the Kavros window to watch."); });
 
             idleOn = Check("Idle alert", 28, 292, 120, settings.IdleEnabled);
             Caption("After", 28, 318);
@@ -379,7 +414,12 @@ namespace KavrosAfkWarden
             Caption("Stays", 230, 694);
             Number(banner, 276, 690, 2, 120, settings.BannerSeconds);
             Caption("sec", 348, 694);
-            updates = Check("Check for updates at startup", 28, 728, 250, settings.CheckForUpdates);
+            Caption("Volume", 28, 728);
+            volume.SetBounds(100, 724, 200, 22);
+            volume.SetValue(settings.Volume);
+            volume.ValueChanged += delegate { if (!loading) { sound.Volume = volume.Value; Save(); } };
+            Controls.Add(volume);
+            updates = Check("Check for updates at startup", 320, 726, 160, settings.CheckForUpdates);
             AddButton("Pin hitpoints", 28, 764, 108, ButtonTone.Secondary, delegate { Pin(0); });
             AddButton("Pin prayer", 144, 764, 100, ButtonTone.Secondary, delegate { Pin(1); });
             AddButton("Pin buff bar", 252, 764, 120, ButtonTone.Secondary, delegate { Pin(2); });
@@ -397,7 +437,7 @@ namespace KavrosAfkWarden
 
             hpPercent.CheckedChanged += delegate { if (!loading) hpThreshold.Maximum = hpPercent.Checked ? 99 : 99999; };
             prayerPercent.CheckedChanged += delegate { if (!loading) prayerThreshold.Maximum = prayerPercent.Checked ? 99 : 99999; };
-            Wire(pause, idleOn, hpOn, prayerOn, afkOn, potionOn, hpPercent, prayerPercent, soundMaster, notifyMaster, idleSound, idleNotify, hpSound, hpNotify, prayerSound, prayerNotify, afkSound, afkNotify, potionSound, potionNotify, updates, topMost);
+            Wire(pause, idleOn, hpOn, prayerOn, afkOn, potionOn, hpPercent, prayerPercent, soundMaster, notifyMaster, idleSound, idleNotify, hpSound, hpNotify, prayerSound, prayerNotify, afkSound, afkNotify, potionSound, potionNotify, updates);
             idleSeconds.ValueChanged += delegate { if (!loading) Save(); };
             hpThreshold.ValueChanged += delegate { if (!loading) Save(); };
             prayerThreshold.ValueChanged += delegate { if (!loading) Save(); };
@@ -411,7 +451,6 @@ namespace KavrosAfkWarden
         private void ApplySettingsToControls()
         {
             pause.Checked = settings.Paused;
-            topMost.Checked = settings.PanelTopMost;
             idleOn.Checked = settings.IdleEnabled;
             hpOn.Checked = settings.HpEnabled;
             prayerOn.Checked = settings.PrayerEnabled;
@@ -432,20 +471,21 @@ namespace KavrosAfkWarden
             potionSound.Checked = settings.PotionSound;
             potionNotify.Checked = settings.PotionNotify;
             updates.Checked = settings.CheckForUpdates;
-            idleSeconds.Value = Clamp(settings.IdleSeconds, idleSeconds);
+            idleSeconds.SetValue(Clamp(settings.IdleSeconds, idleSeconds), false);
             hpThreshold.Maximum = settings.HpPercent ? 99 : 99999;
-            hpThreshold.Value = Clamp(settings.HpThreshold, hpThreshold);
+            hpThreshold.SetValue(Clamp(settings.HpThreshold, hpThreshold), false);
             prayerThreshold.Maximum = settings.PrayerPercent ? 99 : 99999;
-            prayerThreshold.Value = Clamp(settings.PrayerThreshold, prayerThreshold);
-            afkSeconds.Value = Clamp(settings.AfkSeconds, afkSeconds);
+            prayerThreshold.SetValue(Clamp(settings.PrayerThreshold, prayerThreshold), false);
+            afkSeconds.SetValue(Clamp(settings.AfkSeconds, afkSeconds), false);
             afkLead.Maximum = Math.Max(5, (int)afkSeconds.Value - 5);
-            afkLead.Value = Clamp(settings.AfkLeadSeconds, afkLead);
-            potionSeconds.Value = Clamp(settings.PotionSeconds, potionSeconds);
-            cooldown.Value = Clamp(settings.CooldownSeconds, cooldown);
-            banner.Value = Clamp(settings.BannerSeconds, banner);
+            afkLead.SetValue(Clamp(settings.AfkLeadSeconds, afkLead), false);
+            potionSeconds.SetValue(Clamp(settings.PotionSeconds, potionSeconds), false);
+            cooldown.SetValue(Clamp(settings.CooldownSeconds, cooldown), false);
+            banner.SetValue(Clamp(settings.BannerSeconds, banner), false);
+            volume.SetValue(settings.Volume);
         }
 
-        private static decimal Clamp(int value, NumericUpDown number)
+        private static int Clamp(int value, NumberField number)
         {
             if (value < number.Minimum) return number.Minimum;
             if (value > number.Maximum) return number.Maximum;
@@ -484,13 +524,10 @@ namespace KavrosAfkWarden
             Controls.Add(label);
         }
 
-        private void Number(NumericUpDown number, int x, int y, int min, int max, int value)
+        private void Number(NumberField number, int x, int y, int min, int max, int value)
         {
             number.SetBounds(x, y, 64, 24);
-            number.Minimum = min;
-            number.Maximum = max;
-            number.Value = Clamp(value, number);
-            KavrosTheme.StyleNumber(number);
+            number.SetRange(min, max, value);
             Controls.Add(number);
         }
 
@@ -573,7 +610,9 @@ namespace KavrosAfkWarden
         {
             if (loading) return;
             settings.Paused = pause.Checked;
-            settings.PanelTopMost = topMost.Checked;
+            settings.Volume = volume.Value;
+            sound.Volume = settings.Volume;
+            settings.ClientTitle = clientTitle;
             settings.IdleEnabled = idleOn.Checked;
             settings.IdleSeconds = (int)idleSeconds.Value;
             settings.HpEnabled = hpOn.Checked;
@@ -604,7 +643,7 @@ namespace KavrosAfkWarden
             settings.CheckForUpdates = updates.Checked;
             settings.Clamp();
             try { SettingsText.Save(settingsPath, settings); } catch (IOException) { }
-            panel.TopMost = settings.PanelTopMost;
+            panel.TopMost = false;
             panel.SetPaused(settings.Paused);
         }
 
@@ -619,8 +658,78 @@ namespace KavrosAfkWarden
 
         private void ShowPanel()
         {
-            panel.TopMost = settings.PanelTopMost;
+            panel.TopMost = false;
+            FollowPanel();
+        }
+
+        private void FollowPanel()
+        {
+            bool exists = selected != IntPtr.Zero && NativeMethods.IsWindow(selected);
+            if (panel.IsHandleCreated)
+            {
+                try { NativeMethods.SetOwner(panel.Handle, exists ? selected : IntPtr.Zero); }
+                catch (DllNotFoundException) { }
+                catch (EntryPointNotFoundException) { }
+            }
+            bool minimized = exists && NativeMethods.IsIconic(selected);
+            bool foreground = exists && WindowLocator.IsForeground(selected);
+            bool show = PanelDock.Visible(true, exists, minimized, foreground, panel.ContainsFocus, Visible && ContainsFocus);
+            if (!show)
+            {
+                if (panel.Visible) panel.Hide();
+                return;
+            }
+            Rectangle game = exists ? NativeMethods.ClientBounds(selected) : Screen.PrimaryScreen.WorkingArea;
+            Rectangle desk = Screen.FromRectangle(game).WorkingArea;
+            int x, y;
+            PanelDock.Place(game.X, game.Y, game.Width, game.Height, panel.Width, panel.Height, settings.PanelOffsetX, settings.PanelOffsetY, desk.X, desk.Y, desk.Width, desk.Height, out x, out y);
+            if (!panel.IsDragging && (panel.Left != x || panel.Top != y)) panel.Location = new Point(x, y);
             if (!panel.Visible) panel.Show();
+        }
+
+        private void TryPickClient()
+        {
+            if ((NativeMethods.GetAsyncKeyState(1) & 0x8000) == 0) return;
+            NativeMethods.PointStruct cursor;
+            if (!NativeMethods.GetCursorPos(out cursor)) return;
+            IntPtr hit = NativeMethods.WindowFromPoint(cursor);
+            IntPtr root = NativeMethods.GetAncestor(hit, 2);
+            if (root == IntPtr.Zero) root = hit;
+            RefreshWindows();
+            for (int i = 0; i < found.Count; i++)
+            {
+                if (WindowLocator.Score(found[i]) < 100) continue;
+                if (found[i].Handle != hit && found[i].Handle != root) continue;
+                picking = false;
+                selected = found[i].Handle;
+                clientTitle = found[i].Title;
+                settings.ClientTitle = clientTitle;
+                loading = true;
+                windows.SelectedItem = found[i];
+                loading = false;
+                connection.Text = "Game found: " + found[i].Title;
+                connection.Invalidate();
+                Save();
+                SetStatus("Watching " + found[i].Title + ".");
+                return;
+            }
+        }
+
+        private string ClientCaption()
+        {
+            if (selected == IntPtr.Zero) return "Choose a client";
+            int index = 0;
+            int seen = 0;
+            for (int i = 0; i < found.Count; i++)
+            {
+                if (WindowLocator.Score(found[i]) < 100) continue;
+                seen++;
+                if (found[i].Handle == selected) index = seen;
+            }
+            GameWindow current = null;
+            for (int i = 0; i < found.Count; i++) if (found[i].Handle == selected) current = found[i];
+            if (current == null) return clientTitle;
+            return WindowLocator.ClientLabel(current, Math.Max(0, index - 1));
         }
 
         private void Exit()
@@ -636,7 +745,7 @@ namespace KavrosAfkWarden
             loading = true;
             windows.Items.Clear();
             for (int i = 0; i < found.Count; i++) if (WindowLocator.Score(found[i]) >= 100) windows.Items.Add(found[i]);
-            GameWindow choice = WindowLocator.Choose(found, selected);
+            GameWindow choice = WindowLocator.Choose(found, selected, clientTitle);
             if (choice != null)
             {
                 selected = choice.Handle;
@@ -652,14 +761,22 @@ namespace KavrosAfkWarden
         {
             GameWindow window = windows.SelectedItem as GameWindow;
             selected = window == null ? IntPtr.Zero : window.Handle;
+            if (window != null) { clientTitle = window.Title; settings.ClientTitle = clientTitle; if (!loading) Save(); }
             connection.Text = window == null ? "Waiting for Kavros" : "Game found: " + window.Title;
             connection.Invalidate();
         }
 
         private void Tick()
         {
+            if (picking) TryPickClient();
             if (selected == IntPtr.Zero || !NativeMethods.IsWindow(selected)) RefreshWindows();
+            if (settings.CheckForUpdates && DateTime.UtcNow >= nextUpdateCheck)
+            {
+                nextUpdateCheck = DateTime.UtcNow.AddHours(3);
+                AppUpdates.Check(this, false, SetStatus);
+            }
             grab.Tick(selected);
+            FollowPanel();
             bool pixels = grab.Image != null;
             bool moving = pixels && motion.Moved(grab.Image);
             if (pixels) lastHud = HudReader.Read(grab.Image, settings);
@@ -667,8 +784,7 @@ namespace KavrosAfkWarden
             int? hpMax = pixels ? hpMaxStable.Push(lastHud.HpMax) : hpMaxStable.Push(null);
             int? prayer = pixels ? prayerStable.Push(lastHud.Prayer) : prayerStable.Push(null);
             int? prayerMax = pixels ? prayerMaxStable.Push(lastHud.PrayerMax) : prayerMaxStable.Push(null);
-            int? potionRaw = pixels ? lastHud.PotionSeconds : (int?)null;
-            int? potion = pixels ? potionStable.Push(potionRaw) : potionStable.Push(null);
+            int? potion = pixels && lastHud.BuffBarFound ? buffClock.Tick(lastHud.Buffs) : (int?)null;
             bool hpComparable = hp != null && WardenSettings.Comparable(settings.HpPercent, lastHud.HpFromOrb, hpMax != null);
             bool prayerComparable = prayer != null && WardenSettings.Comparable(settings.PrayerPercent, lastHud.PrayerFromOrb, prayerMax != null);
             WatchSample sample = new WatchSample();
@@ -682,7 +798,7 @@ namespace KavrosAfkWarden
             sample.Prayer = prayerComparable ? prayer : (int?)null;
             sample.PrayerMax = prayerMax;
             sample.PotionSeconds = potion;
-            sample.PotionClear = pixels && lastHud.PotionCount == 0;
+            sample.PotionClear = pixels && lastHud.BuffBarFound && potion == null;
             List<AlertEvent> events = engine.Tick(sample, settings);
             for (int i = 0; i < events.Count; i++)
             {
@@ -699,6 +815,7 @@ namespace KavrosAfkWarden
 
         private void UpdatePanel(bool pixels)
         {
+            panel.SetGame(selected != IntPtr.Zero && NativeMethods.IsWindow(selected), ClientCaption());
             panel.SetNote(grab.Note);
             panel.Idle.Pill = engine.IdleLatched ? "Idle" : "Moving";
             panel.Idle.Tone = engine.IdleLatched ? PillTone.Bad : PillTone.Ok;

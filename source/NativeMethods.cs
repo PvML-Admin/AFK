@@ -71,6 +71,22 @@ namespace KavrosAfkWarden
             catch (EntryPointNotFoundException) { }
         }
 
+        [DllImport("user32.dll", EntryPoint = "SetWindowLong")]
+        private static extern int SetWindowLong32(IntPtr window, int index, int value);
+
+        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")]
+        private static extern IntPtr SetWindowLongPtr64(IntPtr window, int index, IntPtr value);
+
+        // GWLP_HWNDPARENT. Clue Helper uses this so the floating card is owned
+        // by the game window: it follows that window's z-order and is not a
+        // topmost window over other applications.
+        internal static void SetOwner(IntPtr child, IntPtr owner)
+        {
+            if (child == IntPtr.Zero) return;
+            if (IntPtr.Size == 8) SetWindowLongPtr64(child, -8, owner);
+            else SetWindowLong32(child, -8, owner.ToInt32());
+        }
+
         internal static void ExcludeFromCapture(IntPtr window)
         {
             if (window == IntPtr.Zero) return;

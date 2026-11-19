@@ -1,5 +1,45 @@
+using System;
+
 namespace KavrosAfkWarden
 {
+    // Same rule Clue Helper uses for its floating card: sit inside the chosen
+    // client at a saved offset, and stay off-screen when that client is
+    // minimized or another application is in front.
+    public static class PanelDock
+    {
+        public static void Place(int gameX, int gameY, int gameW, int gameH, int panelW, int panelH, int offsetX, int offsetY, int deskX, int deskY, int deskW, int deskH, out int x, out int y)
+        {
+            int areaX = gameX, areaY = gameY, areaW = gameW, areaH = gameH;
+            int overlapW = Math.Min(gameX + gameW, deskX + deskW) - Math.Max(gameX, deskX);
+            int overlapH = Math.Min(gameY + gameH, deskY + deskH) - Math.Max(gameY, deskY);
+            if (overlapW >= panelW && overlapH >= panelH)
+            {
+                areaX = Math.Max(gameX, deskX);
+                areaY = Math.Max(gameY, deskY);
+                areaW = overlapW;
+                areaH = overlapH;
+            }
+            else
+            {
+                areaX = deskX;
+                areaY = deskY;
+                areaW = deskW;
+                areaH = deskH;
+            }
+            x = gameX + offsetX;
+            y = gameY + offsetY;
+            if (x < areaX) x = areaX;
+            if (y < areaY) y = areaY;
+            if (x > areaX + areaW - panelW) x = areaX + areaW - panelW;
+            if (y > areaY + areaH - panelH) y = areaY + areaH - panelH;
+        }
+
+        public static bool Visible(bool enabled, bool gameExists, bool minimized, bool gameForeground, bool panelFocused, bool settingsFocused)
+        {
+            return enabled && !minimized && (!gameExists || gameForeground || panelFocused || settingsFocused);
+        }
+    }
+
     // How a frame is obtained. Focus is intentionally not an input: Clue Helper's
     // own capture tests treat an unobstructed background client as readable.
     public enum CaptureRoute

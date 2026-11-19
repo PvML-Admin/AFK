@@ -278,6 +278,13 @@ namespace KavrosAfkWarden
             Check(WindowScore.Score("Kavros Launcher", "launcher", "Launcher", 800, 600) < 0, "the launcher is not the client");
             Check(WindowScore.Score("AFK Warden", "KavrosAfkWarden", "WindowsForms", 300, 200) < 0, "the module does not select itself");
             Check(WindowScore.Score("RuneScape", "rs2client", "SunAwtFrame", 1024, 768) < 0, "another game with no Kavros title is ignored");
+            int px, py;
+            PanelDock.Place(100, 80, 900, 600, 400, 262, 12, 72, 0, 0, 1920, 1080, out px, out py);
+            Check(px == 112 && py == 152, "the panel keeps its offset inside the chosen client");
+            Check(!PanelDock.Visible(true, true, true, true, false, false), "a minimized client hides the panel");
+            Check(!PanelDock.Visible(true, true, false, false, false, false), "the panel does not stay up over another application");
+            Check(PanelDock.Visible(true, true, false, true, false, false), "the panel shows while the chosen client is in front");
+            Check(PanelDock.Visible(true, false, false, false, false, true), "settings keeps the panel available while it is focused");
         }
 
         private static void Motion()
@@ -307,6 +314,25 @@ namespace KavrosAfkWarden
                 for (int px = 0; px < 5; px++)
                     if (glyph[py * 5 + px] == '1')
                         image.Fill(x + px * scale, y + py * scale, scale, scale, color);
+        }
+
+        private static void DrawLifeNumber(ImageBuffer image, int x, int y, int[] current, int[] max, int color)
+        {
+            int dx = x;
+            for (int i = 0; i < current.Length; i++)
+            {
+                if (i > 0 && i % 3 == current.Length % 3) { image.Fill(dx, y + 12, 3, 3, color); dx += 6; }
+                DrawGlyph(image, current[i], dx, y, 2, color);
+                dx += 12;
+            }
+            DrawSlash(image, dx, y, color);
+            dx += 10;
+            for (int i = 0; i < max.Length; i++)
+            {
+                if (i > 0 && i % 3 == max.Length % 3) { image.Fill(dx, y + 12, 3, 3, color); dx += 6; }
+                DrawGlyph(image, max[i], dx, y, 2, color);
+                dx += 12;
+            }
         }
 
         private static void DrawSlash(ImageBuffer image, int x, int y, int color)
@@ -344,46 +370,38 @@ namespace KavrosAfkWarden
         {
             int white = ImageBuffer.Pack(236, 236, 236);
             int green = ImageBuffer.Pack(40, 186, 70);
-            int blue = ImageBuffer.Pack(50, 90, 210);
-            int red = ImageBuffer.Pack(210, 36, 36);
-            ImageBuffer image = ImageBuffer.Blank(400, 400, ImageBuffer.Pack(10, 16, 22));
-            int y = 340;
-            image.Fill(40, y, 120, 8, green);
-            int dx = 40;
-            int[] hp = new int[] { 2, 5, 0, 0 };
-            for (int i = 0; i < hp.Length; i++)
-            {
-                DrawGlyph(image, hp[i], dx, y - 24, 3, white);
-                dx += 17;
-            }
-            DrawSlash(image, dx, y - 26, white);
-            dx += 16;
-            int[] max = new int[] { 1, 0, 0, 0, 0 };
-            for (int i = 0; i < max.Length; i++)
-            {
-                DrawGlyph(image, max[i], dx, y - 24, 3, white);
-                dx += 17;
-            }
-            image.Fill(40, 300, 90, 8, blue);
-            dx = 40;
-            DrawGlyph(image, 8, dx, 276, 3, white);
-            DrawGlyph(image, 0, dx + 17, 276, 3, white);
-            DrawSlash(image, dx + 34, 274, white);
-            DrawGlyph(image, 4, dx + 50, 276, 3, white);
-            DrawGlyph(image, 0, dx + 67, 276, 3, white);
-            DrawGlyph(image, 0, dx + 84, 276, 3, white);
+            int orb = ImageBuffer.Pack(210, 36, 36);
+            ImageBuffer image = ImageBuffer.Blank(640, 220, ImageBuffer.Pack(10, 16, 22));
+            int y = 120;
+            int red = ImageBuffer.Pack(196, 42, 42);
+            int purple = ImageBuffer.Pack(142, 70, 196);
+            int yellow = ImageBuffer.Pack(214, 184, 48);
+            image.Fill(40, y, 150, 8, red);
+            DrawLifeNumber(image, 40, y - 22, new int[] { 1, 6, 3, 3 }, new int[] { 1, 0, 6, 0 }, white);
+            image.Fill(210, y, 90, 8, yellow);
+            DrawGlyph(image, 1, 210, y - 22, 2, white);
+            DrawGlyph(image, 3, 222, y - 22, 2, white);
+            DrawGlyph(image, 5, 234, y - 22, 2, white);
+            image.Fill(320, y, 140, 8, purple);
+            DrawLifeNumber(image, 320, y - 22, new int[] { 1, 0, 4, 0 }, new int[] { 9, 9, 0 }, white);
+            image.Fill(480, y, 80, 8, green);
+            DrawGlyph(image, 6, 480, y - 22, 2, white);
+            DrawGlyph(image, 0, 492, y - 22, 2, white);
+            DrawSlash(image, 506, y - 22, white);
+            DrawGlyph(image, 6, 516, y - 22, 2, white);
+            DrawGlyph(image, 0, 528, y - 22, 2, white);
             int cx = 320, cy = 40, radius = 24;
             for (int py = -radius; py <= radius; py++)
                 for (int px = -radius; px <= radius; px++)
                 {
                     if (px * px + py * py > radius * radius) continue;
                     bool edge = px * px + py * py > (radius - 2) * (radius - 2);
-                    if (py >= 0 || edge) image.Set(cx + px, cy + py, red);
+                    if (py >= 0 || edge) image.Set(cx + px, cy + py, orb);
                 }
             WardenSettings settings = new WardenSettings();
             HudReading reading = HudReader.Read(image, settings);
-            Check(reading.Hp == 2500 && reading.HpMax == 10000 && reading.HpHow == "bar", "life bar reads current and maximum, got " + (reading.Hp == null ? "none" : reading.Hp.Value.ToString()) + "/" + (reading.HpMax == null ? "-" : reading.HpMax.Value.ToString()) + " " + reading.HpHow + " " + HudReader.Explain(image, new IntRect(0, 260, 400, 140)));
-            Check(reading.Prayer == 80 && reading.PrayerMax == 400 && !reading.PrayerFromOrb, "prayer bar reads current and maximum, got " + (reading.Prayer == null ? "none" : reading.Prayer.Value.ToString()) + "/" + (reading.PrayerMax == null ? "-" : reading.PrayerMax.Value.ToString()) + " " + reading.PrayerHow);
+            Check(reading.Hp == 1633 && reading.HpMax == 1060 && reading.HpHow == "bar", "red life bar reads 1,633/1,060 even when current exceeds max, got " + (reading.Hp == null ? "none" : reading.Hp.Value.ToString()) + "/" + (reading.HpMax == null ? "-" : reading.HpMax.Value.ToString()) + " " + reading.HpHow + " " + HudReader.Explain(image, new IntRect(32, 88, 160, 40)));
+            Check(reading.Prayer == 1040 && reading.PrayerMax == 990 && reading.PrayerHow == "bar", "purple prayer bar reads 1,040/990, got " + (reading.Prayer == null ? "none" : reading.Prayer.Value.ToString()) + "/" + (reading.PrayerMax == null ? "-" : reading.PrayerMax.Value.ToString()));
             ImageBuffer pinned = ImageBuffer.Blank(200, 80, ImageBuffer.Pack(10, 16, 22));
             DrawGlyph(pinned, 4, 10, 20, 3, white);
             DrawGlyph(pinned, 2, 27, 20, 3, white);
@@ -438,49 +456,67 @@ namespace KavrosAfkWarden
             Check(quiet != null && !quiet.Sound && quiet.Notify, "potion sound can be off while its notification stays on");
 
             int white = ImageBuffer.Pack(236, 236, 236);
-            int gold = ImageBuffer.Pack(212, 176, 72);
-            ImageBuffer image = ImageBuffer.Blank(400, 400, ImageBuffer.Pack(10, 16, 22));
-            DrawGlyph(image, 1, 20, 16, 3, white);
-            DrawGlyph(image, 5, 37, 16, 3, white);
-            DrawGlyph(image, 4, 120, 16, 3, white);
-            DrawGlyph(image, 0, 137, 16, 3, white);
-            DrawGlyph(image, 1, 220, 16, 3, gold);
-            image.Fill(240, 16, 4, 21, gold);
-            DrawGlyph(image, 0, 250, 16, 3, gold);
-            DrawGlyph(image, 5, 267, 16, 3, gold);
-            DrawGlyph(image, 6, 40, 300, 3, white);
-            DrawGlyph(image, 5, 57, 300, 3, white);
-            WardenSettings auto = new WardenSettings();
-            HudReading reading = HudReader.Read(image, auto);
-            Check(reading.PotionSeconds == 15 && reading.PotionCount == 3 && reading.PotionHow == "bar", "the top buff bar keeps the shortest timer, got " + (reading.PotionSeconds == null ? "none" : reading.PotionSeconds.Value.ToString()) + " count " + reading.PotionCount.ToString() + " " + reading.PotionHow);
-            Check(reading.Hp == null, "a seconds readout in the buff bar is not treated as hitpoints");
+            ImageBuffer bar = ImageBuffer.Blank(420, 90, ImageBuffer.Pack(12, 18, 28));
+            DrawBuffIcon(bar, 16, 24, "60");
+            DrawBuffIcon(bar, 64, 24, "11m");
+            DrawBuffIcon(bar, 112, 24, "4");
+            DrawBuffIcon(bar, 160, 24, "");
+            HudReading icons = HudReader.Read(bar, new WardenSettings());
+            Check(icons.BuffBarFound && icons.Buffs.Count == 4, "green-bordered buff icons are found in a row, got " + icons.Buffs.Count.ToString());
+            Check(icons.Buffs.Count > 0 && icons.Buffs[0].HasTime && !icons.Buffs[0].Minutes && icons.Buffs[0].Value == 60, "a plain buff number is seconds");
+            Check(icons.Buffs.Count > 1 && icons.Buffs[1].Minutes && icons.Buffs[1].Value == 11, "11m is eleven minutes, not eleven seconds, got has=" + (icons.Buffs.Count > 1 && icons.Buffs[1].HasTime) + " min=" + (icons.Buffs.Count > 1 && icons.Buffs[1].Minutes) + " value=" + (icons.Buffs.Count > 1 ? icons.Buffs[1].Value.ToString() : "-"));
+            Check(icons.Buffs.Count > 2 && icons.Buffs[2].HasTime && !icons.Buffs[2].Minutes && icons.Buffs[2].Value == 4, "a stack count is still read as a number");
+            Check(icons.Buffs.Count > 3 && !icons.Buffs[3].HasTime, "an icon with no text has no timer");
+            BuffClock clock = new BuffClock();
+            int? first = clock.Tick(icons.Buffs);
+            Check(first != null && first.Value == 660, "only the minute timer counts until a countdown is confirmed, got " + (first == null ? "none" : first.Value.ToString()));
+            List<BuffIcon> dropped = new List<BuffIcon>();
+            BuffIcon seconds = new BuffIcon();
+            seconds.X = icons.Buffs[1].X;
+            seconds.HasTime = true;
+            seconds.Value = 10;
+            dropped.Add(icons.Buffs[0]);
+            dropped.Add(seconds);
+            dropped.Add(icons.Buffs[2]);
+            int? lowest = clock.Tick(dropped);
+            Check(lowest != null && lowest.Value == 10, "after 11m becomes 10 seconds that icon can alert, got " + (lowest == null ? "none" : lowest.Value.ToString()));
+        }
 
-            ImageBuffer pinned = ImageBuffer.Blank(300, 200, ImageBuffer.Pack(10, 16, 22));
-            DrawGlyph(pinned, 1, 30, 80, 3, white);
-            DrawGlyph(pinned, 2, 47, 80, 3, white);
-            WardenSettings pin = new WardenSettings();
-            pin.BuffPinX = 0.05;
-            pin.BuffPinY = 0.3;
-            pin.BuffPinW = 0.4;
-            pin.BuffPinH = 0.3;
-            HudReading pinnedReading = HudReader.Read(pinned, pin);
-            Check(pinnedReading.PotionSeconds == 12 && pinnedReading.PotionHow == "pin", "a pinned buff bar reads the timer inside it, got " + (pinnedReading.PotionSeconds == null ? "none" : pinnedReading.PotionSeconds.Value.ToString()));
-
-            ImageBuffer plain = ImageBuffer.Blank(200, 200, ImageBuffer.Pack(10, 16, 22));
-            DrawGlyph(plain, 6, 16, 8, 3, white);
-            DrawGlyph(plain, 5, 33, 8, 3, white);
-            HudReading seconds = HudReader.Read(plain, new WardenSettings());
-            Check(seconds.PotionSeconds == 65 && seconds.PotionHow == "bar", "a plain number of seconds is 65, not minutes, got " + (seconds.PotionSeconds == null ? "none" : seconds.PotionSeconds.Value.ToString()));
-            ImageBuffer minutes = ImageBuffer.Blank(200, 200, ImageBuffer.Pack(10, 16, 22));
-            DrawGlyph(minutes, 1, 16, 8, 3, white);
-            minutes.Fill(40, 8, 4, 21, white);
-            HudReading skipped = HudReader.Read(minutes, new WardenSettings());
-            Check(skipped.PotionSeconds == null && skipped.PotionCount == 0, "a lone 1m is not read as one second");
+        private static void DrawBuffIcon(ImageBuffer image, int x, int y, string text)
+        {
+            int green = ImageBuffer.Pack(80, 210, 90);
+            int dark = ImageBuffer.Pack(14, 20, 32);
+            int white = ImageBuffer.Pack(236, 236, 236);
+            int size = 40;
+            image.Fill(x, y, size, 3, green);
+            image.Fill(x, y + size - 3, size, 3, green);
+            image.Fill(x, y, 3, size, green);
+            image.Fill(x + size - 3, y, 3, size, green);
+            image.Fill(x + 3, y + 3, size - 6, size - 6, dark);
+            int tx = x + 4;
+            int ty = y + size - 18;
+            for (int i = 0; i < text.Length; i++)
+            {
+                char ch = text[i];
+                if (ch >= '0' && ch <= '9')
+                {
+                    DrawGlyph(image, ch - '0', tx, ty, 2, white);
+                    tx += 12;
+                }
+                else if (ch == 'm')
+                {
+                    image.Fill(tx, ty + 2, 2, 10, white);
+                    image.Fill(tx + 4, ty + 2, 2, 10, white);
+                    image.Fill(tx + 8, ty + 2, 2, 10, white);
+                    image.Fill(tx, ty + 2, 10, 2, white);
+                    tx += 12;
+                }
+            }
         }
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.1.0" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.0" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -491,10 +527,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.1.0\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.0\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.1.0.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.0.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

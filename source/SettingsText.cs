@@ -36,7 +36,11 @@ namespace KavrosAfkWarden
             Line(text, "potion-seconds", settings.PotionSeconds);
             Line(text, "potion-sound", settings.PotionSound);
             Line(text, "potion-notify", settings.PotionNotify);
+            Line(text, "volume", settings.Volume);
             Line(text, "cooldown", settings.CooldownSeconds);
+            Line(text, "panel-offset-x", settings.PanelOffsetX);
+            Line(text, "panel-offset-y", settings.PanelOffsetY);
+            text.Append("client-title\t").Append(settings.ClientTitle.Replace("\t", " ").Replace("\r", " ").Replace("\n", " ")).Append("\r\n");
             Line(text, "banner-seconds", settings.BannerSeconds);
             Line(text, "paused", settings.Paused);
             Line(text, "check-updates", settings.CheckForUpdates);
@@ -84,7 +88,11 @@ namespace KavrosAfkWarden
                 else if (parts[0] == "potion-seconds" && int.TryParse(parts[1], out number)) settings.PotionSeconds = number;
                 else if (parts[0] == "potion-sound" && bool.TryParse(parts[1], out flag)) settings.PotionSound = flag;
                 else if (parts[0] == "potion-notify" && bool.TryParse(parts[1], out flag)) settings.PotionNotify = flag;
+                else if (parts[0] == "volume" && int.TryParse(parts[1], out number)) settings.Volume = number;
                 else if (parts[0] == "cooldown" && int.TryParse(parts[1], out number)) settings.CooldownSeconds = number;
+                else if (parts[0] == "panel-offset-x" && int.TryParse(parts[1], out number)) settings.PanelOffsetX = number;
+                else if (parts[0] == "panel-offset-y" && int.TryParse(parts[1], out number)) settings.PanelOffsetY = number;
+                else if (parts[0] == "client-title") settings.ClientTitle = parts[1];
                 else if (parts[0] == "banner-seconds" && int.TryParse(parts[1], out number)) settings.BannerSeconds = number;
                 else if (parts[0] == "paused" && bool.TryParse(parts[1], out flag)) settings.Paused = flag;
                 else if (parts[0] == "check-updates" && bool.TryParse(parts[1], out flag)) settings.CheckForUpdates = flag;
