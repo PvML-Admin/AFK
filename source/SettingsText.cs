@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -20,7 +20,8 @@ namespace KavrosAfkWarden
             Line(text, "prayer-threshold", settings.PrayerThreshold);
             Line(text, "prayer-percent", settings.PrayerPercent);
             Line(text, "afk-enabled", settings.AfkEnabled);
-            Line(text, "afk-seconds", settings.AfkSeconds);
+            Line(text, "afk-grandmaster", settings.Grandmaster);
+            Line(text, "afk-tree-perk", settings.TreePerk);
             Line(text, "afk-lead", settings.AfkLeadSeconds);
             Line(text, "sound", settings.SoundMaster);
             Line(text, "notify", settings.NotifyMaster);
@@ -83,7 +84,8 @@ namespace KavrosAfkWarden
                 else if (parts[0] == "prayer-threshold" && int.TryParse(parts[1], out number)) settings.PrayerThreshold = number;
                 else if (parts[0] == "prayer-percent" && bool.TryParse(parts[1], out flag)) settings.PrayerPercent = flag;
                 else if (parts[0] == "afk-enabled" && bool.TryParse(parts[1], out flag)) settings.AfkEnabled = flag;
-                else if (parts[0] == "afk-seconds" && int.TryParse(parts[1], out number)) settings.AfkSeconds = number;
+                else if (parts[0] == "afk-grandmaster" && bool.TryParse(parts[1], out flag)) settings.Grandmaster = flag;
+                else if (parts[0] == "afk-tree-perk" && bool.TryParse(parts[1], out flag)) settings.TreePerk = flag;
                 else if (parts[0] == "afk-lead" && int.TryParse(parts[1], out number)) settings.AfkLeadSeconds = number;
                 else if (parts[0] == "sound" && bool.TryParse(parts[1], out flag)) settings.SoundMaster = flag;
                 else if (parts[0] == "notify" && bool.TryParse(parts[1], out flag)) settings.NotifyMaster = flag;

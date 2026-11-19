@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace KavrosAfkWarden
@@ -143,7 +143,7 @@ namespace KavrosAfkWarden
         public static void ReadBox(ImageBuffer box, bool life, HudReading reading)
         {
             if (box == null || reading == null) return;
-            NumberRead number = ReadNumber(box, new IntRect(0, 0, box.Width, box.Height), WhiteInk);
+            NumberRead number = ReadResource(box, new IntRect(0, 0, box.Width, box.Height), life);
             Apply(reading, life, number, "bar");
         }
 
@@ -160,12 +160,14 @@ namespace KavrosAfkWarden
             HudReading reading = new HudReading();
             if (settings.HasHpPin)
             {
-                NumberRead number = ReadNumber(image, Pin(image, settings.HpPinX, settings.HpPinY, settings.HpPinW, settings.HpPinH), AnyInk);
+                reading.LifeText = Pin(image, settings.HpPinX, settings.HpPinY, settings.HpPinW, settings.HpPinH);
+                NumberRead number = ReadResource(image, reading.LifeText, true);
                 Apply(reading, true, number, "pin");
             }
             if (settings.HasPrayerPin)
             {
-                NumberRead number = ReadNumber(image, Pin(image, settings.PrayerPinX, settings.PrayerPinY, settings.PrayerPinW, settings.PrayerPinH), AnyInk);
+                reading.PrayerText = Pin(image, settings.PrayerPinX, settings.PrayerPinY, settings.PrayerPinW, settings.PrayerPinH);
+                NumberRead number = ReadResource(image, reading.PrayerText, false);
                 Apply(reading, false, number, "pin");
             }
             if (!settings.HasHpPin || !settings.HasPrayerPin)
@@ -214,7 +216,8 @@ namespace KavrosAfkWarden
                 }
             if (!pair)
             {
-                ReadLoneBar(image, reading, purples, false);
+                if (wantLife) ReadLoneBar(image, reading, reds, true);
+                if (wantPrayer) ReadLoneBar(image, reading, purples, false);
                 return;
             }
             reading.StripFound = true;
@@ -236,13 +239,13 @@ namespace KavrosAfkWarden
             reading.PrayerText = prayerText;
             if (wantLife)
             {
-                NumberRead number = ReadLifeNumber(image, lifeText);
+                NumberRead number = ReadResource(image, lifeText, true);
                 reading.LifeTrace = LastTrace;
                 Apply(reading, true, number, "bar");
             }
             if (wantPrayer)
             {
-                NumberRead number = ReadNumber(image, prayerText, WhiteInk);
+                NumberRead number = ReadResource(image, prayerText, false);
                 reading.PrayerTrace = LastTrace;
                 Apply(reading, false, number, "bar");
             }
@@ -289,7 +292,7 @@ namespace KavrosAfkWarden
             int textH = Math.Max(26, best.Height * 6);
             int textW = Math.Max(best.Width + 48, 110);
             IntRect text = Clamp(image, best.X - 10, best.Y - textH, textW, textH);
-            NumberRead number = ReadNumber(image, text, WhiteInk);
+            NumberRead number = ReadResource(image, text, life);
             if (life) reading.LifeTrace = LastTrace;
             else reading.PrayerTrace = LastTrace;
             if (!number.Ok || !number.HasMax) return;
@@ -306,6 +309,19 @@ namespace KavrosAfkWarden
 
         // The heart icon sits just left of the life number. If that icon breaks
         // the read, try the same line again a few pixels further right.
+        private static NumberRead ReadResource(ImageBuffer image, IntRect box, bool life)
+        {
+            // Digits sit immediately above the fill. A bright scene above the HUD
+            // otherwise wins the row-ink vote over the actual numeric line.
+            int height = Math.Min(box.Height, 17);
+            IntRect band = new IntRect(box.X, box.Bottom - height, box.Width, height);
+            NumberRead sample = ReadNumber(image, band, WhiteInk);
+            if (sample.HasMax) return sample;
+            sample = life ? ReadLifeNumber(image, box) : ReadNumber(image, box, WhiteInk);
+            if (sample.HasMax) return sample;
+            return ReadNumber(image, box, life ? (InkTest)LifeDigit : PrayerDigit);
+        }
+
         private static NumberRead ReadLifeNumber(ImageBuffer image, IntRect box)
         {
             NumberRead best = ReadNumber(image, box, WhiteInk);
@@ -328,7 +344,7 @@ namespace KavrosAfkWarden
             return best;
         }
 
-        private static void ReadBuffBar(ImageBuffer image, WardenSettings settings, HudReading reading)
+        internal static void ReadBuffBar(ImageBuffer image, WardenSettings settings, HudReading reading)
         {
             IntRect region = settings.HasBuffPin
                 ? Pin(image, settings.BuffPinX, settings.BuffPinY, settings.BuffPinW, settings.BuffPinH)
@@ -369,11 +385,12 @@ namespace KavrosAfkWarden
             region = Clamp(image, region.X, region.Y, region.Width, region.Height);
             for (int y = region.Y; y < region.Bottom; y++)
             {
-                int x = region.X;
+                int x = region.X + 11;
                 while (x < region.Right)
                 {
-                    if (!BorderGreen(image.Argb(x, y))) { x++; continue; }
+                    if (!BorderGreen(image.Argb(x, y))) { x += 12; continue; }
                     int start = x;
+                    while (start > region.X && x - start < 99 && BorderGreen(image.Argb(start-1,y))) start--;
                     while (x < region.Right && x - start < 100 && BorderGreen(image.Argb(x, y))) x++;
                     int span = x - start;
                     if (span < 12 || span > 96) continue;
@@ -388,20 +405,34 @@ namespace KavrosAfkWarden
                 }
             }
             if (found.Count == 0) return found;
-            int bestY = found[0].Y;
-            int bestCount = 0;
-            for (int i = 0; i < found.Count; i++)
+            // A buff row uses square icons with the same size and pitch. Scenery
+            // can produce hundreds of green edges at roughly the same height.
+            found.Sort(delegate(IntRect a, IntRect b) { return a.X.CompareTo(b.X); });
+            var best = new List<IntRect>();
+            int bestScore = -1;
+            foreach (IntRect first in found)
             {
-                int count = 0;
-                for (int j = 0; j < found.Count; j++)
-                    if (Math.Abs(found[j].Y - found[i].Y) <= 12) count++;
-                if (count > bestCount) { bestCount = count; bestY = found[i].Y; }
+                var row = new List<IntRect> { first };
+                IntRect last = first;
+                foreach (IntRect cand in found)
+                {
+                    int gap = cand.X - last.Right;
+                    if (gap < -1 || gap > 9 || Math.Abs(cand.Y-first.Y)>3 || Math.Abs(cand.Width-first.Width)>3) continue;
+                    row.Add(cand); last=cand;
+                }
+                int score = row.Count * 3;
+                if (row.Count >= 2 || found.Count == 1)
+                {
+                    // Read only the candidate icons, never the whole scenery row.
+                    foreach (IntRect icon in row)
+                    {
+                        BuffIcon clock = ReadIconTime(image, icon);
+                        if (clock.HasTime && ClassifyBuff(image, icon) == "potion") score += 12;
+                    }
+                }
+                if (score > bestScore) { bestScore = score; best = row; }
             }
-            List<IntRect> row = new List<IntRect>();
-            for (int i = 0; i < found.Count; i++)
-                if (Math.Abs(found[i].Y - bestY) <= 12) row.Add(found[i]);
-            row.Sort(delegate(IntRect a, IntRect b) { return a.X.CompareTo(b.X); });
-            return row;
+            return best;
         }
 
         private static bool IconAt(ImageBuffer image, int x, int y, int size)
@@ -518,6 +549,8 @@ namespace KavrosAfkWarden
             NumberRead number = ReadLine(image, text, BuffInk, out minutes, 4);
             if (!number.Ok)
             {
+                NumberRead bright = ReadLine(image, text, BrightBuffInk, out minutes, 4);
+                if (bright.Ok) return bright;
                 bool whiteMinutes;
                 NumberRead white = ReadLine(image, text, WhiteInk, out whiteMinutes, 4);
                 if (white.Ok) { minutes = whiteMinutes; return white; }
@@ -585,7 +618,7 @@ namespace KavrosAfkWarden
 
         private static void Apply(HudReading reading, bool life, NumberRead number, string how)
         {
-            if (!number.Ok || number.Current <= 0) return;
+            if (!number.Ok || number.Current < 0 || (number.Current == 0 && !number.HasMax)) return;
             if (number.HasMax && number.Max <= 0) number.HasMax = false;
             if (life)
             {
@@ -611,6 +644,13 @@ namespace KavrosAfkWarden
             int low = Math.Min(r, Math.Min(g, b));
             int high = Math.Max(r, Math.Max(g, b));
             return low >= 120 && high - low <= 80;
+        }
+
+        private static bool BrightBuffInk(int c)
+        {
+            int r=ImageBuffer.R(c),g=ImageBuffer.G(c),b=ImageBuffer.B(c);
+            int min=Math.Min(r,Math.Min(g,b));
+            return min>=205 && Math.Max(r,Math.Max(g,b))-min<=20;
         }
 
         private static bool BuffInk(int c)
@@ -964,41 +1004,37 @@ namespace KavrosAfkWarden
         {
             List<IntRect> bars = new List<IntRect>();
             region = Clamp(image, region.X, region.Y, region.Width, region.Height);
-            bool[,] on = new bool[region.Height, region.Width];
-            for (int y = 0; y < region.Height; y++)
-                for (int x = 0; x < region.Width; x++)
-                    on[y, x] = ink(image.Argb(region.X + x, region.Y + y));
-            bool[] used = new bool[region.Height * region.Width];
-            for (int y = 0; y < region.Height; y++)
+            const int minRun = 36;
+            for (int y = region.Y; y < region.Bottom; y++)
             {
-                int x = 0;
-                while (x < region.Width)
+                int probe = region.X + minRun - 1;
+                while (probe < region.Right)
                 {
-                    if (!on[y, x]) { x++; continue; }
-                    int start = x;
-                    while (x < region.Width && on[y, x]) x++;
-                    int run = x - start;
-                    if (run < 36) continue;
-                    int top = y;
-                    int bottom = y;
-                    while (bottom + 1 < region.Height)
+                    if (!ink(image.Argb(probe,y))) { probe += minRun; continue; }
+                    int start=probe, end=probe+1;
+                    while (start>region.X && ink(image.Argb(start-1,y))) start--;
+                    while (end<region.Right && ink(image.Argb(end,y))) end++;
+                    int run=end-start;
+                    probe=end+minRun;
+                    if (run<minRun) continue;
+                    int bottom=y;
+                    while (bottom+1<region.Bottom && bottom-y<22)
                     {
-                        int overlap = 0;
-                        for (int xx = start; xx < x; xx++) if (on[bottom + 1, xx]) overlap++;
-                        if (overlap < run / 2) break;
+                        int overlap=0;
+                        for (int xx=start; xx<end; xx++) if (ink(image.Argb(xx,bottom+1))) overlap++;
+                        if (overlap<run/2) break;
                         bottom++;
                     }
-                    int height = bottom - top + 1;
-                    if (height < 3 || height > 22) continue;
-                    bool fresh = false;
-                    for (int yy = top; yy <= bottom && !fresh; yy++)
-                        for (int xx = start; xx < x; xx++)
-                            if (!used[yy * region.Width + xx]) fresh = true;
-                    if (!fresh) continue;
-                    for (int yy = top; yy <= bottom; yy++)
-                        for (int xx = start; xx < x; xx++)
-                            used[yy * region.Width + xx] = true;
-                    bars.Add(new IntRect(region.X + start, region.Y + top, run, height));
+                    int h=bottom-y+1;
+                    if(h<3 || h>22)continue;
+                    bool covered=false;
+                    for(int i=bars.Count-1;i>=0;i--)
+                    {
+                        IntRect prior=bars[i];
+                        if(prior.Y<y-22)break;
+                        if(prior.Bottom>y && prior.X<=start && prior.Right>=end){covered=true;break;}
+                    }
+                    if(!covered)bars.Add(new IntRect(start,y,run,h));
                 }
             }
             return bars;

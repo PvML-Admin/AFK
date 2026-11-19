@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace KavrosAfkWarden
 {
@@ -112,11 +112,11 @@ namespace KavrosAfkWarden
     public static class CapturePlan
     {
         public const int SampleMilliseconds = 500;
-        public const int FullIntervalSeconds = 12;
+        public const int FullIntervalSeconds = 30;
 
         public static bool WantFull(bool locked, DateTime now, DateTime nextFull)
         {
-            return !locked || now >= nextFull;
+            return now >= nextFull;
         }
     }
 }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -146,7 +146,15 @@ namespace KavrosAfkWarden
         private DateTime nextFullSearch = DateTime.MinValue;
         private DateTime nextDebugImage = DateTime.MinValue;
         private readonly Bitmap[] pads = new Bitmap[5];
-        private readonly byte[][] raws = new byte[5][];
+        private readonly int[][] pixelsBySlot = new int[5][];
+        private IntPtr lastClient;
+        private Size lastSize;
+        private WardenSettings lastSettings;
+        private uint lastInputStamp;
+        private bool pollForeground;
+        private DateTime publishedAt;
+        private IntPtr publishedWindow;
+        internal DateTime FrameTime;
 
         internal void Start()
         {
@@ -165,6 +173,10 @@ namespace KavrosAfkWarden
             {
                 try { worker.Join(400); } catch (Exception) { }
             }
+        }
+
+        private void DisposeBuffers()
+        {
             for (int i = 0; i < pads.Length; i++)
             {
                 if (pads[i] != null) pads[i].Dispose();
@@ -177,10 +189,11 @@ namespace KavrosAfkWarden
             lock (gate)
             {
                 requestHwnd = hwnd;
-                requestSettings = settings ?? new WardenSettings();
+                requestSettings = settings == null ? new WardenSettings() : settings.Snapshot();
                 requestCapture = capture;
                 requestPanel = PanelBounds;
-                Reading = published;
+                Reading = publishedWindow==hwnd ? published : new HudReading();
+                FrameTime = publishedAt;
                 Route = publishedRoute;
                 Focused = publishedFocused;
                 Input = publishedInput;
@@ -189,6 +202,8 @@ namespace KavrosAfkWarden
                 XpActivity = publishedXp;
                 PackActivity = publishedPack;
                 LastTickMs = publishedMs;
+                publishedXp = false;
+                publishedPack = false;
                 Image = null;
             }
         }
@@ -197,7 +212,7 @@ namespace KavrosAfkWarden
         {
             try { Thread.CurrentThread.Priority = ThreadPriority.BelowNormal; } catch (Exception) { }
             DateTime nextSample = DateTime.MinValue;
-            while (alive)
+            try { while (alive)
             {
                 PollKeys();
                 if (DateTime.UtcNow >= nextSample)
@@ -208,15 +223,24 @@ namespace KavrosAfkWarden
                     lock (gate) { publishedMs = (int)clock.ElapsedMilliseconds; }
                     nextSample = DateTime.UtcNow.AddMilliseconds(CapturePlan.SampleMilliseconds);
                 }
-                Thread.Sleep(30);
-            }
+                Thread.Sleep(35);
+            } }
+            finally { DisposeBuffers(); }
         }
 
         private void PollKeys()
         {
             IntPtr hwnd;
-            lock (gate) { hwnd = requestHwnd; }
+            lock (gate) { hwnd = requestSettings.Paused ? IntPtr.Zero : requestHwnd; }
             bool foreground = hwnd != IntPtr.Zero && WindowLocator.IsForeground(hwnd);
+            if (!foreground) { pollForeground = false; return; }
+            NativeMethods.LastInput last = new NativeMethods.LastInput();
+            last.Size = System.Runtime.InteropServices.Marshal.SizeOf(typeof(NativeMethods.LastInput));
+            if (!NativeMethods.GetLastInputInfo(ref last)) return;
+            if (pollForeground && last.Time == lastInputStamp) return;
+            bool wasForeground = pollForeground;
+            pollForeground = true;
+            lastInputStamp = last.Time;
             bool edge = false;
             for (int vk = 1; vk < 256; vk++)
             {
@@ -225,7 +249,7 @@ namespace KavrosAfkWarden
                 if (pressed && !keyDown[vk] && foreground) edge = true;
                 keyDown[vk] = pressed;
             }
-            if (edge) lock (gate) { publishedInput = true; }
+            if (edge && wasForeground) lock (gate) { publishedInput = true; }
         }
 
         private static bool WatchKey(int vk)
@@ -247,11 +271,10 @@ namespace KavrosAfkWarden
                 settings = requestSettings;
                 capture = requestCapture;
                 panel = requestPanel;
-                publishedXp = false;
-                publishedPack = false;
             }
             if (hwnd == IntPtr.Zero || !NativeMethods.IsWindow(hwnd))
             {
+                lastClient = IntPtr.Zero;
                 haveBoxes = false;
                 Publish(new HudReading(), CaptureRoute.Missing, false, "Waiting for the Kavros window.");
                 return;
@@ -269,17 +292,30 @@ namespace KavrosAfkWarden
                 Publish(new HudReading(), CaptureRoute.Covered, focused, "Waiting for the Kavros window.");
                 return;
             }
+            if (lastClient != hwnd || lastSize != client.Size || !settings.SamePins(lastSettings))
+            {
+                lastClient=hwnd; lastSize=client.Size; lastSettings=settings;
+                lifeBox=prayerBox=buffStrip=xpBox=packBox=new IntRect();
+                haveBoxes=haveXpHash=havePackHash=false; missedLocks=0; nextFullSearch=DateTime.MinValue;
+            }
+            if (!focused)
+            {
+                int clear=0;
+                for (int y=1;y<6;y+=2) for(int x=1;x<6;x+=2)
+                    if(WindowLocator.OverGame(hwnd,client.X+client.Width*x/6,client.Y+client.Height*y/6))clear++;
+                if(clear<7){Publish(new HudReading(),CaptureRoute.Covered,false,"Game covered. Waiting for its HUD.");return;}
+            }
             bool full = CapturePlan.WantFull(haveBoxes, DateTime.UtcNow, nextFullSearch);
             HudReading reading;
             if (full) reading = FullSearch(client, settings, panel);
-            else reading = LockedSearch(client);
+            else reading = haveBoxes ? LockedSearch(client) : new HudReading();
             string note = focused ? "Watching the visible Kavros window." : "Watching Kavros. The window is visible but not focused.";
             Publish(reading, CaptureRoute.Screen, focused, note);
         }
 
         private HudReading FullSearch(Rectangle client, WardenSettings settings, Rectangle panel)
         {
-            nextFullSearch = DateTime.UtcNow.AddSeconds(CapturePlan.FullIntervalSeconds);
+            nextFullSearch = DateTime.UtcNow.AddSeconds(3);
             ImageBuffer image = CopyScreen(client, 0);
             if (image == null || ImageBuffer.MostlyBlack(image))
             {
@@ -288,14 +324,24 @@ namespace KavrosAfkWarden
             }
             BlankPanel(image, client, panel);
             HudReading reading = HudReader.Read(image, settings);
-            if (reading.Hp != null && reading.HpMax != null && reading.LifeText.Width > 8) lifeBox = Pad(reading.LifeText, 6);
-            if (reading.Prayer != null && reading.PrayerMax != null && reading.PrayerText.Width > 8) prayerBox = Pad(reading.PrayerText, 6);
-            buffStrip = Union(reading.BuffRects);
+            if (reading.LifeText.Width > 8) lifeBox = reading.LifeText;
+            if (reading.PrayerText.Width > 8) prayerBox = reading.PrayerText;
+            IntRect foundBuff = Union(reading.BuffRects);
+            if(settings.HasBuffPin) buffStrip=new IntRect((int)(settings.BuffPinX*image.Width),(int)(settings.BuffPinY*image.Height),(int)Math.Ceiling(settings.BuffPinW*image.Width),(int)Math.Ceiling(settings.BuffPinH*image.Height));
+            else if(foundBuff.Width>0)
+            {
+                // Keep a few neighbouring slots in view when buffs reorder after a dose.
+                int margin=Math.Max(16,foundBuff.Height*2);
+                buffStrip=new IntRect(Math.Max(0,foundBuff.X-margin),Math.Max(0,foundBuff.Y-3),
+                    Math.Min(image.Width,foundBuff.Right+margin)-Math.Max(0,foundBuff.X-margin),
+                    Math.Min(image.Height,foundBuff.Bottom+4)-Math.Max(0,foundBuff.Y-3));
+            }
             IntRect xp = SceneActivity.XpWatch.Find(image);
             if (xp.Width > 8) xpBox = xp;
             IntRect pack = SceneActivity.PackWatch.Find(image);
             if (pack.Width > 8) packBox = pack;
-            haveBoxes = lifeBox.Width > 8 || prayerBox.Width > 8;
+            haveBoxes = lifeBox.Width > 8 || prayerBox.Width > 8 || buffStrip.Width>8;
+            nextFullSearch=DateTime.UtcNow.AddSeconds(reading.HpMax.HasValue && reading.PrayerMax.HasValue ? (buffStrip.Width>8 ? CapturePlan.FullIntervalSeconds : 8) : 3);
             NoteActivity(image);
             MaybeDebug(image, settings, reading);
             return reading;
@@ -304,7 +350,7 @@ namespace KavrosAfkWarden
         private HudReading LockedSearch(Rectangle client)
         {
             HudReading reading = new HudReading();
-            reading.StripFound = true;
+            reading.StripFound = lifeBox.Width>8 || prayerBox.Width>8;
             ImageBuffer life = CopyScreen(ScreenOf(client, lifeBox), 1);
             if (life != null) HudReader.ReadBox(life, true, reading);
             ImageBuffer prayer = CopyScreen(ScreenOf(client, prayerBox), 2);
@@ -319,7 +365,8 @@ namespace KavrosAfkWarden
                     pin.BuffPinY = 0;
                     pin.BuffPinW = 1;
                     pin.BuffPinH = 1;
-                    HudReading buffs = HudReader.Read(strip, pin);
+                    HudReading buffs = new HudReading();
+                    HudReader.ReadBuffBar(strip, pin, buffs);
                     reading.Buffs = buffs.Buffs;
                     reading.BuffRects = buffs.BuffRects;
                     reading.BuffBarFound = buffs.BuffBarFound;
@@ -327,10 +374,11 @@ namespace KavrosAfkWarden
                     reading.PotionCount = buffs.PotionCount;
                 }
             }
-            if (reading.Hp == null && reading.Prayer == null)
+            if (reading.HpMax == null || reading.PrayerMax == null || (buffStrip.Width>8 && !reading.BuffBarFound))
             {
                 missedLocks++;
-                if (missedLocks >= 4) haveBoxes = false;
+                if (missedLocks == 3 && nextFullSearch>DateTime.UtcNow.AddSeconds(3))
+                    nextFullSearch=DateTime.UtcNow.AddSeconds(3);
             }
             else missedLocks = 0;
             ImageBuffer xp = xpBox.Width > 8 ? CopyScreen(ScreenOf(client, xpBox), 4) : null;
@@ -401,6 +449,8 @@ namespace KavrosAfkWarden
         {
             lock (gate)
             {
+                publishedWindow=lastClient;
+                publishedAt = DateTime.UtcNow;
                 published = reading ?? new HudReading();
                 publishedRoute = route;
                 publishedFocused = focused;
@@ -449,25 +499,20 @@ namespace KavrosAfkWarden
             {
                 if (pads[slot] != null) pads[slot].Dispose();
                 pads[slot] = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
-                raws[slot] = null;
+                pixelsBySlot[slot] = new int[bounds.Width*bounds.Height];
             }
             using (Graphics graphics = Graphics.FromImage(pads[slot]))
                 graphics.CopyFromScreen(bounds.Location, Point.Empty, bounds.Size, CopyPixelOperation.SourceCopy);
             BitmapData data = pads[slot].LockBits(new Rectangle(0, 0, pads[slot].Width, pads[slot].Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
             try
             {
-                int bytes = Math.Abs(data.Stride) * pads[slot].Height;
-                if (raws[slot] == null || raws[slot].Length != bytes) raws[slot] = new byte[bytes];
-                System.Runtime.InteropServices.Marshal.Copy(data.Scan0, raws[slot], 0, bytes);
-                int[] pixels = new int[pads[slot].Width * pads[slot].Height];
-                byte[] raw = raws[slot];
-                for (int y = 0; y < pads[slot].Height; y++)
-                    for (int x = 0; x < pads[slot].Width; x++)
-                    {
-                        int i = y * data.Stride + x * 4;
-                        pixels[y * pads[slot].Width + x] = ImageBuffer.Pack(raw[i + 2], raw[i + 1], raw[i]);
-                    }
-                return new ImageBuffer(pads[slot].Width, pads[slot].Height, pixels);
+                int width=bounds.Width,height=bounds.Height;
+                int[] pixels=pixelsBySlot[slot];
+                if(data.Stride==width*4)
+                    System.Runtime.InteropServices.Marshal.Copy(data.Scan0,pixels,0,pixels.Length);
+                else for(int y=0;y<height;y++)
+                    System.Runtime.InteropServices.Marshal.Copy(IntPtr.Add(data.Scan0,y*data.Stride),pixels,y*width,width);
+                return new ImageBuffer(width,height,pixels);
             }
             finally { pads[slot].UnlockBits(data); }
         }

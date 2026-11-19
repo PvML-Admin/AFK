@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace KavrosAfkWarden
@@ -14,7 +14,9 @@ namespace KavrosAfkWarden
         public int PrayerThreshold = 20;
         public bool PrayerPercent = true;
         public bool AfkEnabled = true;
-        public int AfkSeconds = 300;
+        public bool Grandmaster;
+        public bool TreePerk;
+        public int AfkSeconds { get { return ((Grandmaster ? 50 : 25) + (TreePerk ? 15 : 0)) * 60; } }
         public int AfkLeadSeconds = 30;
         public bool SoundMaster = true;
         public bool NotifyMaster = true;
@@ -50,12 +52,19 @@ namespace KavrosAfkWarden
         public bool HasPrayerPin { get { return PrayerPinW > 0.005 && PrayerPinH > 0.005; } }
         public bool HasBuffPin { get { return BuffPinW > 0.005 && BuffPinH > 0.005; } }
 
+        public WardenSettings Snapshot() { return (WardenSettings)MemberwiseClone(); }
+        public bool SamePins(WardenSettings other)
+        {
+            return other!=null && HpPinX==other.HpPinX && HpPinY==other.HpPinY && HpPinW==other.HpPinW && HpPinH==other.HpPinH &&
+                PrayerPinX==other.PrayerPinX && PrayerPinY==other.PrayerPinY && PrayerPinW==other.PrayerPinW && PrayerPinH==other.PrayerPinH &&
+                BuffPinX==other.BuffPinX && BuffPinY==other.BuffPinY && BuffPinW==other.BuffPinW && BuffPinH==other.BuffPinH;
+        }
+
         public void Clamp()
         {
             IdleSeconds = ClampInt(IdleSeconds, 3, 600);
             HpThreshold = ClampInt(HpThreshold, 1, HpPercent ? 999 : 9999999);
             PrayerThreshold = ClampInt(PrayerThreshold, 1, PrayerPercent ? 999 : 9999999);
-            AfkSeconds = ClampInt(AfkSeconds, 60, 1800);
             AfkLeadSeconds = ClampInt(AfkLeadSeconds, 5, AfkSeconds - 5);
             PotionSeconds = ClampInt(PotionSeconds, 1, 600);
             Volume = ClampInt(Volume, 0, 100);
@@ -133,7 +142,7 @@ namespace KavrosAfkWarden
             if (!percentMode)
             {
                 value = current;
-                return current > 0;
+                return current >= 0;
             }
             if (max == null || max.Value <= 0)
             {
@@ -343,11 +352,13 @@ namespace KavrosAfkWarden
     // into the current value.
     public sealed class ReadGate
     {
-        private readonly StableValue current = new StableValue();
+        private StableValue current = new StableValue();
         private readonly StableValue maximum = new StableValue();
         private int? lockedMax;
         private DateTime lastGood;
         private bool saw;
+        private int? candidateMax, previous;
+        private int maxCount, previousDirection;
         public int? Value;
         public int? Max;
         public bool Stale;
@@ -355,19 +366,37 @@ namespace KavrosAfkWarden
         public void Push(int? nowCurrent, int? nowMax, DateTime now)
         {
             bool valid = nowCurrent != null && nowMax != null && nowMax.Value > 0;
-            if (valid && lockedMax != null && nowMax.Value != lockedMax.Value) valid = false;
+            if (valid && lockedMax.HasValue && nowMax != lockedMax)
+            {
+                maxCount = candidateMax==nowMax ? maxCount+1 : 1;
+                candidateMax=nowMax;
+                if(maxCount>=3)
+                {
+                    lockedMax=nowMax; current=new StableValue(); previous=null; previousDirection=0;
+                    maxCount=0;
+                }
+                else valid=false;
+            }
+            else { maxCount=0; candidateMax=null; }
             if (!valid)
             {
                 Stale = saw && (now - lastGood).TotalSeconds > 5;
-                Value = current.Push(null);
                 return;
             }
-            lastGood = now;
-            saw = true;
-            Stale = false;
+            lastGood=now; saw=true; Stale=false;
             int? maxShown = maximum.Push(nowMax);
-            if (maxShown != null) lockedMax = maxShown;
-            Value = current.Push(nowCurrent);
+            if (!lockedMax.HasValue && maxShown.HasValue) lockedMax=maxShown;
+            int value=nowCurrent.Value;
+            int delta=previous.HasValue?value-previous.Value:0;
+            int direction=Math.Sign(delta);
+            int? agreed=current.Push(value);
+            // A draining bar can change on every frame. Three plausible readings
+            // travelling in one direction corroborate each other at the same cap.
+            bool trend=lockedMax==nowMax && direction!=0 && direction==previousDirection && Math.Abs(delta)<=Math.Max(5,nowMax.Value/8);
+            if(trend || (previous==value && lockedMax==nowMax)) Value=value;
+            else if(!Value.HasValue && agreed.HasValue) Value=agreed;
+            previousDirection=Math.Abs(delta)<=Math.Max(5,nowMax.Value/8)?direction:0;
+            previous=value;
             Max = lockedMax != null ? lockedMax : maxShown;
         }
     }
@@ -557,6 +586,29 @@ namespace KavrosAfkWarden
         }
     }
 
+    // Keep an already observed potion through a brief OCR gap. Only actual
+    // observations can trigger an alert. Never estimate beyond the grace period.
+    public sealed class PotionDisplay
+    {
+        private DateTime seen;
+        private int? seconds;
+        public bool Estimated { get; private set; }
+        public int? Observe(int? fresh, DateTime now)
+        {
+            double age=(now-seen).TotalSeconds;
+            bool within=seconds.HasValue && age>=0 && age<=4;
+            // A second, longer buff can remain readable when the shorter one blinks.
+            if (within && (!fresh.HasValue || fresh.Value>seconds.Value+60))
+            {
+                Estimated=true;
+                return Math.Max(0,seconds.Value-(int)age);
+            }
+            Estimated=false;seconds=fresh;
+            if(fresh.HasValue)seen=now;
+            return fresh;
+        }
+    }
+
     public sealed class WatchSample
     {
         public DateTime Time;
@@ -594,7 +646,7 @@ namespace KavrosAfkWarden
         private readonly PotionWatch potion = new PotionWatch();
 
         public TimeSpan StillFor;
-        public TimeSpan AfkRemaining = TimeSpan.FromMinutes(5);
+        public TimeSpan AfkRemaining = TimeSpan.FromMinutes(25);
         public bool IdleLatched;
         public bool HpLatched;
         public bool PrayerLatched;

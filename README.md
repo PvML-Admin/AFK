@@ -1,8 +1,8 @@
 # AFK Warden
 
-AFK Warden is a Companion module for Kavros. It watches the game window and warns you when you have gone idle, when hitpoints or prayer run low, and shortly before the inactivity timer would send you to AFK. Version 0.2.5 is a Windows .NET Framework 4.8 application.
+AFK Warden is a Companion module for Kavros. It watches the game window and warns you when you have gone idle, when hitpoints or prayer run low, and shortly before the inactivity timer would send you to AFK. Version 0.2.6 is a Windows .NET Framework 4.8 application.
 
-The public module record is [`companion.module.json`](companion.module.json). The Companion panel can read it from this repository's `main` branch. While the program is running it also writes `%LocalAppData%\Kavros\Companion\modules\afk-warden.json` with `Running · v0.2.5`.
+The public module record is [`companion.module.json`](companion.module.json). The Companion panel can read it from this repository's `main` branch. While the program is running it also writes `%LocalAppData%\Kavros\Companion\modules\afk-warden.json` with `Running · v0.2.6`.
 
 The window uses the shared Companion theme: `source/KavrosTheme.cs`, `OpaqueButton`, `KavrosCheckBox`, the Cinzel and Outfit fonts, the crest, the navy panels, the gold primary button, the dark secondary buttons, and the status pills.
 
@@ -10,7 +10,7 @@ The window uses the shared Companion theme: `source/KavrosTheme.cs`, `OpaqueButt
 
 Requires Windows 10 or 11 and .NET Framework 4.8.
 
-A release tag `v0.2.5` (the first three parts of `source/app.manifest`) builds with `source/build.ps1`, packs with Velopack 1.2.161, and publishes:
+A release tag `v0.2.6` (the first three parts of `source/app.manifest`) builds with `source/build.ps1`, packs with Velopack 1.2.161, and publishes:
 
 - `KavrosAfkWarden-win-Setup.exe`
 - `KavrosAfkWarden-win-Portable.zip`
@@ -39,7 +39,7 @@ Saved in `%LocalAppData%\KavrosAfkWarden\settings.txt`. They come back the next 
 | Low hitpoints | On, 30 percent | Warns below this percent, or below an absolute number if Percent is off. |
 | Low prayer | On, 20 percent | Same, for prayer. |
 | Potion running out | On, 15 seconds | Warns when any buff-bar timer drops below this. Each alert still has its own Sound and Notify boxes. |
-| AFK teleport | On, 300 second timer, 30 second lead | Warns this many seconds before the inactivity timer expires. |
+| AFK teleport | On, 25 minutes, 30-second warning | Warns this many seconds before the inactivity timer expires. |
 | Play sounds | On | Master switch. Also each alert has its own Sound box. Both must be on. |
 | Volume | 100 percent | Scales every alert sound and Test sound. |
 | Show notifications | On | Master switch for the popup and the toast. Each alert has its own Notify box. Both must be on. |
@@ -69,7 +69,7 @@ Two similar frames are required before a number is trusted. A single bad frame d
 
 **Idle.** The character view is the centre of the client, outside the minimap, the top ribbon, and the bottom bar. Movement is either a clear change in that view or the minimap player dot moving. A skilling animation counts as movement. Moving the mouse does not. Time the window cannot be seen is not counted as stillness.
 
-**AFK teleport.** RS3's logout timer is hidden. Public Kavros notes mention an AFK area and do not publish the delay or a countdown on screen. The default full duration is 5 minutes, the RS3 base and the usual private-server value, and it is configurable from 60 to 1800 seconds. The lead time defaults to 30 seconds. The clock starts when Warden first sees the client, because earlier idle time is not visible. It resets when the cursor moves over the game, when a mouse button goes down over the game, or when a key is held while the game is focused. Typing into another application does not reset it. Character animation does not reset it. Pause, or the game closing, freezes it.
+**AFK teleport.** The countdown starts when Warden attaches to the client and resets on detected game clicks or keys. The normal timeout is 25 minutes. Enable Grandmaster for 50 minutes, the tree perk for 40 minutes, or both for 65 minutes. A client already idle before Warden opens can teleport sooner than the displayed estimate.
 
 ## Rebuild
 
@@ -82,7 +82,7 @@ KavrosAfkWarden.exe --self-test results.txt
 
 The headless test checks the alert gates, the per-alert sound and notification switches, the settings file, idle versus the AFK clock, minimized and covered capture decisions, digit and bar reading, and that `companion.module.json` matches `source/app.manifest`. It does not open a window and it does not capture the desktop.
 
-Tag `v0.2.5` to publish a release. The tag must match the first three parts of the version in `source/app.manifest`. While **Check for updates at startup** is on, an installed copy also checks GitHub Releases every three hours. A folder copy that was not installed with Setup cannot update itself.
+Tag `v0.2.6` to publish a release. The tag must match the first three parts of the version in `source/app.manifest`. While **Check for updates at startup** is on, an installed copy also checks GitHub Releases every three hours. A folder copy that was not installed with Setup cannot update itself.
 
 ## What was not verified
 

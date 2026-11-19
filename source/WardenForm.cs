@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -39,10 +39,7 @@ namespace KavrosAfkWarden
                 CrashLog.Write(ex);
                 return 1;
             }
-            finally
-            {
-                Environment.Exit(0);
-            }
+
         }
 
         private static bool ClaimInstance()
@@ -55,18 +52,21 @@ namespace KavrosAfkWarden
             catch (AbandonedMutexException) { owned = true; }
             if (!owned)
             {
-                try { activateEvent.Set(); } catch (Exception) { }
-                if (ackEvent.WaitOne(800)) return false;
-                if (!InstanceIsFresh())
+                // A launcher started by a foreground Companion can pass its activation
+                // right to the running Warden before signalling the existing window.
+                try
                 {
-                    KillOther();
-                    try { owned = singleInstance.WaitOne(1500); }
-                    catch (AbandonedMutexException) { owned = true; }
+                    string path=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"KavrosAfkWarden","instance.pid");
+                    int pid;
+                    if(File.Exists(path) && int.TryParse(File.ReadAllText(path),out pid))
+                        using(var old=System.Diagnostics.Process.GetProcessById(pid))
+                        using(var self=System.Diagnostics.Process.GetCurrentProcess())
+                            if(old.SessionId==self.SessionId && old.ProcessName==self.ProcessName)
+                                NativeMethods.AllowSetForegroundWindow(pid);
                 }
-            }
-            if (!owned)
-            {
-                MessageBox.Show("AFK Warden is already running.", AppInfo.Name);
+                catch(Exception) { }
+                activateEvent.Set();
+                ackEvent.WaitOne(2500);
                 return false;
             }
             try
@@ -76,10 +76,11 @@ namespace KavrosAfkWarden
                 File.WriteAllText(Path.Combine(dir, "instance.pid"), System.Diagnostics.Process.GetCurrentProcess().Id.ToString());
             }
             catch (Exception) { }
+            host = new WardenForm();
+            IntPtr readyHandle=host.Handle;
             activateWaiter = new Thread(WaitForActivate);
             activateWaiter.IsBackground = true;
             activateWaiter.Start();
-            host = new WardenForm();
             return true;
         }
 
@@ -101,33 +102,6 @@ namespace KavrosAfkWarden
                 }
                 catch (Exception) { }
             }
-        }
-
-        private static bool InstanceIsFresh()
-        {
-            try
-            {
-                string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KavrosAfkWarden", "instance.pid");
-                if (!File.Exists(path)) return false;
-                return (DateTime.UtcNow - File.GetLastWriteTimeUtc(path)).TotalSeconds < 2.5;
-            }
-            catch (Exception) { return false; }
-        }
-
-        private static void KillOther()
-        {
-            try
-            {
-                string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KavrosAfkWarden", "instance.pid");
-                if (!File.Exists(path)) return;
-                int pid;
-                if (!int.TryParse(File.ReadAllText(path).Trim(), out pid)) return;
-                if (pid == System.Diagnostics.Process.GetCurrentProcess().Id) return;
-                System.Diagnostics.Process other = System.Diagnostics.Process.GetProcessById(pid);
-                other.Kill();
-                other.WaitForExit(1500);
-            }
-            catch (Exception) { }
         }
 
         private static string FindRoot()
@@ -351,7 +325,8 @@ namespace KavrosAfkWarden
         private readonly NumberField idleSeconds = new NumberField();
         private readonly NumberField hpThreshold = new NumberField();
         private readonly NumberField prayerThreshold = new NumberField();
-        private readonly NumberField afkSeconds = new NumberField();
+        private KavrosCheckBox grandmaster, treePerk;
+        private Label afkDuration;
         private readonly NumberField afkLead = new NumberField();
         private readonly NumberField potionSeconds = new NumberField();
         private readonly NumberField cooldown = new NumberField();
@@ -365,7 +340,7 @@ namespace KavrosAfkWarden
         private readonly FrameGrab grab = new FrameGrab();
         private Rectangle dockedGame;
         private bool haveDockedGame;
-        private readonly SceneActivity activity = new SceneActivity();
+        private SceneActivity activity = new SceneActivity();
         private DateTime lastDebugSave = DateTime.MinValue;
         private DateTime lastClientSearch = DateTime.MinValue;
         private int? shownHp;
@@ -373,10 +348,14 @@ namespace KavrosAfkWarden
         private int? shownPrayer;
         private int? shownPrayerMax;
         private int? shownPotion;
-        private readonly ReadGate hpGate = new ReadGate();
-        private readonly ReadGate prayerGate = new ReadGate();
+        private PotionDisplay potionDisplay=new PotionDisplay();
+        private IntPtr observedClient, panelOwner;
+        private DateTime lastFrame;
+        private bool everAttached;
+        private ReadGate hpGate = new ReadGate();
+        private ReadGate prayerGate = new ReadGate();
         private readonly BuffClock buffClock = new BuffClock();
-        private readonly WardenEngine engine = new WardenEngine();
+        private WardenEngine engine = new WardenEngine();
         private readonly System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
         private readonly NotifyIcon tray;
         private readonly string settingsPath;
@@ -448,7 +427,7 @@ namespace KavrosAfkWarden
                 StartupClock.MarkShown();
                 panel.SetNote("Starting...");
                 Hide();
-                ShowPanel();
+                BringUp();
                 if (!started)
                 {
                     started = true;
@@ -558,8 +537,9 @@ namespace KavrosAfkWarden
             potionNotify = Check("Notify", 590, 508, 78, settings.PotionNotify);
 
             afkOn = Check("AFK teleport warning", 28, 548, 240, settings.AfkEnabled);
-            Caption("Timer", 28, 576);
-            Number(afkSeconds, 88, 572, 60, 1800, settings.AfkSeconds);
+            afkDuration = Caption(settings.AfkSeconds / 60 + " min timer", 28, 576);
+            grandmaster = Check("Grandmaster (+25 min)", 28, 604, 200, settings.Grandmaster);
+            treePerk = Check("Tree perk (+15 min)", 232, 604, 205, settings.TreePerk);
             Caption("lead", 176, 576);
             Number(afkLead, 220, 572, 5, Math.Max(5, settings.AfkSeconds - 5), settings.AfkLeadSeconds);
             Caption("sec", 304, 576);
@@ -598,11 +578,10 @@ namespace KavrosAfkWarden
 
             hpPercent.CheckedChanged += delegate { if (!loading) hpThreshold.Maximum = hpPercent.Checked ? 999 : 9999999; };
             prayerPercent.CheckedChanged += delegate { if (!loading) prayerThreshold.Maximum = prayerPercent.Checked ? 999 : 9999999; };
-            Wire(pause, idleOn, hpOn, prayerOn, afkOn, potionOn, hpPercent, prayerPercent, soundMaster, notifyMaster, idleSound, idleNotify, hpSound, hpNotify, prayerSound, prayerNotify, afkSound, afkNotify, potionSound, potionNotify, updates, saveDebug);
+            Wire(grandmaster, treePerk, pause, idleOn, hpOn, prayerOn, afkOn, potionOn, hpPercent, prayerPercent, soundMaster, notifyMaster, idleSound, idleNotify, hpSound, hpNotify, prayerSound, prayerNotify, afkSound, afkNotify, potionSound, potionNotify, updates, saveDebug);
             idleSeconds.ValueChanged += delegate { if (!loading) Save(); };
             hpThreshold.ValueChanged += delegate { if (!loading) Save(); };
             prayerThreshold.ValueChanged += delegate { if (!loading) Save(); };
-            afkSeconds.ValueChanged += delegate { if (!loading) { afkLead.Maximum = Math.Max(5, (int)afkSeconds.Value - 5); Save(); } };
             afkLead.ValueChanged += delegate { if (!loading) Save(); };
             potionSeconds.ValueChanged += delegate { if (!loading) Save(); };
             cooldown.ValueChanged += delegate { if (!loading) Save(); };
@@ -638,8 +617,10 @@ namespace KavrosAfkWarden
             hpThreshold.SetValue(Clamp(settings.HpThreshold, hpThreshold), false);
             prayerThreshold.Maximum = settings.PrayerPercent ? 999 : 9999999;
             prayerThreshold.SetValue(Clamp(settings.PrayerThreshold, prayerThreshold), false);
-            afkSeconds.SetValue(Clamp(settings.AfkSeconds, afkSeconds), false);
-            afkLead.Maximum = Math.Max(5, (int)afkSeconds.Value - 5);
+            grandmaster.Checked = settings.Grandmaster;
+            treePerk.Checked = settings.TreePerk;
+            afkDuration.Text = settings.AfkSeconds / 60 + " min timer";
+            afkLead.Maximum = settings.AfkSeconds - 5;
             afkLead.SetValue(Clamp(settings.AfkLeadSeconds, afkLead), false);
             potionSeconds.SetValue(Clamp(settings.PotionSeconds, potionSeconds), false);
             cooldown.SetValue(Clamp(settings.CooldownSeconds, cooldown), false);
@@ -675,7 +656,7 @@ namespace KavrosAfkWarden
             return box;
         }
 
-        private void Caption(string text, int x, int y)
+        private Label Caption(string text, int x, int y)
         {
             Label label = new Label();
             label.Text = text;
@@ -685,6 +666,7 @@ namespace KavrosAfkWarden
             label.BackColor = KavrosTheme.Panel;
             label.Font = KavrosTheme.Ui(8.5F, false);
             Controls.Add(label);
+            return label;
         }
 
         private void Number(NumberField number, int x, int y, int min, int max, int value)
@@ -785,7 +767,10 @@ namespace KavrosAfkWarden
             settings.PrayerThreshold = (int)prayerThreshold.Value;
             settings.PrayerPercent = prayerPercent.Checked;
             settings.AfkEnabled = afkOn.Checked;
-            settings.AfkSeconds = (int)afkSeconds.Value;
+            settings.Grandmaster = grandmaster.Checked;
+            settings.TreePerk = treePerk.Checked;
+            afkDuration.Text = settings.AfkSeconds / 60 + " min timer";
+            afkLead.Maximum = settings.AfkSeconds - 5;
             settings.AfkLeadSeconds = (int)afkLead.Value;
             settings.SoundMaster = soundMaster.Checked;
             settings.NotifyMaster = notifyMaster.Checked;
@@ -938,6 +923,7 @@ namespace KavrosAfkWarden
         {
             if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
             Show();
+            BringToFront();
             Activate();
         }
 
@@ -950,9 +936,10 @@ namespace KavrosAfkWarden
         private void FollowPanel()
         {
             bool exists = selected != IntPtr.Zero && NativeMethods.IsWindow(selected);
-            if (panel.IsHandleCreated)
+            IntPtr owner=exists ? selected : IntPtr.Zero;
+            if (owner!=panelOwner && (exists || panel.IsHandleCreated))
             {
-                try { NativeMethods.SetOwner(panel.Handle, exists ? selected : IntPtr.Zero); }
+                try { NativeMethods.SetOwner(panel.Handle, owner); panelOwner=owner; }
                 catch (DllNotFoundException) { }
                 catch (EntryPointNotFoundException) { }
             }
@@ -1043,7 +1030,8 @@ namespace KavrosAfkWarden
             settings = loaded ?? new WardenSettings();
             clientTitle = settings.ClientTitle ?? "";
             sound.Volume = settings.Volume;
-            ApplySettingsToControls();
+            loading=true;
+            try { ApplySettingsToControls(); } finally { loading=false; }
             panel.SetPaused(settings.Paused);
             PlacePanel();
             nextUpdateCheck = DateTime.UtcNow.AddHours(3);
@@ -1085,10 +1073,15 @@ namespace KavrosAfkWarden
 
         internal void BringUp()
         {
+            if(Visible){ShowSettings();return;}
+            if(selected!=IntPtr.Zero && NativeMethods.IsIconic(selected)){ShowSettings();return;}
             ShowPanel();
             if (panel.IsHandleCreated)
             {
-                NativeMethods.ShowWindow(panel.Handle, 9);
+                if(!panel.Visible)panel.Show();
+                // Raise for this explicit user launch only. Normal gameplay does not steal focus.
+                panel.BringToFront();
+                NativeMethods.SetWindowPos(panel.Handle,IntPtr.Zero,0,0,0,0,0x0001|0x0002|0x0040);
                 NativeMethods.SetForegroundWindow(panel.Handle);
             }
         }
@@ -1127,6 +1120,7 @@ namespace KavrosAfkWarden
             if (choice == null) connection.Text = "Waiting for Kavros";
             else connection.Text = "GAME DETECTED: " + choice.Title;
             connection.Invalidate();
+            if(choice!=null && !everAttached){everAttached=true;BringUp();}
         }
 
         private void AttachSelected()
@@ -1151,14 +1145,23 @@ namespace KavrosAfkWarden
             bool minimized = selected != IntPtr.Zero && NativeMethods.IsIconic(selected);
             timer.Interval = minimized || selected == IntPtr.Zero ? 1000 : CapturePlan.SampleMilliseconds;
             grab.PanelBounds = panel.Visible ? panel.Bounds : Rectangle.Empty;
-            grab.Tick(selected, settings, !panel.IsDragging && !windowDragging && !minimized);
+            if(observedClient!=selected)
+            {
+                observedClient=selected; hpGate=new ReadGate(); prayerGate=new ReadGate();
+                activity=new SceneActivity(); engine=new WardenEngine(); lastHud=new HudReading();
+                potionDisplay=new PotionDisplay(); lastFrame=DateTime.MinValue;
+            }
+            grab.Tick(selected, settings, !settings.Paused && !panel.IsDragging && !windowDragging && !minimized);
             if (!windowDragging) FollowPanel();
-            bool pixels = grab.Reading != null && (grab.Reading.StripFound || grab.Reading.BuffBarFound || grab.Reading.Hp != null || grab.Reading.Prayer != null);
+            bool pixels = !settings.Paused && (DateTime.UtcNow-grab.FrameTime).TotalSeconds<=3 && grab.Reading != null && (grab.Reading.StripFound || grab.Reading.BuffBarFound || grab.Reading.Hp != null || grab.Reading.Prayer != null);
             if (grab.Reading != null && pixels) lastHud = grab.Reading;
             bool moving = activity.Tick(null, lastHud, grab.Input, grab.XpActivity, grab.PackActivity);
             WriteDebug(pixels, moving);
             DateTime sampleTime = DateTime.UtcNow;
-            if (pixels)
+            bool newCapture=grab.FrameTime!=lastFrame;
+            bool freshFrame=pixels && newCapture;
+            if(newCapture)lastFrame=grab.FrameTime;
+            if (freshFrame)
             {
                 hpGate.Push(lastHud.Hp, lastHud.HpMax, sampleTime);
                 prayerGate.Push(lastHud.Prayer, lastHud.PrayerMax, sampleTime);
@@ -1185,13 +1188,14 @@ namespace KavrosAfkWarden
             shownHpMax = hpMax;
             shownPrayer = prayer;
             shownPrayerMax = prayerMax;
-            shownPotion = potion;
-            sample.Hp = hpComparable ? hp : (int?)null;
+            if(newCapture || (sampleTime-lastFrame).TotalSeconds>1.5)
+                shownPotion=potionDisplay.Observe(freshFrame ? potion : (int?)null,sampleTime);
+            sample.Hp = freshFrame && lastHud.HpMax.HasValue && !hpGate.Stale && hpComparable ? hp : (int?)null;
             sample.HpMax = hpMax;
-            sample.Prayer = prayerComparable ? prayer : (int?)null;
+            sample.Prayer = freshFrame && lastHud.PrayerMax.HasValue && !prayerGate.Stale && prayerComparable ? prayer : (int?)null;
             sample.PrayerMax = prayerMax;
-            sample.PotionSeconds = potion;
-            sample.PotionClear = pixels && lastHud.BuffBarFound && potion == null;
+            sample.PotionSeconds = freshFrame && !potionDisplay.Estimated ? potion : null;
+            sample.PotionClear = freshFrame && lastHud.BuffBarFound && !shownPotion.HasValue;
             List<AlertEvent> events = engine.Tick(sample, settings);
             for (int i = 0; i < events.Count; i++)
             {
@@ -1229,12 +1233,14 @@ namespace KavrosAfkWarden
             panel.Prayer.Tone = engine.PrayerLatched ? PillTone.Warn : !pixels || lastHud.Prayer == null ? PillTone.Example : PillTone.Ok;
             panel.Prayer.Value = !pixels ? "No view" : prayerGate.Stale ? Stale(shownPrayer) : shownPrayer == null ? "Unread" : Format(shownPrayer, shownPrayerMax, lastHud.PrayerFromOrb);
             panel.Potion.Pill = engine.PotionLatched ? "Potion low" : "Potions";
-            panel.Potion.Tone = engine.PotionLatched ? PillTone.Warn : !pixels || lastHud.PotionSeconds == null ? PillTone.Example : PillTone.Ok;
-            panel.Potion.Value = !pixels ? "No view" : shownPotion == null ? (lastHud.BuffBarFound && lastHud.Buffs != null ? lastHud.Buffs.Count.ToString() + " icons" : "No buffs") : shownPotion.Value.ToString() + "s left";
+            panel.Potion.Tone = engine.PotionLatched ? PillTone.Warn : !pixels || !shownPotion.HasValue || potionDisplay.Estimated ? PillTone.Example : PillTone.Ok;
+            panel.Potion.Value = shownPotion.HasValue && !settings.Paused
+                ? TimeSpan.FromSeconds(shownPotion.Value).ToString(@"m\:ss")+(potionDisplay.Estimated?" (last read)":" left")
+                : (!pixels ? "No view" : "No potion timer");
             int left = Math.Max(0, (int)engine.AfkRemaining.TotalSeconds);
             panel.Afk.Pill = engine.AfkLatched ? "AFK soon" : "AFK timer";
             panel.Afk.Tone = engine.AfkLatched ? PillTone.Bad : PillTone.Ok;
-            panel.Afk.Value = (left / 60).ToString() + ":" + (left % 60).ToString("00") + " left";
+            panel.Afk.Value = settings.Paused ? "Paused" : selected==IntPtr.Zero ? "Waiting for client" : (left / 60).ToString() + ":" + (left % 60).ToString("00") + " left";
             panel.Idle.Invalidate();
             panel.Hp.Invalidate();
             panel.Prayer.Invalidate();

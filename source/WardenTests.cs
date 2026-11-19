@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 
@@ -32,6 +32,7 @@ namespace KavrosAfkWarden
                 LiveCapture(root);
                 Live023(root);
                 LiveRead(root);
+                Release026(root);
                 Manifest(root);
             }
             catch (Exception ex)
@@ -43,6 +44,35 @@ namespace KavrosAfkWarden
             if (failures.Count == 0) text += "PASS\r\n";
             File.WriteAllText(report, text);
             return failures.Count == 0 ? 0 : 1;
+        }
+
+        private static void Release026(string root)
+        {
+            WardenSettings legacy=SettingsText.Read("afk-seconds\t300\nvolume\t71\n");
+            Check(legacy.AfkSeconds==1500 && legacy.Volume==71,"migration replaces the old five-minute guess and preserves other settings");
+            string dir=Path.Combine(root,"verification","fixtures","live023");
+            HudReading frame=HudReader.Read(PngImage.Load(Path.Combine(dir,"live-v024-full-layout-lag.png")),new WardenSettings());
+            Check(frame.Hp==1633 && frame.HpMax==1060 && frame.Prayer==1040 && frame.PrayerMax==990,
+                "bright landscape does not hide life and prayer digits");
+            Check(BuffClock.ShownSeconds(frame.Buffs)==420,"live buff row reads seven minutes against bright ground");
+            DateTime now=DateTime.UtcNow;
+            var clock=new PotionDisplay();
+            Check(clock.Observe(17,now)==17, "observed potion");
+            Check(clock.Observe(null,now.AddSeconds(2))==15 && clock.Estimated, "temporary missing potion is marked last read");
+            Check(clock.Observe(600,now.AddSeconds(3))==14 && clock.Estimated, "longer second buff does not hide a briefly unread shorter buff");
+            Check(clock.Observe(13,now.AddSeconds(4))==13 && !clock.Estimated, "short timer confirmed again");
+            Check(clock.Observe(null,now.AddSeconds(10))==null, "unknown potion expires");
+            var drain=new ReadGate();
+            drain.Push(942,990,now);drain.Push(939,990,now.AddSeconds(1));drain.Push(936,990,now.AddSeconds(2));
+            Check(drain.Value==936 && drain.Max==990,"prayer can drain continuously between frames");
+            foreach(bool gm in new[]{false,true})foreach(bool tree in new[]{false,true})
+            {
+                var cfg=new WardenSettings{Grandmaster=gm,TreePerk=tree};var eng=new WardenEngine();
+                eng.Tick(Sample(now,true,true,false,true),cfg);
+                var early=eng.Tick(Sample(now.AddSeconds(cfg.AfkSeconds-31),true,false,false,false),cfg);
+                var due=eng.Tick(Sample(now.AddSeconds(cfg.AfkSeconds-30),true,false,false,false),cfg);
+                Check(Find(early,"afk")==null && Find(due,"afk")!=null,"warning timing for GM="+gm+" tree="+tree);
+            }
         }
 
         private static void Check(bool condition, string message)
@@ -90,7 +120,8 @@ namespace KavrosAfkWarden
             settings.HpThreshold = 1500;
             settings.PrayerPercent = true;
             settings.PrayerThreshold = 12;
-            settings.AfkSeconds = 600;
+            settings.Grandmaster = true;
+            settings.TreePerk = true;
             settings.AfkLeadSeconds = 45;
             settings.SoundMaster = false;
             settings.NotifyMaster = true;
@@ -128,7 +159,15 @@ namespace KavrosAfkWarden
             Check(!loaded.PrayerSound && !loaded.PrayerNotify && loaded.AfkSound && loaded.AfkNotify, "prayer and AFK channels round-trip");
             Check(loaded.CooldownSeconds == 7 && loaded.BannerSeconds == 11 && loaded.Paused && !loaded.PanelTopMost, "cooldown, banner and panel flags round-trip");
             Check(loaded.PanelX == 40 && loaded.PanelY == 80 && loaded.HasHpPin, "panel position and hitpoint pin round-trip");
-            Check(loaded.AfkSeconds == 600 && loaded.AfkLeadSeconds == 45, "AFK timer settings round-trip");
+            WardenSettings rates = new WardenSettings();
+            Check(rates.AfkSeconds == 1500, "normal AFK rate");
+            rates.TreePerk = true;
+            Check(rates.AfkSeconds == 2400, "tree-only AFK rate");
+            rates.Grandmaster = true;
+            Check(rates.AfkSeconds == 3900, "grandmaster plus tree AFK rate");
+            rates.TreePerk = false;
+            Check(rates.AfkSeconds == 3000, "grandmaster-only AFK rate");
+            Check(loaded.Grandmaster && loaded.TreePerk && loaded.AfkSeconds == 3900 && loaded.AfkLeadSeconds == 45, "AFK timer settings round-trip");
             Check(!loaded.PotionEnabled && loaded.PotionSeconds == 22 && !loaded.PotionSound && loaded.PotionNotify && loaded.HasBuffPin, "potion alert and buff pin round-trip");
             string path = Path.Combine(Path.GetTempPath(), "afk-warden-settings-" + Guid.NewGuid().ToString("N") + ".txt");
             SettingsText.Save(path, settings);
@@ -190,7 +229,6 @@ namespace KavrosAfkWarden
             settings.HpEnabled = false;
             settings.PrayerEnabled = false;
             settings.IdleSeconds = 12;
-            settings.AfkSeconds = 300;
             settings.AfkLeadSeconds = 30;
             settings.CooldownSeconds = 20;
             DateTime t = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -214,7 +252,6 @@ namespace KavrosAfkWarden
             WardenEngine engine = new WardenEngine();
             WardenSettings settings = new WardenSettings();
             settings.IdleSeconds = 12;
-            settings.AfkSeconds = 300;
             settings.AfkLeadSeconds = 30;
             settings.CooldownSeconds = 0;
             settings.HpEnabled = true;
@@ -229,7 +266,7 @@ namespace KavrosAfkWarden
             start.Hp = 90;
             start.HpMax = 100;
             engine.Tick(start, settings);
-            WatchSample hidden = Sample(t.AddSeconds(270), true, false, false, false);
+            WatchSample hidden = Sample(t.AddSeconds(settings.AfkSeconds - 30), true, false, false, false);
             hidden.Hp = 10;
             hidden.HpMax = 100;
             List<AlertEvent> events = engine.Tick(hidden, settings);
@@ -237,7 +274,7 @@ namespace KavrosAfkWarden
             Check(afk != null && afk.Sound && !afk.Notify, "minimized client still warns about the AFK timer, and only on the channels that are on");
             Check(Find(events, "idle") == null, "time the window was unreadable is not counted as idle");
             Check(Find(events, "hp") == null && !engine.HpLatched, "a hidden client does not invent a low-hitpoint reading");
-            WatchSample seen = Sample(t.AddSeconds(271), true, true, true, true);
+            WatchSample seen = Sample(t.AddSeconds(settings.AfkSeconds - 29), true, true, true, true);
             seen.Hp = 10;
             seen.HpMax = 100;
             List<AlertEvent> hp = engine.Tick(seen, settings);
@@ -273,7 +310,7 @@ namespace KavrosAfkWarden
             Check(InputActivity.IsActivity(false, true, true, false, true, false), "a click in the focused game resets idle");
             Check(!InputActivity.IsActivity(true, false, true, true, true, true), "a minimized game receives none of this input");
             Check(!InputActivity.IsActivity(false, false, false, true, true, false), "clicks on the window that covers the game do not count");
-            Check(CapturePlan.WantFull(false, DateTime.UtcNow, DateTime.UtcNow.AddSeconds(12)), "a missing lock forces a full search");
+            Check(!CapturePlan.WantFull(false, DateTime.UtcNow, DateTime.UtcNow.AddSeconds(3)), "unread HUD backs off between full-frame attempts");
             Check(!CapturePlan.WantFull(true, DateTime.UtcNow, DateTime.UtcNow.AddSeconds(12)), "a locked slot waits out the slow full search");
             Check(CapturePlan.SampleMilliseconds <= 500 && CapturePlan.FullIntervalSeconds >= 10, "steady capture stays at or under 2 Hz");
         }
@@ -751,7 +788,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.5" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.6" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -762,10 +799,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.5\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.6\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.5.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.6.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

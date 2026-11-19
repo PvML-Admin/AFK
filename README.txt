@@ -1,4 +1,4 @@
-KAVROS AFK WARDEN v0.2.5
+KAVROS AFK WARDEN v0.2.6
 =========================
 
 Close the previous copy with Exit. Extract the WHOLE ZIP into a new folder,
@@ -40,7 +40,7 @@ Idle: on, 12 seconds without animation or movement.
 Hitpoints: on, below 30 percent (turn Percent off for an absolute number).
 Prayer: on, below 20 percent.
 Potions: on, below 15 seconds left on any buff-bar timer.
-AFK teleport: on, 300 second timer, warn 30 seconds before.
+AFK teleport: on, 25 minutes normally, warn 30 seconds before.
 Cooldown: 20 seconds. Popup: 8 seconds.
 The panel follows the chosen client and hides only while that client is minimized. The alert popup stays on top.
 
@@ -73,13 +73,7 @@ animation counts as movement. Moving the mouse does not. Time the window
 cannot be seen is not counted as stillness.
 
 AFK TIMER
-The client does not draw this countdown. RS3's hidden logout base is 5
-minutes, and public Kavros notes do not publish the AFK-area delay. The
-default is 300 seconds, configurable from 60 to 1800. The clock starts when
-Warden first sees the client. It resets when the cursor moves over the game,
-when a mouse button goes down over the game, or when a key is held while the
-game is focused. Typing in another app does not reset it. Animation does not
-reset it. Pause, or the game closing, freezes it.
+The countdown starts when Warden attaches to the client and resets on detected game clicks or keys. The normal timeout is 25 minutes. Enable Grandmaster for 50 minutes, the tree perk for 40 minutes, or both for 65 minutes. A client already idle before Warden opens can teleport sooner than the displayed estimate.
 
 REBUILD
 powershell -ExecutionPolicy Bypass -File source\build.ps1
