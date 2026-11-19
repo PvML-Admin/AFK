@@ -181,7 +181,7 @@ namespace KavrosAfkWarden
 
         private string Describe()
         {
-            if (Route == CaptureRoute.Minimized) return "Kavros is minimized. Hitpoints, prayer and idle need the window restored. The AFK timer is still running.";
+            if (Route == CaptureRoute.Minimized) return "Kavros is minimized. Hitpoints, prayer, potions and idle need the window restored. The AFK timer is still running.";
             if (Route == CaptureRoute.Covered) return "Kavros is covered and window capture is unavailable. Uncover the client to read hitpoints. The AFK timer is still running.";
             if (Route == CaptureRoute.WindowSurface) return Focused ? "Watching Kavros, including while other windows cover it." : "Watching Kavros in the background.";
             if (Route == CaptureRoute.Screen) return Focused ? "Watching the visible Kavros window." : "Watching Kavros. The window is visible but not focused.";

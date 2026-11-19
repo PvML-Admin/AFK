@@ -32,6 +32,10 @@ namespace KavrosAfkWarden
             Line(text, "prayer-notify", settings.PrayerNotify);
             Line(text, "afk-sound", settings.AfkSound);
             Line(text, "afk-notify", settings.AfkNotify);
+            Line(text, "potion-enabled", settings.PotionEnabled);
+            Line(text, "potion-seconds", settings.PotionSeconds);
+            Line(text, "potion-sound", settings.PotionSound);
+            Line(text, "potion-notify", settings.PotionNotify);
             Line(text, "cooldown", settings.CooldownSeconds);
             Line(text, "banner-seconds", settings.BannerSeconds);
             Line(text, "paused", settings.Paused);
@@ -40,6 +44,7 @@ namespace KavrosAfkWarden
             text.Append("panel\t").Append(settings.PanelX.ToString(CultureInfo.InvariantCulture)).Append('\t').Append(settings.PanelY.ToString(CultureInfo.InvariantCulture)).Append("\r\n");
             Pin(text, "hp-pin", settings.HpPinX, settings.HpPinY, settings.HpPinW, settings.HpPinH);
             Pin(text, "prayer-pin", settings.PrayerPinX, settings.PrayerPinY, settings.PrayerPinW, settings.PrayerPinH);
+            Pin(text, "buff-pin", settings.BuffPinX, settings.BuffPinY, settings.BuffPinW, settings.BuffPinH);
             return text.ToString();
         }
 
@@ -75,6 +80,10 @@ namespace KavrosAfkWarden
                 else if (parts[0] == "prayer-notify" && bool.TryParse(parts[1], out flag)) settings.PrayerNotify = flag;
                 else if (parts[0] == "afk-sound" && bool.TryParse(parts[1], out flag)) settings.AfkSound = flag;
                 else if (parts[0] == "afk-notify" && bool.TryParse(parts[1], out flag)) settings.AfkNotify = flag;
+                else if (parts[0] == "potion-enabled" && bool.TryParse(parts[1], out flag)) settings.PotionEnabled = flag;
+                else if (parts[0] == "potion-seconds" && int.TryParse(parts[1], out number)) settings.PotionSeconds = number;
+                else if (parts[0] == "potion-sound" && bool.TryParse(parts[1], out flag)) settings.PotionSound = flag;
+                else if (parts[0] == "potion-notify" && bool.TryParse(parts[1], out flag)) settings.PotionNotify = flag;
                 else if (parts[0] == "cooldown" && int.TryParse(parts[1], out number)) settings.CooldownSeconds = number;
                 else if (parts[0] == "banner-seconds" && int.TryParse(parts[1], out number)) settings.BannerSeconds = number;
                 else if (parts[0] == "paused" && bool.TryParse(parts[1], out flag)) settings.Paused = flag;
@@ -89,8 +98,9 @@ namespace KavrosAfkWarden
                         settings.PanelY = y;
                     }
                 }
-                else if (parts[0] == "hp-pin") ReadPin(parts, settings, true);
-                else if (parts[0] == "prayer-pin") ReadPin(parts, settings, false);
+                else if (parts[0] == "hp-pin") ReadPin(parts, settings, 0);
+                else if (parts[0] == "prayer-pin") ReadPin(parts, settings, 1);
+                else if (parts[0] == "buff-pin") ReadPin(parts, settings, 2);
             }
             settings.Clamp();
             return settings;
@@ -123,7 +133,7 @@ namespace KavrosAfkWarden
             text.Append(key).Append('\t').Append(x.ToString(CultureInfo.InvariantCulture)).Append('\t').Append(y.ToString(CultureInfo.InvariantCulture)).Append('\t').Append(w.ToString(CultureInfo.InvariantCulture)).Append('\t').Append(h.ToString(CultureInfo.InvariantCulture)).Append("\r\n");
         }
 
-        private static void ReadPin(string[] parts, WardenSettings settings, bool hp)
+        private static void ReadPin(string[] parts, WardenSettings settings, int which)
         {
             if (parts.Length < 5) return;
             double x, y, w, h;
@@ -131,8 +141,9 @@ namespace KavrosAfkWarden
             if (!double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out y)) return;
             if (!double.TryParse(parts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out w)) return;
             if (!double.TryParse(parts[4], NumberStyles.Float, CultureInfo.InvariantCulture, out h)) return;
-            if (hp) { settings.HpPinX = x; settings.HpPinY = y; settings.HpPinW = w; settings.HpPinH = h; }
-            else { settings.PrayerPinX = x; settings.PrayerPinY = y; settings.PrayerPinW = w; settings.PrayerPinH = h; }
+            if (which == 0) { settings.HpPinX = x; settings.HpPinY = y; settings.HpPinW = w; settings.HpPinH = h; }
+            else if (which == 1) { settings.PrayerPinX = x; settings.PrayerPinY = y; settings.PrayerPinW = w; settings.PrayerPinH = h; }
+            else { settings.BuffPinX = x; settings.BuffPinY = y; settings.BuffPinW = w; settings.BuffPinH = h; }
         }
     }
 }

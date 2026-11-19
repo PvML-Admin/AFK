@@ -13,6 +13,9 @@ namespace KavrosAfkWarden
         public int? PrayerMax;
         public bool PrayerFromOrb;
         public string PrayerHow = "";
+        public int? PotionSeconds;
+        public int PotionCount;
+        public string PotionHow = "";
     }
 
     internal struct InkBlob
@@ -109,7 +112,176 @@ namespace KavrosAfkWarden
                 Apply(reading, false, number, "pin");
             }
             else ReadAuto(image, false, reading);
+            ReadPotions(image, settings, reading);
             return reading;
+        }
+
+        private static void ReadPotions(ImageBuffer image, WardenSettings settings, HudReading reading)
+        {
+            IntRect region;
+            string how;
+            if (settings.HasBuffPin)
+            {
+                region = Pin(image, settings.BuffPinX, settings.BuffPinY, settings.BuffPinW, settings.BuffPinH);
+                how = "pin";
+            }
+            else
+            {
+                // The buff bar sits along the top. The life and prayer numbers
+                // are in the bottom quarter, so they are not potion timers.
+                int height = Math.Max(24, (int)(image.Height * 0.22));
+                region = new IntRect(0, 0, image.Width, height);
+                how = "bar";
+            }
+            List<int> timers = ReadTimers(image, region);
+            if (timers.Count == 0)
+            {
+                reading.PotionHow = "none";
+                return;
+            }
+            int min = timers[0];
+            for (int i = 1; i < timers.Count; i++) if (timers[i] < min) min = timers[i];
+            reading.PotionSeconds = min;
+            reading.PotionCount = timers.Count;
+            reading.PotionHow = how;
+        }
+
+        // Each buff icon carries a small countdown. Accepted shapes are a plain
+        // number of seconds (15, 65) or minutes and seconds split by a colon
+        // or a letter (1:05, and 1m 05s when the letters fall between the digits).
+        private static List<int> ReadTimers(ImageBuffer image, IntRect region)
+        {
+            List<int> timers = new List<int>();
+            region = Clamp(image, region.X, region.Y, region.Width, region.Height);
+            if (region.Width < 8 || region.Height < 8) return timers;
+            bool[] mask = Mask(image, region, TimerInk);
+            List<Blob> blobs = Components(mask, region.Width, region.Height);
+            List<InkBlob> glyphs = new List<InkBlob>();
+            for (int i = 0; i < blobs.Count; i++)
+            {
+                Blob blob = blobs[i];
+                if (blob.Height < 6 || blob.Height > 32 || blob.Width > 48 || blob.Area < 8) continue;
+                int digit = DigitFont.Match(Sample(mask, region.Width, blob));
+                bool separator = digit < 0 && blob.Width <= blob.Height * 1.6;
+                if (digit < 0 && !separator) continue;
+                InkBlob inkBlob = new InkBlob();
+                inkBlob.Left = blob.Left;
+                inkBlob.Top = blob.Top;
+                inkBlob.Width = blob.Width;
+                inkBlob.Height = blob.Height;
+                inkBlob.Digit = digit;
+                inkBlob.Slash = separator;
+                glyphs.Add(inkBlob);
+            }
+            if (glyphs.Count == 0) return timers;
+            glyphs.Sort(delegate(InkBlob a, InkBlob b)
+            {
+                if (a.Top != b.Top) return a.Top.CompareTo(b.Top);
+                return a.Left.CompareTo(b.Left);
+            });
+            int index = 0;
+            while (index < glyphs.Count)
+            {
+                int bottom = glyphs[index].Top + glyphs[index].Height;
+                int end = index + 1;
+                while (end < glyphs.Count && glyphs[end].Top < bottom - 1)
+                {
+                    int nextBottom = glyphs[end].Top + glyphs[end].Height;
+                    if (nextBottom > bottom) bottom = nextBottom;
+                    end++;
+                }
+                List<InkBlob> line = new List<InkBlob>();
+                int lineHeight = 1;
+                for (int i = index; i < end; i++)
+                {
+                    line.Add(glyphs[i]);
+                    if (glyphs[i].Height > lineHeight) lineHeight = glyphs[i].Height;
+                }
+                line.Sort(delegate(InkBlob a, InkBlob b) { return a.Left.CompareTo(b.Left); });
+                ParseTimerLine(line, lineHeight, timers);
+                index = end;
+            }
+            return timers;
+        }
+
+        private static void ParseTimerLine(List<InkBlob> line, int lineHeight, List<int> timers)
+        {
+            List<string> parts = new List<string>();
+            string part = "";
+            int previousRight = -1000;
+            bool started = false;
+            bool sawSeparator = false;
+            for (int i = 0; i < line.Count; i++)
+            {
+                InkBlob glyph = line[i];
+                int gap = glyph.Left - previousRight;
+                bool nextTimer = started && !glyph.Slash && gap > lineHeight;
+                bool nextPart = glyph.Slash || (part.Length > 0 && gap > lineHeight / 2);
+                if (nextTimer)
+                {
+                    FlushTimer(parts, part, sawSeparator, timers);
+                    parts.Clear();
+                    part = "";
+                    sawSeparator = false;
+                }
+                else if (nextPart)
+                {
+                    if (part.Length > 0) parts.Add(part);
+                    part = "";
+                    if (glyph.Slash)
+                    {
+                        sawSeparator = true;
+                        previousRight = glyph.Left + glyph.Width;
+                        started = true;
+                        continue;
+                    }
+                }
+                if (!glyph.Slash) part += glyph.Digit.ToString();
+                previousRight = glyph.Left + glyph.Width;
+                started = true;
+            }
+            FlushTimer(parts, part, sawSeparator, timers);
+        }
+
+        private static void FlushTimer(List<string> parts, string part, bool sawSeparator, List<int> timers)
+        {
+            if (part.Length > 0) parts.Add(part);
+            // "1m" or "15s" has a letter and only one number. Skipping it avoids
+            // reading the minute as one second. "1m 05s" still has two numbers.
+            if (sawSeparator && parts.Count < 2) return;
+            int seconds;
+            if (TryTimer(parts, out seconds)) timers.Add(seconds);
+        }
+
+        private static bool TryTimer(List<string> parts, out int seconds)
+        {
+            seconds = 0;
+            if (parts.Count == 1)
+            {
+                int value;
+                if (parts[0].Length == 0 || parts[0].Length > 4) return false;
+                if (!int.TryParse(parts[0], out value)) return false;
+                if (value < 0 || value > 3600) return false;
+                seconds = value;
+                return true;
+            }
+            if (parts.Count == 2)
+            {
+                int minutes, secs;
+                if (parts[0].Length == 0 || parts[0].Length > 3 || parts[1].Length == 0 || parts[1].Length > 2) return false;
+                if (!int.TryParse(parts[0], out minutes) || !int.TryParse(parts[1], out secs)) return false;
+                if (secs >= 60 || minutes > 180) return false;
+                seconds = minutes * 60 + secs;
+                return true;
+            }
+            return false;
+        }
+
+        private static bool TimerInk(int c)
+        {
+            if (WhiteInk(c)) return true;
+            int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
+            return r >= 170 && g >= 140 && b <= 130 && r > b + 30 && g > b + 10;
         }
 
         private static string ReadAuto(ImageBuffer image, bool life, HudReading reading)

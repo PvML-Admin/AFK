@@ -28,6 +28,7 @@ namespace KavrosAfkWarden
                 Motion();
                 Digits();
                 Hud();
+                Potions();
                 Manifest(root);
             }
             catch (Exception ex)
@@ -71,6 +72,10 @@ namespace KavrosAfkWarden
             settings.AfkNotify = false;
             Check(!settings.AllowsSound("afk") && !settings.AllowsNotify("afk"), "an alert can silence both of its channels");
             Check(settings.AllowsSound("prayer") && settings.AllowsNotify("prayer"), "other alerts keep their channels");
+            Check(settings.AllowsSound("potion") && settings.AllowsNotify("potion") && settings.PotionSeconds == 15, "potion alert defaults to 15 seconds with both channels on");
+            settings.PotionSound = false;
+            settings.PotionNotify = false;
+            Check(!settings.AllowsSound("potion") && !settings.AllowsNotify("potion"), "potion sound and notification can both be off");
         }
 
         private static void Persistence()
@@ -104,6 +109,14 @@ namespace KavrosAfkWarden
             settings.HpPinY = 0.2;
             settings.HpPinW = 0.3;
             settings.HpPinH = 0.05;
+            settings.PotionEnabled = false;
+            settings.PotionSeconds = 22;
+            settings.PotionSound = false;
+            settings.PotionNotify = true;
+            settings.BuffPinX = 0.05;
+            settings.BuffPinY = 0.02;
+            settings.BuffPinW = 0.4;
+            settings.BuffPinH = 0.08;
             string text = SettingsText.Write(settings);
             WardenSettings loaded = SettingsText.Read(text);
             Check(loaded.IdleSeconds == 40 && loaded.HpThreshold == 1500 && !loaded.HpPercent, "numeric settings round-trip");
@@ -113,6 +126,7 @@ namespace KavrosAfkWarden
             Check(loaded.CooldownSeconds == 7 && loaded.BannerSeconds == 11 && loaded.Paused && !loaded.PanelTopMost, "cooldown, banner and panel flags round-trip");
             Check(loaded.PanelX == 40 && loaded.PanelY == 80 && loaded.HasHpPin, "panel position and hitpoint pin round-trip");
             Check(loaded.AfkSeconds == 600 && loaded.AfkLeadSeconds == 45, "AFK timer settings round-trip");
+            Check(!loaded.PotionEnabled && loaded.PotionSeconds == 22 && !loaded.PotionSound && loaded.PotionNotify && loaded.HasBuffPin, "potion alert and buff pin round-trip");
             string path = Path.Combine(Path.GetTempPath(), "afk-warden-settings-" + Guid.NewGuid().ToString("N") + ".txt");
             SettingsText.Save(path, settings);
             WardenSettings fromDisk = SettingsText.Load(path);
@@ -380,6 +394,88 @@ namespace KavrosAfkWarden
             pin.HpPinH = 1;
             HudReading pinnedReading = HudReader.Read(pinned, pin);
             Check(pinnedReading.Hp == 42 && pinnedReading.HpHow == "pin", "a pinned rectangle overrides the automatic search");
+        }
+
+        private static void Potions()
+        {
+            WardenEngine engine = new WardenEngine();
+            WardenSettings settings = new WardenSettings();
+            settings.IdleEnabled = false;
+            settings.HpEnabled = false;
+            settings.PrayerEnabled = false;
+            settings.AfkEnabled = false;
+            settings.PotionSeconds = 15;
+            settings.CooldownSeconds = 20;
+            DateTime t = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            WatchSample high = Sample(t, true, true, true, false);
+            high.PotionSeconds = 40;
+            Check(Find(engine.Tick(high, settings), "potion") == null && !engine.PotionLatched, "40 seconds left does not fire a 15 second potion alert");
+            WatchSample low = Sample(t.AddSeconds(1), true, true, true, false);
+            low.PotionSeconds = 10;
+            List<AlertEvent> fired = engine.Tick(low, settings);
+            AlertEvent potion = Find(fired, "potion");
+            Check(potion != null && potion.Sound && potion.Notify && engine.PotionLatched, "10 seconds left fires the potion alert on both channels");
+            low.Time = t.AddSeconds(2);
+            Check(Find(engine.Tick(low, settings), "potion") == null && engine.PotionLatched, "the potion alert does not refire while the timer stays low");
+            WatchSample missed = Sample(t.AddSeconds(3), true, true, true, false);
+            Check(Find(engine.Tick(missed, settings), "potion") == null && engine.PotionLatched, "a missed frame is not a potion recovery");
+            WatchSample margin = Sample(t.AddSeconds(4), true, true, true, false);
+            margin.PotionSeconds = 16;
+            Check(Find(engine.Tick(margin, settings), "potion") == null && engine.PotionLatched, "16 seconds is still inside the recovery margin");
+            WatchSample recovered = Sample(t.AddSeconds(5), true, true, true, false);
+            recovered.PotionSeconds = 30;
+            Check(Find(engine.Tick(recovered, settings), "potion") == null && !engine.PotionLatched, "30 seconds recovers the potion alert");
+            low.Time = t.AddSeconds(10);
+            Check(Find(engine.Tick(low, settings), "potion") == null, "potion cooldown blocks the return");
+            low.Time = t.AddSeconds(26);
+            Check(Find(engine.Tick(low, settings), "potion") != null, "the potion alert fires again after cooldown");
+            WatchSample gone = Sample(t.AddSeconds(27), true, true, true, false);
+            gone.PotionClear = true;
+            Check(Find(engine.Tick(gone, settings), "potion") == null && !engine.PotionLatched, "no buff timers means the potion is no longer running out");
+            settings.PotionSound = false;
+            low.Time = t.AddSeconds(50);
+            AlertEvent quiet = Find(engine.Tick(low, settings), "potion");
+            Check(quiet != null && !quiet.Sound && quiet.Notify, "potion sound can be off while its notification stays on");
+
+            int white = ImageBuffer.Pack(236, 236, 236);
+            int gold = ImageBuffer.Pack(212, 176, 72);
+            ImageBuffer image = ImageBuffer.Blank(400, 400, ImageBuffer.Pack(10, 16, 22));
+            DrawGlyph(image, 1, 20, 16, 3, white);
+            DrawGlyph(image, 5, 37, 16, 3, white);
+            DrawGlyph(image, 4, 120, 16, 3, white);
+            DrawGlyph(image, 0, 137, 16, 3, white);
+            DrawGlyph(image, 1, 220, 16, 3, gold);
+            image.Fill(240, 16, 4, 21, gold);
+            DrawGlyph(image, 0, 250, 16, 3, gold);
+            DrawGlyph(image, 5, 267, 16, 3, gold);
+            DrawGlyph(image, 6, 40, 300, 3, white);
+            DrawGlyph(image, 5, 57, 300, 3, white);
+            WardenSettings auto = new WardenSettings();
+            HudReading reading = HudReader.Read(image, auto);
+            Check(reading.PotionSeconds == 15 && reading.PotionCount == 3 && reading.PotionHow == "bar", "the top buff bar keeps the shortest timer, got " + (reading.PotionSeconds == null ? "none" : reading.PotionSeconds.Value.ToString()) + " count " + reading.PotionCount.ToString() + " " + reading.PotionHow);
+            Check(reading.Hp == null, "a seconds readout in the buff bar is not treated as hitpoints");
+
+            ImageBuffer pinned = ImageBuffer.Blank(300, 200, ImageBuffer.Pack(10, 16, 22));
+            DrawGlyph(pinned, 1, 30, 80, 3, white);
+            DrawGlyph(pinned, 2, 47, 80, 3, white);
+            WardenSettings pin = new WardenSettings();
+            pin.BuffPinX = 0.05;
+            pin.BuffPinY = 0.3;
+            pin.BuffPinW = 0.4;
+            pin.BuffPinH = 0.3;
+            HudReading pinnedReading = HudReader.Read(pinned, pin);
+            Check(pinnedReading.PotionSeconds == 12 && pinnedReading.PotionHow == "pin", "a pinned buff bar reads the timer inside it, got " + (pinnedReading.PotionSeconds == null ? "none" : pinnedReading.PotionSeconds.Value.ToString()));
+
+            ImageBuffer plain = ImageBuffer.Blank(200, 200, ImageBuffer.Pack(10, 16, 22));
+            DrawGlyph(plain, 6, 16, 8, 3, white);
+            DrawGlyph(plain, 5, 33, 8, 3, white);
+            HudReading seconds = HudReader.Read(plain, new WardenSettings());
+            Check(seconds.PotionSeconds == 65 && seconds.PotionHow == "bar", "a plain number of seconds is 65, not minutes, got " + (seconds.PotionSeconds == null ? "none" : seconds.PotionSeconds.Value.ToString()));
+            ImageBuffer minutes = ImageBuffer.Blank(200, 200, ImageBuffer.Pack(10, 16, 22));
+            DrawGlyph(minutes, 1, 16, 8, 3, white);
+            minutes.Fill(40, 8, 4, 21, white);
+            HudReading skipped = HudReader.Read(minutes, new WardenSettings());
+            Check(skipped.PotionSeconds == null && skipped.PotionCount == 0, "a lone 1m is not read as one second");
         }
 
         private static void Manifest(string root)

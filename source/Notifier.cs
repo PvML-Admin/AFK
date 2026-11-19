@@ -27,7 +27,7 @@ namespace KavrosAfkWarden
         private static byte[] Build(string kind)
         {
             int rate = 22050;
-            double[] tones = kind == "hp" ? new double[] { 880, 660 } : kind == "afk" ? new double[] { 988, 740 } : kind == "prayer" ? new double[] { 660, 520 } : new double[] { 520, 780 };
+            double[] tones = kind == "hp" ? new double[] { 880, 660 } : kind == "afk" ? new double[] { 988, 740 } : kind == "prayer" ? new double[] { 660, 520 } : kind == "potion" ? new double[] { 740, 520 } : new double[] { 520, 780 };
             int samples = (int)(rate * 0.42);
             byte[] data = new byte[samples * 2];
             for (int i = 0; i < samples; i++)
@@ -134,6 +134,7 @@ namespace KavrosAfkWarden
             if (alert.Kind == "hp") { pill = "Low HP"; tone = PillTone.Bad; }
             else if (alert.Kind == "prayer") { pill = "Low prayer"; tone = PillTone.Warn; }
             else if (alert.Kind == "afk") { pill = "AFK teleport"; tone = PillTone.Bad; }
+            else if (alert.Kind == "potion") { pill = "Potion"; tone = PillTone.Warn; }
             else { pill = "Idle"; tone = PillTone.Warn; }
             Invalidate();
             System.Windows.Forms.Screen screen = System.Windows.Forms.Screen.FromPoint(System.Windows.Forms.Cursor.Position);

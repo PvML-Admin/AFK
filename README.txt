@@ -39,6 +39,7 @@ DEFAULTS
 Idle: on, 12 seconds without animation or movement.
 Hitpoints: on, below 30 percent (turn Percent off for an absolute number).
 Prayer: on, below 20 percent.
+Potions: on, below 15 seconds left on any buff-bar timer.
 AFK teleport: on, 300 second timer, warn 30 seconds before.
 Cooldown: 20 seconds. Popup: 8 seconds.
 Keep panel on top: on. The alert popup is always on top either way.
@@ -57,7 +58,11 @@ read until you restore it. The AFK timer does not need those pixels, so it
 keeps running and can still notify you.
 A number is used after two similar frames. A missing frame is not a recovery.
 Pin hitpoints or Pin prayer if the automatic search is looking at the wrong
-readout. Clear pins returns to the automatic search.
+readout. Pin buff bar if the potion timers are not along the top. Clear
+pins returns to the automatic search.
+A buff timer is a plain number of seconds (65 means 65 seconds, not 1:05)
+or minutes and seconds with a colon (1:05). "1m 05s" is read when the
+letters sit between the two numbers. "1m" or "15s" alone is skipped.
 Modern HUD: green life bar and blue prayer bar along the bottom, usually
 current/max. Legacy orbs by the minimap are a fill, read as a percent.
 Percent mode is the default because life totals vary so widely. An orb

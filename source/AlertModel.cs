@@ -26,6 +26,10 @@ namespace KavrosAfkWarden
         public bool PrayerNotify = true;
         public bool AfkSound = true;
         public bool AfkNotify = true;
+        public bool PotionEnabled = true;
+        public int PotionSeconds = 15;
+        public bool PotionSound = true;
+        public bool PotionNotify = true;
         public int CooldownSeconds = 20;
         public int BannerSeconds = 8;
         public bool Paused;
@@ -35,9 +39,11 @@ namespace KavrosAfkWarden
         public int PanelY = int.MinValue;
         public double HpPinX = -1, HpPinY, HpPinW, HpPinH;
         public double PrayerPinX = -1, PrayerPinY, PrayerPinW, PrayerPinH;
+        public double BuffPinX = -1, BuffPinY, BuffPinW, BuffPinH;
 
         public bool HasHpPin { get { return HpPinW > 0.005 && HpPinH > 0.005; } }
         public bool HasPrayerPin { get { return PrayerPinW > 0.005 && PrayerPinH > 0.005; } }
+        public bool HasBuffPin { get { return BuffPinW > 0.005 && BuffPinH > 0.005; } }
 
         public void Clamp()
         {
@@ -46,6 +52,7 @@ namespace KavrosAfkWarden
             PrayerThreshold = ClampInt(PrayerThreshold, 1, PrayerPercent ? 99 : 99999);
             AfkSeconds = ClampInt(AfkSeconds, 60, 1800);
             AfkLeadSeconds = ClampInt(AfkLeadSeconds, 5, AfkSeconds - 5);
+            PotionSeconds = ClampInt(PotionSeconds, 1, 600);
             CooldownSeconds = ClampInt(CooldownSeconds, 0, 600);
             BannerSeconds = ClampInt(BannerSeconds, 2, 120);
         }
@@ -57,6 +64,7 @@ namespace KavrosAfkWarden
             if (kind == "hp") return HpSound;
             if (kind == "prayer") return PrayerSound;
             if (kind == "afk") return AfkSound;
+            if (kind == "potion") return PotionSound;
             return false;
         }
 
@@ -67,6 +75,7 @@ namespace KavrosAfkWarden
             if (kind == "hp") return HpNotify;
             if (kind == "prayer") return PrayerNotify;
             if (kind == "afk") return AfkNotify;
+            if (kind == "potion") return PotionNotify;
             return false;
         }
 
@@ -176,6 +185,44 @@ namespace KavrosAfkWarden
         }
     }
 
+    // Same gate as hitpoints: fire once while any buff timer stays under the
+    // threshold, and do not treat a missed frame as the buff having recovered.
+    public sealed class PotionWatch
+    {
+        private readonly AlertGate gate = new AlertGate();
+        private bool have;
+        public bool Low;
+
+        public bool Tick(int? seconds, bool clear, bool enabled, int threshold, DateTime now, TimeSpan cooldown)
+        {
+            if (!enabled)
+            {
+                have = false;
+                Low = false;
+                gate.ShouldFire(false, now, cooldown);
+                return false;
+            }
+            if (clear)
+            {
+                Low = false;
+                have = true;
+                return gate.ShouldFire(false, now, cooldown);
+            }
+            if (seconds == null) return false;
+            if (!have)
+            {
+                Low = seconds.Value < threshold;
+                have = true;
+            }
+            else if (Low)
+            {
+                if (seconds.Value >= threshold + 3) Low = false;
+            }
+            else if (seconds.Value < threshold) Low = true;
+            return gate.ShouldFire(Low, now, cooldown);
+        }
+    }
+
     public sealed class StillnessClock
     {
         private DateTime? since;
@@ -279,6 +326,10 @@ namespace KavrosAfkWarden
         public int? HpMax;
         public int? Prayer;
         public int? PrayerMax;
+        public int? PotionSeconds;
+        // True when the buff bar was scanned and no timer was there. A null
+        // PotionSeconds without this flag is a missed frame, not a recovery.
+        public bool PotionClear;
     }
 
     public sealed class AlertEvent
@@ -298,6 +349,7 @@ namespace KavrosAfkWarden
         private readonly AlertGate afkGate = new AlertGate();
         private readonly LevelWatch hp = new LevelWatch();
         private readonly LevelWatch prayer = new LevelWatch();
+        private readonly PotionWatch potion = new PotionWatch();
 
         public TimeSpan StillFor;
         public TimeSpan AfkRemaining = TimeSpan.FromMinutes(5);
@@ -305,6 +357,7 @@ namespace KavrosAfkWarden
         public bool HpLatched;
         public bool PrayerLatched;
         public bool AfkLatched;
+        public bool PotionLatched;
 
         public List<AlertEvent> Tick(WatchSample sample, WardenSettings settings)
         {
@@ -328,6 +381,7 @@ namespace KavrosAfkWarden
                 afkGate.ShouldFire(false, sample.Time, TimeSpan.Zero);
                 hp.Tick(null, null, settings.HpPercent, settings.HpThreshold, false, sample.Time, TimeSpan.Zero);
                 prayer.Tick(null, null, settings.PrayerPercent, settings.PrayerThreshold, false, sample.Time, TimeSpan.Zero);
+                potion.Tick(null, true, false, settings.PotionSeconds, sample.Time, TimeSpan.Zero);
                 return events;
             }
 
@@ -346,6 +400,12 @@ namespace KavrosAfkWarden
             if (prayer.Tick(prayerNow, sample.PrayerMax, settings.PrayerPercent, settings.PrayerThreshold, settings.PrayerEnabled, sample.Time, cooldown))
                 events.Add(Make(settings, "prayer", "Prayer is low", FormatLevel("Prayer", sample.Prayer, sample.PrayerMax, settings.PrayerPercent)));
             PrayerLatched = prayer.Low;
+
+            int? potionNow = see ? sample.PotionSeconds : (int?)null;
+            bool potionClear = see && sample.PotionClear;
+            if (potion.Tick(potionNow, potionClear, settings.PotionEnabled, settings.PotionSeconds, sample.Time, cooldown))
+                events.Add(Make(settings, "potion", "A potion is running out", "About " + (potionNow == null ? 0 : potionNow.Value).ToString() + "s left on a buff timer."));
+            PotionLatched = potion.Low;
 
             bool afkDue = settings.AfkEnabled && AfkRemaining <= TimeSpan.FromSeconds(settings.AfkLeadSeconds);
             AfkLatched = afkDue;
