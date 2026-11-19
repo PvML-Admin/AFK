@@ -26,6 +26,7 @@ namespace KavrosAfkWarden
         public IntRect PrayerBar;
         public string LifeTrace = "";
         public string PrayerTrace = "";
+        public string BuffTrace = "";
         public List<BuffIcon> Buffs = new List<BuffIcon>();
         public List<IntRect> BuffRects = new List<IntRect>();
     }
@@ -210,11 +211,24 @@ namespace KavrosAfkWarden
                         yellow = between;
                     }
                 }
-            if (!pair) return;
+            if (!pair)
+            {
+                ReadLoneBar(image, reading, purples, false);
+                return;
+            }
             reading.StripFound = true;
             reading.StripY = red.Y;
-            IntRect lifeText = Above(image, red);
-            IntRect prayerText = Above(image, purple);
+            // The coloured rectangle is only the fill. It shrinks as the bar
+            // empties. The number stays over the whole slot, whose pitch is the
+            // distance from this fill's left edge to the next icon.
+            int pitch = 0;
+            if (yellow.Width > 0 && yellow.X > red.X + 40) pitch = yellow.X - red.X;
+            else if (purple.X > red.X + 40) pitch = (purple.X - red.X) / 2;
+            if (pitch < 48) pitch = Math.Max(Math.Max(red.Width, purple.Width), 80) + 36;
+            int textW = Math.Max(pitch - 16, Math.Max(red.Width, purple.Width) + 12);
+            int textH = Math.Max(26, Math.Max(red.Height, purple.Height) * 6);
+            IntRect lifeText = Clamp(image, red.X - 2, red.Y - textH, textW, textH);
+            IntRect prayerText = Clamp(image, purple.X - 2, purple.Y - textH, textW, textH);
             reading.LifeBar = red;
             reading.PrayerBar = purple;
             reading.LifeText = lifeText;
@@ -265,6 +279,24 @@ namespace KavrosAfkWarden
             return new IntRect(left, seed.Y, right - left, seed.Height);
         }
 
+        private static void ReadLoneBar(ImageBuffer image, HudReading reading, List<IntRect> bars, bool life)
+        {
+            IntRect best = new IntRect();
+            for (int i = 0; i < bars.Count; i++)
+                if (bars[i].Width > best.Width) best = bars[i];
+            if (best.Width < 24) return;
+            int textH = Math.Max(26, best.Height * 6);
+            int textW = Math.Max(best.Width + 48, 110);
+            IntRect text = Clamp(image, best.X - 10, best.Y - textH, textW, textH);
+            NumberRead number = ReadNumber(image, text, WhiteInk);
+            if (life) reading.LifeTrace = LastTrace;
+            else reading.PrayerTrace = LastTrace;
+            if (!number.Ok || !number.HasMax) return;
+            if (life) { reading.LifeBar = best; reading.LifeText = text; reading.LifeTrace = LastTrace; }
+            else { reading.PrayerBar = best; reading.PrayerText = text; reading.PrayerTrace = LastTrace; reading.StripFound = true; reading.StripY = best.Y; }
+            Apply(reading, life, number, "bar");
+        }
+
         private static IntRect Above(ImageBuffer image, IntRect bar)
         {
             int height = Math.Max(22, bar.Height * 5);
@@ -310,19 +342,23 @@ namespace KavrosAfkWarden
             }
             reading.BuffBarFound = true;
             reading.PotionHow = "bar";
+            System.Text.StringBuilder buffTrace = new System.Text.StringBuilder();
             for (int i = 0; i < icons.Count; i++)
             {
                 BuffIcon icon = ReadIconTime(image, icons[i]);
                 reading.Buffs.Add(icon);
                 reading.BuffRects.Add(icons[i]);
                 if (icon.HasTime) reading.PotionCount++;
+                if (buffTrace.Length > 0) buffTrace.Append(" ");
+                buffTrace.Append(icons[i].X).Append(":").Append(LastTrace);
             }
+            reading.BuffTrace = buffTrace.ToString();
         }
 
         private static bool BorderGreen(int c)
         {
             int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
-            return g >= 120 && r < 180 && b < 150 && g > r + 25 && g > b + 20;
+            return g >= 80 && r < 220 && b < 190 && g > r + 12 && g > b + 12;
         }
 
         private static List<IntRect> FindBuffIcons(ImageBuffer image, IntRect region)
@@ -334,11 +370,11 @@ namespace KavrosAfkWarden
                 int x = region.X;
                 while (x < region.Right)
                 {
-                    if (!BorderGreen(image.Argb(x, y))) { x += 2; continue; }
+                    if (!BorderGreen(image.Argb(x, y))) { x++; continue; }
                     int start = x;
-                    while (x < region.Right && x - start < 74 && BorderGreen(image.Argb(x, y))) x++;
+                    while (x < region.Right && x - start < 100 && BorderGreen(image.Argb(x, y))) x++;
                     int span = x - start;
-                    if (span < 16 || span > 68) continue;
+                    if (span < 12 || span > 96) continue;
                     if (!IconAt(image, start, y, span)) continue;
                     bool overlap = false;
                     for (int i = 0; i < found.Count; i++)
@@ -356,12 +392,12 @@ namespace KavrosAfkWarden
             {
                 int count = 0;
                 for (int j = 0; j < found.Count; j++)
-                    if (Math.Abs(found[j].Y - found[i].Y) <= 4) count++;
+                    if (Math.Abs(found[j].Y - found[i].Y) <= 12) count++;
                 if (count > bestCount) { bestCount = count; bestY = found[i].Y; }
             }
             List<IntRect> row = new List<IntRect>();
             for (int i = 0; i < found.Count; i++)
-                if (Math.Abs(found[i].Y - bestY) <= 4) row.Add(found[i]);
+                if (Math.Abs(found[i].Y - bestY) <= 12) row.Add(found[i]);
             row.Sort(delegate(IntRect a, IntRect b) { return a.X.CompareTo(b.X); });
             return row;
         }
@@ -413,11 +449,11 @@ namespace KavrosAfkWarden
         private static NumberRead ReadIconLine(ImageBuffer image, IntRect icon, int textH, out bool minutes)
         {
             IntRect text = Clamp(image, icon.X + 1, icon.Bottom - textH, Math.Max(8, icon.Width - 2), Math.Max(6, textH - 1));
-            NumberRead number = ReadLine(image, text, BuffInk, out minutes);
+            NumberRead number = ReadLine(image, text, BuffInk, out minutes, 4);
             if (!number.Ok)
             {
                 bool whiteMinutes;
-                NumberRead white = ReadLine(image, text, WhiteInk, out whiteMinutes);
+                NumberRead white = ReadLine(image, text, WhiteInk, out whiteMinutes, 4);
                 if (white.Ok) { minutes = whiteMinutes; return white; }
             }
             return number;
@@ -618,12 +654,22 @@ namespace KavrosAfkWarden
         private static NumberRead ReadNumber(ImageBuffer image, IntRect region, InkTest ink)
         {
             bool minutes;
-            return ReadLine(image, region, ink, out minutes);
+            return ReadLine(image, region, ink, out minutes, 5, false);
         }
 
         // Column groups, not connected blobs: the HUD font's 2, 3 and 9 break
         // into pieces, and the slash must stay a separator so 60/60 is not 6060.
         private static NumberRead ReadLine(ImageBuffer image, IntRect region, InkTest ink, out bool minutes)
+        {
+            return ReadLine(image, region, ink, out minutes, 5, false);
+        }
+
+        private static NumberRead ReadLine(ImageBuffer image, IntRect region, InkTest ink, out bool minutes, int minDigit)
+        {
+            return ReadLine(image, region, ink, out minutes, minDigit, true);
+        }
+
+        private static NumberRead ReadLine(ImageBuffer image, IntRect region, InkTest ink, out bool minutes, int minDigit, bool allowLetter)
         {
             minutes = false;
             NumberRead result = new NumberRead();
@@ -632,6 +678,31 @@ namespace KavrosAfkWarden
             bool[] mask = Mask(image, region, ink);
             int width = region.Width;
             int height = region.Height;
+            // Keep the digit line only. Pixels above it (icon glow) otherwise
+            // bridge neighbouring digits such as the 3 and the 6 in 936.
+            int[] rowInk = new int[height];
+            for (int row = 0; row < height; row++)
+                for (int x = 0; x < width; x++)
+                    if (mask[row * width + x]) rowInk[row]++;
+            int bestTop = 0, bestBottom = height - 1, bestSum = -1;
+            int rowCursor = 0;
+            while (rowCursor < height)
+            {
+                if (rowInk[rowCursor] < 2) { rowCursor++; continue; }
+                int top = rowCursor;
+                int sum = 0;
+                while (rowCursor < height && (rowInk[rowCursor] >= 2 || (rowCursor + 1 < height && rowInk[rowCursor + 1] >= 2)))
+                {
+                    sum += rowInk[rowCursor];
+                    rowCursor++;
+                }
+                if (sum > bestSum) { bestSum = sum; bestTop = top; bestBottom = rowCursor - 1; }
+            }
+            for (int yy = 0; yy < height; yy++)
+            {
+                if (yy >= bestTop && yy <= bestBottom) continue;
+                for (int x = 0; x < width; x++) mask[yy * width + x] = false;
+            }
             bool[] column = new bool[width];
             for (int y = 0; y < height; y++)
                 for (int x = 0; x < width; x++)
@@ -639,6 +710,7 @@ namespace KavrosAfkWarden
             string current = "";
             string max = "";
             bool inMax = false;
+            bool unknown = false;
             int digitRight = -1;
             System.Text.StringBuilder trace = new System.Text.StringBuilder();
             trace.Append("cols");
@@ -662,15 +734,17 @@ namespace KavrosAfkWarden
                 int ww = cursor - start;
                 int hh = bottom - top + 1;
                 if (area < 3 || hh < 3) continue;
-                if (hh <= 4 && ww <= 5 && area <= 14) { trace.Append(" ,"); continue; }
+                int commaHeight = Math.Max(3, minDigit - 1);
+                if (hh <= commaHeight && ww <= commaHeight + 1 && area <= 14) { trace.Append(" ,"); continue; }
                 Blob blob = new Blob();
                 blob.Left = start;
                 blob.Top = top;
                 blob.Right = cursor - 1;
                 blob.Bottom = bottom;
                 blob.Area = area;
+                if (inMax && max.Length > 0 && digitRight > 0 && start - digitRight > Math.Max(14, hh * 2)) break;
                 int digit = -1;
-                if (ww <= 22 && hh >= 5 && hh <= 32)
+                if (ww <= 28 && hh >= minDigit && hh <= 40)
                     digit = DigitFont.Match(Sample(mask, width, blob));
                 bool slash = digit < 0 && hh >= 6 && ww <= 8 && ww * 2 <= hh + 4 && IsDiagonal(mask, width, blob);
                 if (digit >= 0)
@@ -684,14 +758,21 @@ namespace KavrosAfkWarden
                 {
                     trace.Append(" /");
                     inMax = true;
+                    digitRight = cursor;
                 }
-                else if (digitRight >= 0 && start + 2 >= digitRight && ww >= 3 && hh >= 5)
+                else if (allowLetter && digitRight >= 0 && start + 2 >= digitRight && ww >= 3 && hh >= 5)
                 {
                     trace.Append(" m");
                     minutes = true;
                 }
+                else if (hh >= minDigit && ww >= 2)
+                {
+                    trace.Append(" ?");
+                    unknown = true;
+                }
             }
             LastTrace = trace.ToString();
+            if (unknown) return result;
             int value;
             if (!TryParse(current, out value)) return result;
             result.Ok = true;
@@ -701,6 +782,8 @@ namespace KavrosAfkWarden
             {
                 result.Max = maxValue;
                 result.HasMax = true;
+                // 9/990 or 87/990 is a clipped read. 936/990 and 1040/990 are not.
+                if (max.Length >= 3 && current.Length < max.Length) return new NumberRead();
             }
             return result;
         }

@@ -136,6 +136,9 @@ namespace KavrosAfkWarden
                 Note = "Waiting for the Kavros window.";
                 haveCursor = false;
                 haveBoxes = false;
+                lifeBox = new IntRect();
+                prayerBox = new IntRect();
+                buffBoxes.Clear();
                 LastTickMs = (int)clock.ElapsedMilliseconds;
                 return;
             }
@@ -178,6 +181,7 @@ namespace KavrosAfkWarden
                         {
                             Reading = HudReader.Read(Image, settings);
                             RememberBoxes(Reading);
+                            FillLocked(client, Reading);
                             nextFullSearch = DateTime.UtcNow.AddSeconds(haveBoxes ? 4 : 1);
                         }
                         else
@@ -192,6 +196,7 @@ namespace KavrosAfkWarden
                 {
                     Reading = HudReader.Read(Image, settings);
                     RememberBoxes(Reading);
+                    FillLocked(client, Reading);
                 }
             }
             catch (Exception) { Image = null; Route = CaptureRoute.Covered; }
@@ -210,14 +215,31 @@ namespace KavrosAfkWarden
 
         private void RememberBoxes(HudReading reading)
         {
-            if (reading != null && reading.Hp != null && reading.Prayer != null && reading.LifeText.Width > 8 && reading.PrayerText.Width > 8)
+            if (reading == null) return;
+            if (reading.Hp != null && reading.LifeText.Width > 8) lifeBox = Pad(reading.LifeText, 6);
+            if (reading.Prayer != null && reading.PrayerText.Width > 8) prayerBox = Pad(reading.PrayerText, 6);
+            if (reading.BuffRects != null && reading.BuffRects.Count > 0)
             {
-                lifeBox = Pad(reading.LifeText, 6);
-                prayerBox = Pad(reading.PrayerText, 6);
                 buffBoxes.Clear();
-                if (reading.BuffRects != null)
-                    for (int i = 0; i < reading.BuffRects.Count; i++) buffBoxes.Add(Pad(reading.BuffRects[i], 2));
-                haveBoxes = true;
+                for (int i = 0; i < reading.BuffRects.Count; i++) buffBoxes.Add(Pad(reading.BuffRects[i], 2));
+            }
+            haveBoxes = lifeBox.Width > 8 || prayerBox.Width > 8;
+        }
+
+        // A later search can miss a bar once the coloured fill shrinks below the
+        // finder. The text rectangle from the last good read stays put.
+        private void FillLocked(Rectangle client, HudReading reading)
+        {
+            if (reading == null) return;
+            if (reading.Hp == null && lifeBox.Width > 8)
+            {
+                ImageBuffer life = CopyScreen(ScreenOf(client, lifeBox));
+                if (life != null) HudReader.ReadBox(life, true, reading);
+            }
+            if (reading.Prayer == null && prayerBox.Width > 8)
+            {
+                ImageBuffer prayer = CopyScreen(ScreenOf(client, prayerBox));
+                if (prayer != null) HudReader.ReadBox(prayer, false, reading);
             }
         }
 

@@ -30,6 +30,7 @@ namespace KavrosAfkWarden
                 Hud();
                 Potions();
                 LiveCapture(root);
+                Live023(root);
                 Manifest(root);
             }
             catch (Exception ex)
@@ -569,7 +570,35 @@ namespace KavrosAfkWarden
                     seen += reading.BuffRects[i].X.ToString() + ":" + (reading.Buffs[i].HasTime ? (reading.Buffs[i].Minutes ? reading.Buffs[i].Value.ToString() + "m" : reading.Buffs[i].Value.ToString()) : "-") + " ";
             Check(reading.BuffBarFound && seconds >= 1 && minutes >= 4, "live buff row reads 60 seconds and four 10 minute icons, got " + seen);
             SceneActivity scene = new SceneActivity();
-            Check(scene.Tick(image, reading), "the combat frame is activity, so idle does not start");
+            Check(!scene.Tick(image, reading), "a steady target bar does not reset idle, reason " + scene.Reason);
+            ImageBuffer struck = new ImageBuffer(image.Width, image.Height, (int[])image.Pixels.Clone());
+            int painted = 0;
+            for (int y = 0; y < struck.Height && painted == 0; y++)
+            {
+                int x = 0;
+                while (x < struck.Width && painted == 0)
+                {
+                    int c = struck.Argb(x, y);
+                    int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
+                    bool lime = g >= 160 && b <= 80 && g > r + 30 && g > b + 40;
+                    if (!lime) { x++; continue; }
+                    int x0 = x;
+                    while (x < struck.Width)
+                    {
+                        int d = struck.Argb(x, y);
+                        int rr = ImageBuffer.R(d), gg = ImageBuffer.G(d), bb = ImageBuffer.B(d);
+                        if (!(gg >= 160 && bb <= 80 && gg > rr + 30 && gg > bb + 40)) break;
+                        x++;
+                    }
+                    if (x - x0 >= 20)
+                    {
+                        for (int dy = -3; dy <= 3; dy++)
+                            for (int k = 0; k < 16; k++) struck.Set(x0 + k, y + dy, ImageBuffer.Pack(8, 8, 8));
+                        painted = 16;
+                    }
+                }
+            }
+            Check(painted > 0 && scene.Tick(struck, reading), "a shrinking target bar resets idle, reason " + scene.Reason);
             SceneActivity calm = new SceneActivity();
             ImageBuffer trees = ImageBuffer.Blank(320, 240, ImageBuffer.Pack(20, 80, 30));
             ImageBuffer sway = ImageBuffer.Blank(320, 240, ImageBuffer.Pack(30, 110, 40));
@@ -584,9 +613,31 @@ namespace KavrosAfkWarden
             Check(steady.Push(400) == 1040, "a single prayer jump is rejected");
         }
 
+        private static void Live023(string root)
+        {
+            string dir = Path.Combine(root, "verification", "fixtures", "live023");
+            string full = Path.Combine(dir, "debug-capture.png");
+            string prayer = Path.Combine(dir, "game-prayer-936-990.png");
+            if (!File.Exists(full) || !File.Exists(prayer))
+            {
+                failures.Add("missing live023 fixtures");
+                assertions++;
+                return;
+            }
+            HudReading reading = HudReader.Read(PngImage.Load(full), new WardenSettings());
+            Check(reading.Hp == 1633 && reading.HpMax == 1060, "live023 life is 1633/1060 from the full slot, got " + (reading.Hp == null ? "none" : reading.Hp.Value.ToString()) + "/" + (reading.HpMax == null ? "-" : reading.HpMax.Value.ToString()) + " " + reading.LifeTrace);
+            Check(reading.Prayer == 1040 && reading.PrayerMax == 990, "live023 prayer is 1040/990, got " + (reading.Prayer == null ? "none" : reading.Prayer.Value.ToString()) + "/" + (reading.PrayerMax == null ? "-" : reading.PrayerMax.Value.ToString()) + " " + reading.PrayerTrace);
+            Check(reading.LifeText.Width > reading.LifeBar.Width, "the life text box uses the slot, not the fill");
+            Check(reading.PrayerText.Width > 80, "the prayer text box stays wide enough when the fill is full, width " + reading.PrayerText.Width.ToString());
+            int? shown = BuffClock.ShownSeconds(reading.Buffs);
+            Check(reading.BuffBarFound && shown != null, "live023 buff icons expose a timer, got " + (reading.BuffTrace ?? "") + " shown " + (shown == null ? "none" : shown.Value.ToString()));
+            HudReading drained = HudReader.Read(PngImage.Load(prayer), new WardenSettings());
+            Check(drained.Prayer == 936 && drained.PrayerMax == 990, "drained prayer reads 936/990, got " + (drained.Prayer == null ? "none" : drained.Prayer.Value.ToString()) + "/" + (drained.PrayerMax == null ? "-" : drained.PrayerMax.Value.ToString()) + " trace=" + drained.PrayerTrace + " last=" + HudReader.LastTrace);
+        }
+
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.3" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.4" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -597,10 +648,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.3\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.4\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.3.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.4.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

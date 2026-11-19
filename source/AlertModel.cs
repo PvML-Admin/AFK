@@ -404,6 +404,23 @@ namespace KavrosAfkWarden
             for (int i = slots.Count - 1; i >= 0; i--) if (!slots[i].Seen) slots.RemoveAt(i);
             return best < 0 ? (int?)null : best;
         }
+
+        // What the panel shows. Minute marks count immediately. A plain number
+        // counts when it is too large to be a stack such as 4 or 8.
+        public static int? ShownSeconds(List<BuffIcon> icons)
+        {
+            int best = -1;
+            if (icons == null) return null;
+            for (int i = 0; i < icons.Count; i++)
+            {
+                BuffIcon icon = icons[i];
+                if (!icon.HasTime || icon.Value <= 0) continue;
+                int seconds = icon.Minutes ? icon.Value * 60 : icon.Value;
+                if (!icon.Minutes && icon.Value < 10) continue;
+                if (best < 0 || seconds < best) best = seconds;
+            }
+            return best < 0 ? (int?)null : best;
+        }
     }
 
     public sealed class WatchSample

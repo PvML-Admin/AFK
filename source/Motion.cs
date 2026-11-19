@@ -131,38 +131,49 @@ namespace KavrosAfkWarden
 
         private int lastSplat = -1;
         private int lastXp = -1;
+        private int lastTarget = -1;
+        internal string Reason = "none";
 
         public bool Tick(ImageBuffer image, HudReading reading)
         {
             return Tick(image, reading, false);
         }
 
-        // Player signals only. Swaying trees, water and other people walking
-        // are not activity. Whole-scene motion is intentionally not used.
+        // Player signals only. A steady overhead bar is not movement. A change
+        // in that bar, a hitsplat, an XP counter, or the HUD numbers is.
         public bool Tick(ImageBuffer image, HudReading reading, bool playerInput)
         {
-            bool busy = playerInput;
-            if (reading != null && HudChanged(reading)) busy = true;
+            string reason = "";
+            if (playerInput) reason = Join(reason, "input");
+            string hud = HudChange(reading);
+            if (hud.Length > 0) reason = Join(reason, hud);
             if (image != null)
             {
-                if (HasTargetBar(image, reading)) busy = true;
-                if (HitsplatChanged(image)) busy = true;
-                if (XpCounterChanged(image)) busy = true;
+                if (TargetChanged(image, reading)) reason = Join(reason, "target-bar");
+                if (HitsplatChanged(image)) reason = Join(reason, "hitsplat");
             }
-            return busy;
+            Reason = reason.Length == 0 ? "none" : reason;
+            return reason.Length > 0;
         }
 
-        private bool HudChanged(HudReading reading)
+        private static string Join(string left, string right)
         {
+            if (left.Length == 0) return right;
+            return left + "+" + right;
+        }
+
+        private string HudChange(HudReading reading)
+        {
+            if (reading == null) return "";
             int hp = reading.Hp == null ? -1 : reading.Hp.Value;
             int prayer = reading.Prayer == null ? -1 : reading.Prayer.Value;
             int adrenaline = reading.Adrenaline == null ? -1 : reading.Adrenaline.Value;
-            bool changed = false;
+            string changed = "";
             if (haveHud)
             {
-                if (hp >= 0 && lastHp >= 0 && hp != lastHp) changed = true;
-                if (prayer >= 0 && lastPrayer >= 0 && prayer != lastPrayer) changed = true;
-                if (adrenaline >= 0 && lastAdrenaline >= 0 && adrenaline != lastAdrenaline) changed = true;
+                // Prayer drain and adrenaline decay happen while standing still.
+                if (hp >= 0 && lastHp >= 0 && hp != lastHp) changed = Join(changed, "hp");
+                if (adrenaline >= 0 && lastAdrenaline >= 0 && adrenaline >= lastAdrenaline + 8) changed = Join(changed, "adrenaline");
             }
             if (hp >= 0) lastHp = hp;
             if (prayer >= 0) lastPrayer = prayer;
@@ -173,9 +184,10 @@ namespace KavrosAfkWarden
 
         // A short bright green bar that is not the summoning bar in the HUD row.
         // That is the overhead target (or player) health bar.
-        private static bool HasTargetBar(ImageBuffer image, HudReading reading)
+        private bool TargetChanged(ImageBuffer image, HudReading reading)
         {
             if (image == null) return false;
+            int longest = 0;
             int step = image.Width > 1400 ? 2 : 1;
             for (int y = 0; y < image.Height; y += step)
             {
@@ -199,10 +211,12 @@ namespace KavrosAfkWarden
                         height += step;
                         below += step;
                     }
-                    if (height >= 2 && height <= 10) return true;
+                    if (height >= 2 && height <= 10 && run > longest) longest = run;
                 }
             }
-            return false;
+            bool changed = lastTarget >= 0 && longest >= 16 && Math.Abs(longest - lastTarget) >= 8;
+            if (longest >= 16) lastTarget = longest;
+            return changed;
         }
 
         private static bool Lime(int c)

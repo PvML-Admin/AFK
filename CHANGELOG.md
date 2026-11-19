@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.4
+
+- Life and prayer numbers are read from the full bar slot, not the shrinking coloured fill. A good slot is kept, so a short fill on a later frame does not drop the number.
+- A read with an unrecognised glyph is discarded. When the maximum has three or more digits, a shorter current value is discarded too, so a clipped `9/990` cannot replace `936/990`. Prayer is still shown only after three consistent reads.
+- Buff icons are searched anywhere, including a detached bar, and their borders and timers tolerate a smaller icon. Minute timers and plain numbers of 10 or more show immediately. Each icon's timer text is written to the debug log.
+- Idle resets only for input while the game window is in front, a change in life, an adrenaline increase, a target bar that actually changes width, or a hitsplat. Prayer drain, swaying trees, and other players do not count. The reason is written to the debug log. Pausing watching shows Paused on the panel.
+
 ## 0.2.3
 
 - The window appears before the client list and the update check. Those run off the UI thread. Capture pauses while a window is dragged, and Settings uses the window manager for the drag.

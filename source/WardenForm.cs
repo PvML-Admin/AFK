@@ -283,6 +283,7 @@ namespace KavrosAfkWarden
         private int? shownHpMax;
         private int? shownPrayer;
         private int? shownPrayerMax;
+        private int? shownPotion;
         private readonly StableValue hpStable = new StableValue();
         private readonly StableValue hpMaxStable = new StableValue();
         private readonly StableValue prayerStable = new StableValue();
@@ -707,14 +708,27 @@ namespace KavrosAfkWarden
 
         private void SetStatus(string text) { if (!status.IsDisposed) status.Text = text; }
 
+        private uint lastInputStamp;
+        private bool sawGameForeground;
+
         private bool PlayerInput()
         {
-            if (selected == IntPtr.Zero || !WindowLocator.IsForeground(selected)) return false;
+            bool foreground = selected != IntPtr.Zero && WindowLocator.IsForeground(selected);
             NativeMethods.LastInput info = new NativeMethods.LastInput();
             info.Size = System.Runtime.InteropServices.Marshal.SizeOf(typeof(NativeMethods.LastInput));
-            if (!NativeMethods.GetLastInputInfo(ref info)) return false;
-            uint now = NativeMethods.GetTickCount();
-            return now - info.Time < 800;
+            if (!NativeMethods.GetLastInputInfo(ref info))
+            {
+                sawGameForeground = foreground;
+                return false;
+            }
+            bool fresh = info.Time != lastInputStamp;
+            uint age = NativeMethods.GetTickCount() - info.Time;
+            // GetLastInputInfo is system-wide. Count a new stamp only while the
+            // chosen client has stayed in front, so typing in another app does not.
+            bool count = foreground && sawGameForeground && fresh && age < 800;
+            lastInputStamp = info.Time;
+            sawGameForeground = foreground;
+            return count;
         }
 
         protected override void WndProc(ref Message message)
@@ -732,10 +746,15 @@ namespace KavrosAfkWarden
             base.WndProc(ref message);
         }
 
-        private void WriteDebug(bool pixels)
+        private string lastLoggedReason = "";
+
+        private void WriteDebug(bool pixels, bool moving)
         {
-            if ((DateTime.UtcNow - lastDebugSave).TotalSeconds < 2) return;
-            lastDebugSave = DateTime.UtcNow;
+            bool reasonChanged = activity.Reason != lastLoggedReason;
+            bool due = (DateTime.UtcNow - lastDebugSave).TotalSeconds >= 2;
+            if (!reasonChanged && !due) return;
+            if (due) lastDebugSave = DateTime.UtcNow;
+            lastLoggedReason = activity.Reason;
             try
             {
                 string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KavrosAfkWarden");
@@ -748,11 +767,14 @@ namespace KavrosAfkWarden
                     + " prayer=" + (reading.Prayer == null ? "none" : reading.Prayer.Value.ToString())
                     + "/" + (reading.PrayerMax == null ? "-" : reading.PrayerMax.Value.ToString())
                     + " buffs=" + (reading.Buffs == null ? 0 : reading.Buffs.Count).ToString()
+                    + " buffText=" + (reading.BuffTrace ?? "")
                     + " lifeBar=" + reading.LifeBar.X + "," + reading.LifeBar.Y + " " + reading.LifeBar.Width + "x" + reading.LifeBar.Height
                     + " prayerBar=" + reading.PrayerBar.X + "," + reading.PrayerBar.Y + " " + reading.PrayerBar.Width + "x" + reading.PrayerBar.Height
                     + " lifeText=" + (reading.LifeTrace ?? "")
                     + " prayerText=" + (reading.PrayerTrace ?? "")
                     + " pixels=" + pixels
+                    + " activity=" + activity.Reason
+                    + " idleReset=" + (moving ? "yes" : "no")
                     + "\r\n";
                 string logPath = Path.Combine(dir, "debug-log.txt");
                 File.AppendAllText(logPath, line);
@@ -762,7 +784,7 @@ namespace KavrosAfkWarden
                     string tail = File.ReadAllText(logPath);
                     if (tail.Length > 80000) File.WriteAllText(logPath, tail.Substring(tail.Length - 80000));
                 }
-                if (grab.Image != null) SaveAnnotated(dir, grab.Image, reading);
+                if (due && grab.Image != null) SaveAnnotated(dir, grab.Image, reading);
             }
             catch (Exception) { }
         }
@@ -954,14 +976,14 @@ namespace KavrosAfkWarden
             grab.Tick(selected, settings, !panel.IsDragging && !windowDragging && !minimized);
             if (!windowDragging) FollowPanel();
             bool pixels = grab.Reading != null && (grab.Image != null || grab.Reading.StripFound || grab.Reading.BuffBarFound || grab.Reading.Hp != null);
-            bool moving = PlayerInput() || activity.Tick(grab.Image, grab.Reading);
+            bool moving = activity.Tick(grab.Image, grab.Reading, PlayerInput());
             if (grab.Reading != null && (grab.Image != null || grab.Reading.StripFound || grab.Reading.BuffBarFound)) lastHud = grab.Reading;
-            WriteDebug(pixels);
+            WriteDebug(pixels, moving);
             int? hp = pixels ? hpStable.Push(lastHud.Hp) : hpStable.Push(null);
             int? hpMax = pixels ? hpMaxStable.Push(lastHud.HpMax) : hpMaxStable.Push(null);
             int? prayer = pixels ? prayerStable.Push(lastHud.Prayer) : prayerStable.Push(null);
             int? prayerMax = pixels ? prayerMaxStable.Push(lastHud.PrayerMax) : prayerMaxStable.Push(null);
-            int? potion = pixels && lastHud.BuffBarFound ? buffClock.Tick(lastHud.Buffs) : (int?)null;
+            int? potion = pixels && lastHud.BuffBarFound ? BuffClock.ShownSeconds(lastHud.Buffs) : (int?)null;
             bool hpComparable = hp != null && WardenSettings.Comparable(settings.HpPercent, lastHud.HpFromOrb, hpMax != null);
             bool prayerComparable = prayer != null && WardenSettings.Comparable(settings.PrayerPercent, lastHud.PrayerFromOrb, prayerMax != null);
             WatchSample sample = new WatchSample();
@@ -974,6 +996,7 @@ namespace KavrosAfkWarden
             shownHpMax = hpMax;
             shownPrayer = prayer;
             shownPrayerMax = prayerMax;
+            shownPotion = potion;
             sample.Hp = hpComparable ? hp : (int?)null;
             sample.HpMax = hpMax;
             sample.Prayer = prayerComparable ? prayer : (int?)null;
@@ -998,9 +1021,18 @@ namespace KavrosAfkWarden
         {
             panel.SetGame(selected != IntPtr.Zero && NativeMethods.IsWindow(selected), ClientCaption());
             panel.SetNote(grab.Note);
-            panel.Idle.Pill = engine.IdleLatched ? "Idle" : "Moving";
-            panel.Idle.Tone = engine.IdleLatched ? PillTone.Bad : PillTone.Ok;
-            panel.Idle.Value = pixels ? ((int)engine.StillFor.TotalSeconds).ToString() + "s still" : "No view";
+            if (settings.Paused)
+            {
+                panel.Idle.Pill = "Paused";
+                panel.Idle.Tone = PillTone.Warn;
+                panel.Idle.Value = "Watching off";
+            }
+            else
+            {
+                panel.Idle.Pill = engine.IdleLatched ? "Idle" : "Moving";
+                panel.Idle.Tone = engine.IdleLatched ? PillTone.Bad : PillTone.Ok;
+                panel.Idle.Value = pixels ? ((int)engine.StillFor.TotalSeconds).ToString() + "s still" : "No view";
+            }
             panel.Hp.Pill = engine.HpLatched ? "Low HP" : "Hitpoints";
             panel.Hp.Tone = engine.HpLatched ? PillTone.Bad : !pixels || lastHud.Hp == null ? PillTone.Example : PillTone.Ok;
             panel.Hp.Value = !pixels ? "No view" : shownHp == null ? "Unread" : Format(shownHp, shownHpMax, lastHud.HpFromOrb);
@@ -1009,7 +1041,7 @@ namespace KavrosAfkWarden
             panel.Prayer.Value = !pixels ? "No view" : shownPrayer == null ? "Unread" : Format(shownPrayer, shownPrayerMax, lastHud.PrayerFromOrb);
             panel.Potion.Pill = engine.PotionLatched ? "Potion low" : "Potions";
             panel.Potion.Tone = engine.PotionLatched ? PillTone.Warn : !pixels || lastHud.PotionSeconds == null ? PillTone.Example : PillTone.Ok;
-            panel.Potion.Value = !pixels ? "No view" : lastHud.PotionSeconds == null ? "No buffs" : lastHud.PotionSeconds.Value.ToString() + "s left";
+            panel.Potion.Value = !pixels ? "No view" : shownPotion == null ? (lastHud.BuffBarFound && lastHud.Buffs != null ? lastHud.Buffs.Count.ToString() + " icons" : "No buffs") : shownPotion.Value.ToString() + "s left";
             int left = Math.Max(0, (int)engine.AfkRemaining.TotalSeconds);
             panel.Afk.Pill = engine.AfkLatched ? "AFK soon" : "AFK timer";
             panel.Afk.Tone = engine.AfkLatched ? PillTone.Bad : PillTone.Ok;
