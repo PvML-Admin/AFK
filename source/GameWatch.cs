@@ -142,6 +142,7 @@ namespace KavrosAfkWarden
         private IntRect buffStrip;
         private IntRect xpBox;
         private IntRect packBox;
+        private IntRect packHold;
         private IntRect heldLife;
         private IntRect heldPrayer;
         private bool haveBoxes;
@@ -315,7 +316,7 @@ namespace KavrosAfkWarden
             if (lastClient != hwnd || lastSize != client.Size || !settings.SamePins(lastSettings))
             {
                 lastClient=hwnd; lastSize=client.Size; lastSettings=settings;
-                lifeBox=prayerBox=buffStrip=xpBox=packBox=new IntRect();
+                lifeBox=prayerBox=buffStrip=xpBox=packBox=packHold=new IntRect();
                 heldLife=heldPrayer=new IntRect();
                 haveBoxes=false; missedLocks=0; nextFullSearch=DateTime.MinValue;
             }
@@ -387,26 +388,31 @@ namespace KavrosAfkWarden
                     Math.Min(image.Height,foundBuff.Bottom+4)-Math.Max(0,foundBuff.Y-3));
             }
             if (xpBox.Width < 8)
+                xpBox = new IntRect(0, 0, image.Width, image.Height);
+            NoteActivity(image);
+            if (skills.XpRect.Width > 8)
             {
-                xpBox = new IntRect(image.Width / 5, 0, image.Width * 3 / 5, Math.Max(48, image.Height * 45 / 100));
-            }
-            IntRect xp = SceneActivity.XpWatch.Find(image);
-            if (xp.Width > 8)
-            {
-                // The drop floats upward and fades, so the locked band stays tall.
-                int left = Math.Max(0, xp.X - image.Width / 8);
-                int right = Math.Min(image.Width, xp.Right + image.Width / 6);
-                int bottom = Math.Min(image.Height, Math.Max(xp.Bottom + xp.Height * 3, image.Height * 45 / 100));
-                xpBox = new IntRect(left, 0, Math.Max(32, right - left), Math.Max(48, bottom));
+                // Follow the drop wherever it was, with room for the float, and
+                // keep scanning the rest of the client on the next full pass.
+                IntRect xp = skills.XpRect;
+                int left = Math.Max(0, xp.X - Math.Max(80, image.Width / 5));
+                int top = Math.Max(0, xp.Y - Math.Max(40, image.Height / 5));
+                int right = Math.Min(image.Width, xp.Right + Math.Max(160, image.Width / 4));
+                int bottom = Math.Min(image.Height, xp.Bottom + Math.Max(80, image.Height / 5));
+                xpBox = new IntRect(left, top, Math.Max(32, right - left), Math.Max(32, bottom - top));
             }
             IntRect pack = SceneActivity.PackWatch.Find(image);
-            if (pack.Width > 8) packBox = pack;
+            if (pack.Width > 8)
+            {
+                if (packBox.Width < 8 || SameGrid(pack, packBox) || (packHold.Width > 8 && SameGrid(pack, packHold)))
+                    packBox = pack;
+                packHold = pack;
+            }
             RememberBars(reading);
             haveBoxes = lifeBox.Width > 8 || prayerBox.Width > 8 || buffStrip.Width>8;
             bool complete = reading.HpMax.HasValue && reading.PrayerMax.HasValue;
             failedFull = complete ? 0 : failedFull + 1;
             nextFullSearch=DateTime.UtcNow.AddSeconds(CapturePlan.NextFullSeconds(complete, buffStrip.Width>8, failedFull));
-            NoteActivity(image);
             MaybeDebug(image, settings, reading);
             return reading;
         }
@@ -471,6 +477,17 @@ namespace KavrosAfkWarden
             skills.Observe(xp, pack);
             PublishSkills();
             return reading;
+        }
+
+        private static bool SameGrid(IntRect a, IntRect b)
+        {
+            int ax = a.X + a.Width / 2;
+            int ay = a.Y + a.Height / 2;
+            int bx = b.X + b.Width / 2;
+            int by = b.Y + b.Height / 2;
+            int dx = ax - bx;
+            int dy = ay - by;
+            return dx * dx + dy * dy < 80 * 80;
         }
 
         private void RememberBars(HudReading reading)

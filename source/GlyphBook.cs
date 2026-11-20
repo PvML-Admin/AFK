@@ -157,11 +157,19 @@ namespace KavrosAfkWarden
 
         internal static int FindPlus(ImageBuffer image, out int scale)
         {
-            scale = 100;
+            return FindPlus(image, 0, out scale);
+        }
+
+        // onlyScale locks the search to 100, 150 or 200 after that scale has repeated.
+        internal static int FindPlus(ImageBuffer image, int onlyScale, out int scale)
+        {
+            scale = onlyScale == 100 || onlyScale == 150 || onlyScale == 200 ? onlyScale : 100;
             if (image == null) return -1;
-            int bestX = -1, bestY = -1, bestScale = 100, bestMiss = 100;
-            int limit = image.Height * 70 / 100;
-            int[] scales = new int[] { 100, 150, 200 };
+            int bestX = -1, bestY = -1, bestScale = scale, bestMiss = 100;
+            int limit = image.Height - 2;
+            int[] scales = onlyScale == 100 || onlyScale == 150 || onlyScale == 200
+                ? new int[] { onlyScale }
+                : new int[] { 100, 150, 200 };
             for (int s = 0; s < scales.Length; s++)
             {
                 Stamp plus = Scaled('+', scales[s]);
@@ -221,8 +229,8 @@ namespace KavrosAfkWarden
                 for (int dy = -4; dy <= 6; dy += 2)
                 {
                     if (y + dy < 0) continue;
-                    if (PlusMiss(image, x + dx, y + dy, ex) <= 30) return true;
-                    if (PlusMiss(image, x + dx, y + dy, pee) <= 30) return true;
+                    if (PlusMiss(image, x + dx, y + dy, ex) <= 14) return true;
+                    if (PlusMiss(image, x + dx, y + dy, pee) <= 14) return true;
                 }
             }
             return false;
@@ -237,7 +245,7 @@ namespace KavrosAfkWarden
         {
             int r = ImageBuffer.R(color), g = ImageBuffer.G(color), b = ImageBuffer.B(color);
             // Includes a faded drop, not only the bright frame at the start of the float.
-            return r >= 140 && g >= 55 && g <= 220 && b <= 160 && r + 8 >= g && r >= b + 20;
+            return r >= 140 && g >= 55 && g <= 220 && b <= 160 && r >= g + 15 && r >= b + 25;
         }
     }
 }

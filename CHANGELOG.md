@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.13
+
+- The buff bar is found by its row of timers, wherever it sits. A still client shot scaled back up reads four potions at 5 minutes. Pasting the same buff bar in another corner still reads.
+- An orange plus in the scenery is not an XP drop. A drop needs the xp letters, and the search follows it instead of locking onto the trees. The same drop is still found after it is moved.
+- The backpack grid is searched across the whole client and stays put once it repeats. Windows scale stays on 100, 150 or 200 after two agreeing reads.
+- Boosted hitpoints such as 1471/990 stay legal.
+
 ## 0.2.12
 
 - A potion is recognised from the flask itself: Elder is the dark teal flask, Aggro the purple flask, and Overload the green flask with a dark rim. The first clean 1–60 minute or second read is kept. A later read can correct it, and one odd reading does not replace a timer that is already counting. An empty buff frame leaves the clocks alone for a minute. The panel lists each potion with the time it has left.

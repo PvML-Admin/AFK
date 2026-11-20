@@ -289,24 +289,40 @@ namespace KavrosAfkWarden
         // The box is the glyphs only. Scenery behind them is not part of the match.
         public static XpSight Read(ImageBuffer image)
         {
+            return Read(image, 0);
+        }
+
+        // onlyScale is 100, 150 or 200 once that scale has been confirmed, otherwise 0.
+        public static XpSight Read(ImageBuffer image, int onlyScale)
+        {
             XpSight best = new XpSight();
             if (image == null || image.Width < 12 || image.Height < 12) return best;
             int plusScale;
-            int plusAt = GlyphBook.FindPlus(image, out plusScale);
+            int plusAt = GlyphBook.FindPlus(image, onlyScale, out plusScale);
             if (plusAt >= 0)
             {
                 int px = plusAt % image.Width;
                 int py = plusAt / image.Width;
+                XpSight parsed = ReadAroundPlus(image, px, py, plusScale);
+                if (parsed.Found && HasDigit(parsed.Text))
+                {
+                    parsed.Scale = plusScale;
+                    parsed.Trace = "xp=" + parsed.Text + "@" + parsed.X.ToString() + "," + parsed.Y.ToString() + " scale=" + plusScale.ToString();
+                    return parsed;
+                }
+                // Digits can be too faint after a rescale. The plus was already
+                // confirmed by the xp letters, so it is still the drop.
                 best.Found = true;
                 best.Plus = true;
+                best.Scale = plusScale;
                 best.Text = "+";
-                best.Rect = new IntRect(px, py, 9 * plusScale / 100, 9 * plusScale / 100);
+                best.Rect = new IntRect(px, py, Math.Max(8, 9 * plusScale / 100), Math.Max(8, 9 * plusScale / 100));
                 best.Trace = "xp=+@" + px.ToString() + "," + py.ToString() + " scale=" + plusScale.ToString();
                 return best;
             }
             List<InkBand> bands = new List<InkBand>();
             int guard = 0;
-            int limit = image.Height * 70 / 100;
+            int limit = image.Height;
             for (int y = 0; y < limit && guard < 6000; y++)
             {
                 int x = 0;
@@ -341,12 +357,44 @@ namespace KavrosAfkWarden
             return best;
         }
 
+        // The plus is only the anchor. A drop still needs the orange digits beside it,
+        // so a plus-shaped patch of leaves is not an XP drop.
+        private static XpSight ReadAroundPlus(ImageBuffer image, int px, int py, int scale)
+        {
+            int reach = Math.Max(48, 160 * scale / 100);
+            int tall = Math.Max(18, 32 * scale / 100);
+            int x0 = Math.Max(0, px - 6);
+            int y0 = Math.Max(0, py - 6);
+            int x1 = Math.Min(image.Width - 1, px + reach);
+            int y1 = Math.Min(image.Height - 1, py + tall);
+            InkBand band = new InkBand();
+            for (int y = y0; y <= y1; y++)
+            {
+                int x = x0;
+                while (x <= x1)
+                {
+                    if (!Ink(image.Argb(x, y))) { x++; continue; }
+                    int run = x;
+                    while (x <= x1 && Ink(image.Argb(x, y))) x++;
+                    if (x - run >= 2) band.Add(run, y, x);
+                }
+            }
+            return Parse(image, band);
+        }
+
+        private static bool HasDigit(string text)
+        {
+            if (text == null) return false;
+            for (int i = 0; i < text.Length; i++)
+                if (text[i] >= '0' && text[i] <= '9') return true;
+            return false;
+        }
+
         private static XpSight Parse(ImageBuffer image, InkBand band)
         {
             XpSight sight = new XpSight();
             int w = band.X1 - band.X0;
             int h = band.Y1 - band.Y0 + 1;
-            if (band.Y0 > image.Height * 70 / 100) return sight;
             if (h < 6 || h > 48 || w < 8 || w > 420) return sight;
             bool[] mask = new bool[w * h];
             int ink = 0;
@@ -427,7 +475,7 @@ namespace KavrosAfkWarden
             int r = ImageBuffer.R(color), g = ImageBuffer.G(color), b = ImageBuffer.B(color);
             // Orange floating "+N xp" text, including the darker outline.
             // Near-white scenery is not included; it joins the glyphs into one blob.
-            return r >= 140 && g >= 55 && g <= 220 && b <= 160 && r + 8 >= g && r >= b + 20;
+            return r >= 140 && g >= 55 && g <= 220 && b <= 160 && r >= g + 15 && r >= b + 25;
         }
 
         private sealed class InkBand
@@ -462,6 +510,7 @@ namespace KavrosAfkWarden
     {
         public bool Found;
         public bool Plus;
+        public int Scale;
         public string Text = "";
         public string Trace = "xp=none";
         public IntRect Rect;
@@ -473,14 +522,58 @@ namespace KavrosAfkWarden
     {
         public static IntRect Find(ImageBuffer image)
         {
-            IntRect live = FindLive(image);
-            if (live.Width > 8) return live;
-            return FindSquare(image);
+            // A complete 4 by 7 lattice wins. Otherwise take a partial slot grid
+            // anywhere on the client, which is what a moved backpack looks like.
+            IntRect square = FindSquare(image);
+            if (square.Width > 8) return square;
+            return FindGrid(image);
         }
 
-        // The live backpack is a 4-column grid of gold-brown borders in the
-        // lower right. Slots are wider than they are tall, and the window
-        // often clips the bottom rows, so a 4x7 square search misses it.
+        // Four columns and three rows of slot borders, searched across the whole
+        // client so a moved backpack is found in any corner.
+        private static IntRect FindGrid(ImageBuffer image)
+        {
+            if (image == null || image.Width < 140 || image.Height < 100) return new IntRect();
+            int[] widths = new int[] { 30, 36, 42, 46, 56, 68, 84 };
+            int[] heights = new int[] { 24, 30, 36, 42, 48, 56, 68 };
+            int step = image.Width > 1600 ? 6 : 4;
+            int bestHits = 0;
+            int bestAvg = 9999;
+            IntRect found = new IntRect();
+            for (int ih = 0; ih < heights.Length; ih++)
+            {
+                int cellH = heights[ih];
+                for (int iw = 0; iw < widths.Length; iw++)
+                {
+                    int cellW = widths[iw];
+                    int gridW = cellW * 4;
+                    int gridH = cellH * 3;
+                    if (gridW >= image.Width || gridH >= image.Height) continue;
+                    for (int y = 0; y + gridH < image.Height; y += step)
+                    {
+                        for (int x = 0; x + gridW < image.Width; x += step)
+                        {
+                            int hits;
+                            int avg;
+                            if (!ScoreLive(image, x, y, cellW, cellH, out hits, out avg)) continue;
+                            if (x < 8 || y < 8) continue;
+                            if (hits < 10) continue;
+                            // Dark empty slots outrank a bright panel that happens to have edges.
+                            bool better = bestHits < 10 || avg + 20 < bestAvg || (avg <= bestAvg + 20 && hits > bestHits);
+                            if (better)
+                            {
+                                bestHits = hits;
+                                bestAvg = avg;
+                                found = new IntRect(x, y, gridW, gridH);
+                            }
+                        }
+                    }
+                }
+            }
+            if (bestHits < 10) return new IntRect();
+            return found;
+        }
+
         private static IntRect FindLive(ImageBuffer image)
         {
             if (image == null || image.Width < 400 || image.Height < 300) return new IntRect();
@@ -529,6 +622,7 @@ namespace KavrosAfkWarden
             hits = 0;
             int sum = 0;
             int cells = 0;
+            int dark = 0;
             for (int row = 0; row < 3; row++)
             {
                 for (int col = 0; col < 4; col++)
@@ -553,12 +647,13 @@ namespace KavrosAfkWarden
                     }
                     int inside = Lum(image.Argb(Math.Min(image.Width - 1, left + Math.Max(6, cellW / 6)), cy));
                     if (edge > center + 22 && edge > inside + 8 && topEdge > center + 14 && center < 220) hits++;
+                    if (center < 90) dark++;
                     sum += center;
                     cells++;
                 }
             }
             avg = cells == 0 ? 9999 : sum / cells;
-            return hits >= 9 && avg < 140;
+            return hits >= 9 && dark >= 8 && avg < 140;
         }
 
         private static int Lum(int color)
@@ -711,7 +806,11 @@ namespace KavrosAfkWarden
         public bool XpEvent;
         public bool PackEvent;
         public bool View;
+        public int LockedScale;
+        public IntRect XpRect;
         public string Trace = "xp=none pack=none";
+        private int scaleVote;
+        private int scaleVotes;
         private string shown = "";
         private int hits;
         private string fired = "";
@@ -729,12 +828,17 @@ namespace KavrosAfkWarden
             string xpText = "xp=none";
             if (xpImage != null)
             {
-                var sight = SceneActivity.XpWatch.Read(xpImage);
-                if (sight.Found)
+                var sight = SceneActivity.XpWatch.Read(xpImage, LockedScale);
+                if (sight.Found && HasXpDigit(sight.Text))
                 {
                     saw = true;
                     ever = true;
+                    XpRect = sight.Rect;
                     xpText = sight.Trace;
+                    if (sight.Scale == scaleVote) scaleVotes++;
+                    else { scaleVote = sight.Scale; scaleVotes = 1; }
+                    if (scaleVotes >= 2 && (sight.Scale == 100 || sight.Scale == 150 || sight.Scale == 200))
+                        LockedScale = sight.Scale;
                     if (sight.Text == shown) hits++;
                     else { shown = sight.Text; hits = 1; }
                     if (hits == 2 && fired != shown)
@@ -769,6 +873,14 @@ namespace KavrosAfkWarden
             else if (quiet < 4) quiet++;
             View = saw || (ever && quiet < 3);
             Trace = xpText + " " + packText + (XpEvent ? " xp-event" : "") + (PackEvent ? " pack-event" : "");
+        }
+
+        private static bool HasXpDigit(string text)
+        {
+            if (text == null) return false;
+            for (int i = 0; i < text.Length; i++)
+                if (text[i] >= '0' && text[i] <= '9') return true;
+            return false;
         }
     }
 }

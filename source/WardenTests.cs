@@ -42,6 +42,8 @@ namespace KavrosAfkWarden
                 XpDropFixture(root);
                 ScaleFixtures(root);
                 LiveFlasks(root);
+                MovedHud(root);
+                LiveClient(root);
                 Manifest(root);
             }
             catch (Exception ex)
@@ -318,6 +320,80 @@ namespace KavrosAfkWarden
             return icon;
         }
 
+        private static void Blit(ImageBuffer dest, ImageBuffer src, int dx, int dy)
+        {
+            for (int y = 0; y < src.Height; y++)
+                for (int x = 0; x < src.Width; x++)
+                {
+                    int px = dx + x;
+                    int py = dy + y;
+                    if (px >= 0 && py >= 0 && px < dest.Width && py < dest.Height) dest.Set(px, py, src.Argb(x, y));
+                }
+        }
+
+        private static void MovedHud(string root)
+        {
+            if (root == null || root.Length == 0) return;
+            string twelve = Path.Combine(root, "verification", "fixtures", "live023", "buffbar-potions-12m.png");
+            if (!File.Exists(twelve)) { Check(false, "missing 12m buff crop"); return; }
+            ImageBuffer icon = PngImage.Load(twelve);
+            int[] xs = new int[] { 16, 620 };
+            int[] ys = new int[] { 24, 430 };
+            for (int i = 0; i < xs.Length; i++)
+            {
+                ImageBuffer frame = ImageBuffer.Blank(980, 640, ImageBuffer.Pack(18, 22, 26));
+                frame.Fill(80, 80, 240, 90, ImageBuffer.Pack(40, 48, 36));
+                Blit(frame, icon, xs[i], ys[i]);
+                HudReading hud = HudReader.Read(frame, new WardenSettings());
+                Check(BuffClock.ShownSeconds(hud.Buffs) == 720, "a buff bar pasted at " + xs[i].ToString() + "," + ys[i].ToString() + " still reads 12m, got " + (hud.BuffTrace ?? ""));
+            }
+            ImageBuffer low = ImageBuffer.Blank(860, 520, ImageBuffer.Pack(24, 40, 22));
+            int orange = ImageBuffer.Pack(226, 170, 70);
+            DrawPlus(low, 540, 390, 2, orange);
+            DrawGlyph(low, 5, 554, 390, 2, orange);
+            DrawGlyph(low, 8, 568, 390, 2, orange);
+            DrawGlyph(low, 9, 582, 390, 2, orange);
+            var drop = SceneActivity.XpWatch.Read(low);
+            Check(drop.Found && drop.Plus && drop.X > 400 && drop.Y > 300, "an XP drop in the lower right is still a drop, got " + drop.Trace);
+            ImageBuffer corner = ImageBuffer.Blank(520, 420, ImageBuffer.Pack(12, 14, 16));
+            for (int row = 0; row < 4; row++)
+                for (int col = 0; col < 4; col++)
+                {
+                    corner.Fill(18 + col * 36, 22 + row * 30, 34, 28, ImageBuffer.Pack(70, 60, 40));
+                    corner.Fill(22 + col * 36, 26 + row * 30, 26, 20, ImageBuffer.Pack(16, 16, 18));
+                }
+            IntRect grid = SceneActivity.PackWatch.Find(corner);
+            Check(grid.Width > 8 && grid.X < 80 && grid.Y < 80, "a backpack in the top left is found, got " + grid.X.ToString() + "," + grid.Y.ToString());
+        }
+
+        private static void LiveClient(string root)
+        {
+            if (root == null || root.Length == 0) return;
+            string path = Path.Combine(root, "verification", "fixtures", "live0212", "full-client-v0212.png");
+            if (!File.Exists(path)) { Check(false, "missing full client fixture"); return; }
+            ImageBuffer shot = PngImage.Load(path).Scale(2.0);
+            HudReading hud = HudReader.Read(shot, new WardenSettings());
+            int fives = 0;
+            if (hud.Buffs != null)
+            {
+                for (int i = 0; i < hud.Buffs.Count; i++)
+                {
+                    BuffIcon icon = hud.Buffs[i];
+                    if (icon.HasTime && icon.Minutes && icon.Value == 5 && PotionKind.IsPotion(icon.Kind)) fives++;
+                }
+            }
+            Check(fives >= 4, "the client shot has four potions at 5m, got " + fives.ToString() + " " + (hud.BuffTrace ?? ""));
+            Check(hud.LifeBar.Width > 20 && hud.PrayerBar.Width > hud.LifeBar.Width / 2 && hud.PrayerBar.X > hud.LifeBar.Right && Math.Abs(hud.LifeBar.Y - hud.PrayerBar.Y) < 8,
+                "the client shot locates the life and prayer bars on one row, got " + hud.LifeBar.X.ToString() + "," + hud.LifeBar.Y.ToString() + " " + hud.LifeBar.Width.ToString() + " and " + hud.PrayerBar.X.ToString() + "," + hud.PrayerBar.Y.ToString());
+            Check(ReadGate.Plausible(1471, 990), "boosted hitpoints 1471/990 stay a legal reading");
+            if (hud.Hp != null)
+                Check(hud.Hp == 1471 && hud.HpMax == 990, "a hitpoint number from the client shot is 1471/990, got " + hud.Hp.Value.ToString() + "/" + (hud.HpMax == null ? "-" : hud.HpMax.Value.ToString()));
+            IntRect pack = SceneActivity.PackWatch.Find(shot);
+            Check(pack.Width > 8, "the client shot has a backpack grid, got " + pack.X.ToString() + "," + pack.Y.ToString());
+            var xp = SceneActivity.XpWatch.Read(shot);
+            Check(!xp.Found, "a still client with no drop is not an XP event, got " + xp.Trace);
+        }
+
         private static void DrawPlus(ImageBuffer image, int x, int y, int scale, int color)
         {
             for (int px = 0; px < 5; px++) image.Fill(x + px * scale, y + 3 * scale, scale, scale, color);
@@ -368,7 +444,8 @@ namespace KavrosAfkWarden
             var gone = SceneActivity.XpWatch.Read(cleared);
             Check(!gone.Found, "the same frame with the orange text removed is not an XP drop, got " + gone.Trace);
             IntRect pack = SceneActivity.PackWatch.Find(live);
-            Check(pack.Width > 8 && pack.X > live.Width / 2 && pack.Y > live.Height * 70 / 100, "the backpack is the lower-right slot grid, got " + pack.X.ToString() + "," + pack.Y.ToString() + " " + pack.Width.ToString() + "x" + pack.Height.ToString());
+            IntRect packAgain = SceneActivity.PackWatch.Find(live);
+            Check(pack.Width > 8 && pack.X == packAgain.X && pack.Y == packAgain.Y, "the woodcutting frame finds a stable backpack grid, got " + pack.X.ToString() + "," + pack.Y.ToString() + " " + pack.Width.ToString() + "x" + pack.Height.ToString());
         }
 
         private static void LiveFlasks(string root)
@@ -404,8 +481,9 @@ namespace KavrosAfkWarden
                 {
                     ImageBuffer frame = PngImage.Load(wood).Scale(scales[s]);
                     IntRect grid = SceneActivity.PackWatch.Find(frame);
-                    Check(grid.Width > 8 && grid.X > frame.Width / 2 && grid.Y > frame.Height * 70 / 100,
-                        "backpack at " + names[s] + " stays in the lower right, got " + grid.X.ToString() + "," + grid.Y.ToString());
+                    IntRect again = SceneActivity.PackWatch.Find(frame);
+                    Check(grid.Width > 8 && grid.X == again.X && grid.Y == again.Y,
+                        "backpack at " + names[s] + " is a stable grid, got " + grid.X.ToString() + "," + grid.Y.ToString());
                 }
             }
         }
@@ -1250,7 +1328,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.12" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.13" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -1261,10 +1339,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.12\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.13\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.12.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.13.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

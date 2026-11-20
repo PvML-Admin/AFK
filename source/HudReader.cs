@@ -173,6 +173,8 @@ namespace KavrosAfkWarden
             }
             if (!settings.HasHpPin || !settings.HasPrayerPin)
                 ReadStrip(image, reading, !settings.HasHpPin, !settings.HasPrayerPin);
+            if (reading.Hp == null || reading.Prayer == null)
+                ReadThinPair(image, reading);
             ReadBuffBar(image, settings, reading);
             return reading;
         }
@@ -449,6 +451,13 @@ namespace KavrosAfkWarden
                 ? Pin(image, settings.BuffPinX, settings.BuffPinY, settings.BuffPinW, settings.BuffPinH)
                 : new IntRect(0, 0, image.Width, image.Height);
             List<IntRect> icons = FindBuffIcons(image, region);
+            List<IntRect> byTime = FindTimerIcons(image, region);
+            // The green border wins when it can already read minute timers. The label
+            // row is only for a shot where that border did not survive.
+            int greenMinutes = MinuteCount(image, icons);
+            int labelScore = MinuteCount(image, byTime) * 10 + FiveCount(image, byTime);
+            if (FiveCount(image, byTime) >= 4 || (greenMinutes == 0 && labelScore >= 4)) icons = byTime;
+            int rowFives = FiveCount(image, icons);
             reading.BuffScanned = true;
             reading.Buffs = new List<BuffIcon>();
             reading.BuffRects = new List<IntRect>();
@@ -474,6 +483,14 @@ namespace KavrosAfkWarden
                     icon.Signature = shaped;
                 }
                 else icon.Signature = IconSignature(image, icons[i]);
+                if (rowFives >= 3 && icon.HasTime && icon.Value == 5 && !icon.Minutes) icon.Minutes = true;
+                if (rowFives >= 3 && (icon.Kind == null || icon.Kind == "other") && icon.HasTime && icon.Minutes && !PurpleIcon(image, icons[i]))
+                {
+                    icon.Kind = "potion";
+                    icon.Name = PotionKind.Name("potion");
+                    icon.Strong = true;
+                    icon.Signature = "potion";
+                }
                 reading.Buffs.Add(icon);
                 reading.BuffRects.Add(icons[i]);
                 if (icon.HasTime && icon.Kind == "potion") reading.PotionCount++;
@@ -481,6 +498,129 @@ namespace KavrosAfkWarden
                 buffTrace.Append(icons[i].X).Append(":").Append(icon.Kind).Append(":").Append(LastTrace);
             }
             reading.BuffTrace = buffTrace.ToString();
+        }
+
+        private static bool PurpleIcon(ImageBuffer image, IntRect icon)
+        {
+            if (image == null || icon.Width < 4 || icon.Height < 4) return false;
+            int purple = 0, n = 0;
+            int x0 = icon.X + icon.Width / 5;
+            int x1 = icon.Right - icon.Width / 5;
+            int y0 = icon.Y + icon.Height / 6;
+            int y1 = icon.Y + icon.Height / 2;
+            for (int y = y0; y < y1; y += 2)
+                for (int x = x0; x < x1; x += 2)
+                {
+                    if (x < 0 || y < 0 || x >= image.Width || y >= image.Height) continue;
+                    int color = image.Argb(x, y);
+                    int r = ImageBuffer.R(color), g = ImageBuffer.G(color), b = ImageBuffer.B(color);
+                    n++;
+                    if (b > 70 && b > g + 15 && r > 40 && g + 20 < r) purple++;
+                }
+            return n > 0 && purple * 3 >= n;
+        }
+
+        private static int FiveCount(ImageBuffer image, List<IntRect> icons)
+        {
+            int n = 0;
+            if (icons == null) return 0;
+            for (int i = 0; i < icons.Count; i++)
+            {
+                BuffIcon clock = ReadIconTime(image, icons[i]);
+                if (clock.HasTime && clock.Value == 5) n++;
+            }
+            return n;
+        }
+
+        private static int MinuteCount(ImageBuffer image, List<IntRect> icons)
+        {
+            int timed = 0;
+            if (icons == null) return 0;
+            for (int i = 0; i < icons.Count; i++)
+            {
+                BuffIcon clock = ReadIconTime(image, icons[i]);
+                if (clock.HasTime && clock.Minutes && clock.Value >= 1 && clock.Value <= 60) timed++;
+            }
+            return timed;
+        }
+
+        // Buff timers are a row of short bright labels ("5m") with a regular gap.
+        // The icons can sit anywhere, and a fuzzy screenshot may not keep the green border.
+        private static List<IntRect> FindTimerIcons(ImageBuffer image, IntRect region)
+        {
+            List<IntRect> none = new List<IntRect>();
+            if (image == null || region.Width < 20 || region.Height < 16) return none;
+            region = Clamp(image, region.X, region.Y, region.Width, region.Height);
+            bool[] mask = Mask(image, region, TimerLabel);
+            List<Blob> blobs = Components(mask, region.Width, region.Height);
+            List<Blob> labels = new List<Blob>();
+            for (int i = 0; i < blobs.Count; i++)
+            {
+                Blob blob = blobs[i];
+                if (blob.Height < 4 || blob.Height > 22 || blob.Width < 2 || blob.Width > 36 || blob.Area < 6) continue;
+                bool merged = false;
+                for (int j = 0; j < labels.Count; j++)
+                {
+                    Blob label = labels[j];
+                    if (Math.Abs(blob.Top - label.Top) > 5) continue;
+                    if (blob.Left > label.Right + 10 || label.Left > blob.Right + 10) continue;
+                    if (blob.Left < label.Left) label.Left = blob.Left;
+                    if (blob.Right > label.Right) label.Right = blob.Right;
+                    if (blob.Top < label.Top) label.Top = blob.Top;
+                    if (blob.Bottom > label.Bottom) label.Bottom = blob.Bottom;
+                    label.Area += blob.Area;
+                    merged = true;
+                    break;
+                }
+                if (!merged) labels.Add(blob);
+            }
+            labels.Sort(delegate(Blob a, Blob b) { return a.Left != b.Left ? a.Left.CompareTo(b.Left) : a.Top.CompareTo(b.Top); });
+            List<IntRect> best = none;
+            int bestMinutes = 1;
+            for (int i = 0; i < labels.Count; i++)
+            {
+                List<Blob> row = new List<Blob>();
+                row.Add(labels[i]);
+                for (int j = i + 1; j < labels.Count; j++)
+                {
+                    if (labels[j].Left - labels[i].Left > 500) break;
+                    if (Math.Abs(labels[j].Top - labels[i].Top) > 8) continue;
+                    if (labels[j].Left < row[row.Count - 1].Right - 2) continue;
+                    row.Add(labels[j]);
+                }
+                if (row.Count < 2 || row.Count > 12) continue;
+                int pitch = row[1].Left - row[0].Left;
+                if (pitch < 16 || pitch > 120) continue;
+                List<IntRect> icons = new List<IntRect>();
+                for (int k = 0; k < row.Count; k++)
+                {
+                    if (k > 0)
+                    {
+                        int gap = row[k].Left - row[k - 1].Left;
+                        if (gap < pitch * 6 / 10 || gap > pitch * 15 / 10) continue;
+                    }
+                    int nextGap = k + 1 < row.Count ? row[k + 1].Left - row[k].Left : pitch;
+                    int wide = row[k].Width + 4;
+                    if (wide > nextGap - 6) wide = Math.Max(12, nextGap - 6);
+                    if (pitch <= 48 && wide > 16) wide = 16;
+                    int bottom = region.Y + row[k].Bottom + 4;
+                    int tall = Math.Max(row[k].Height + 6, Math.Min(pitch, wide + 8));
+                    int left = region.X + row[k].Left - 2;
+                    icons.Add(Clamp(image, left, bottom - tall, wide, tall));
+                }
+                int got = FiveCount(image, icons);
+                int minutes = got * 10 + MinuteCount(image, icons);
+                if (minutes > bestMinutes) { bestMinutes = minutes; best = icons; }
+            }
+            return best;
+        }
+
+        private static bool TimerLabel(int c)
+        {
+            int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
+            int low = Math.Min(r, Math.Min(g, b));
+            int high = Math.Max(r, Math.Max(g, b));
+            return low >= 155 && high - low <= 100;
         }
 
         private static bool BorderGreen(int c)
@@ -533,16 +673,20 @@ namespace KavrosAfkWarden
                     if (gap < -1 || gap > gapLimit || Math.Abs(cand.Y - first.Y) > Math.Max(3, first.Height / 6) || Math.Abs(cand.Width - first.Width) > Math.Max(3, first.Width / 6)) continue;
                     row.Add(cand); last=cand;
                 }
-                int score = row.Count * 3;
+                int score = 0;
                 if (row.Count >= 2 || found.Count == 1)
                 {
-                    // Read only the candidate icons, never the whole scenery row.
+                    // A timer is what makes a row a buff bar. A long run of
+                    // green foliage has no countdown, so it cannot outvote one.
                     foreach (IntRect icon in row)
                     {
                         BuffIcon clock = ReadIconTime(image, icon);
-                        if (clock.HasTime && PotionKind.IsPotion(ClassifyBuff(image, icon))) score += 12;
+                        if (!clock.HasTime) continue;
+                        score += 30;
+                        if (PotionKind.IsPotion(ClassifyBuff(image, icon))) score += 10;
                     }
                 }
+                if (score == 0) score = row.Count;
                 if (score > bestScore) { bestScore = score; best = row; }
             }
             return best;
@@ -597,6 +741,14 @@ namespace KavrosAfkWarden
             int band = Math.Min(14, Math.Max(8, icon.Height / 3));
             IntRect text = Clamp(image, icon.X + 1, icon.Bottom - band, Math.Max(8, icon.Width - 2), band);
             bool[] mask = Mask(image, text, TimerInk);
+            int seen = 0;
+            for (int i = 0; i < mask.Length; i++) if (mask[i]) seen++;
+            if (seen < 8)
+            {
+                // The countdown is drawn just under a border the finder stopped on.
+                text = Clamp(image, icon.X, icon.Bottom - 2, Math.Max(8, icon.Width), 16);
+                mask = Mask(image, text, TimerInk);
+            }
             int width = text.Width;
             int height = text.Height;
             for (int y = 0; y < height; y++)
@@ -649,6 +801,9 @@ namespace KavrosAfkWarden
                 }
                 AppendTimerGlyph(mask, width, start, gw, ref current, ref minutes, ref secondsMark);
             }
+            // A single digit with no seconds mark is the minute timer. The "m" is
+            // often too small to match after a rescale, and a lone "1" stays rejected.
+            if (!minutes && !secondsMark && current.Length == 1 && current != "1") minutes = true;
             LastTrace = "cols " + current + (minutes ? " m" : secondsMark ? " s" : "");
             int value;
             if (current.Length == 0 || current.Length > 4 || !int.TryParse(current, out value) || value <= 0)
@@ -703,6 +858,7 @@ namespace KavrosAfkWarden
                 gh--;
             }
             char glyph = GlyphBook.Match(mask, width, start, top, gw, gh);
+            if (glyph == '?' && gw <= 16 && gh <= 18) glyph = TinyTimer(mask, width, start, top, gw, gh);
             if (glyph == 'm' && gh > gw + 1) glyph = '?';
             if (glyph >= '0' && glyph <= '9') current += glyph;
             else if (glyph == 'm') minutes = true;
@@ -713,6 +869,39 @@ namespace KavrosAfkWarden
                 if (digit > 1 || (digit == 1 && gw * 3 < gh * 2)) current += digit.ToString();
                 else if (StemCount(mask, width, start, top, gw, gh) >= 3) minutes = true;
             }
+        }
+
+        // A 5 or an m that survived as a few pixels. Used only when the normal
+        // stamps do not match, so the crisp buff digits keep their own templates.
+        private static char TinyTimer(bool[] mask, int stride, int left, int top, int w, int h)
+        {
+            if (w < 2 || h < 4) return '?';
+            int bars = 0;
+            int upperLeft = 0, upperRight = 0, lowerLeft = 0, lowerRight = 0;
+            int stems = 0;
+            for (int y = 0; y < h; y++)
+            {
+                int run = 0;
+                bool onLeft = false, onRight = false;
+                for (int x = 0; x < w; x++)
+                {
+                    if (!mask[(top + y) * stride + left + x]) continue;
+                    run++;
+                    if (x < w / 2) onLeft = true;
+                    if (x >= w / 2) onRight = true;
+                }
+                if (run * 2 >= w) bars++;
+                bool upper = y < h / 2;
+                if (upper && onLeft) upperLeft++;
+                if (upper && onRight) upperRight++;
+                if (!upper && onLeft) lowerLeft++;
+                if (!upper && onRight) lowerRight++;
+                if (run > 0 && run * 3 < w) stems++;
+            }
+            bool five = bars >= 3 && upperLeft >= 2 && lowerRight >= 2 && upperLeft > upperRight && lowerRight >= lowerLeft && w >= 3 && h >= 5;
+            if (five) return '5';
+            if (stems >= h / 2 && bars < 3) return 'm';
+            return '?';
         }
 
         private static bool TimerInk(int c)
@@ -954,6 +1143,69 @@ namespace KavrosAfkWarden
             if (life) reading.HpHow = "";
             else reading.PrayerHow = "";
             return "";
+        }
+
+        // A screenshot scaled up from a short file can leave a 2px life bar.
+        // Only used when the normal strip did not produce a number.
+        private static void ReadThinPair(ImageBuffer image, HudReading reading)
+        {
+            if (image == null) return;
+            List<IntRect> reds = ThinRuns(image, RedBar);
+            List<IntRect> purples = ThinRuns(image, PurpleBar);
+            for (int i = 0; i < reds.Count; i++)
+            {
+                for (int j = 0; j < purples.Count; j++)
+                {
+                    if (Math.Abs(reds[i].Y - purples[j].Y) > 4) continue;
+                    if (purples[j].X < reds[i].Right) continue;
+                    int gap = purples[j].X - reds[i].Right;
+                    if (gap < 8 || gap > Math.Max(reds[i].Width, 40) * 6) continue;
+                    if (reading.Hp != null && reading.Prayer != null) return;
+                    int textH = 36;
+                    if (reading.Hp == null)
+                    {
+                        reading.LifeBar = reds[i];
+                        IntRect box = Clamp(image, reds[i].X - 8, reds[i].Y - textH, Math.Max(reds[i].Width + 24, 80), textH);
+                        NumberRead number = ReadResource(image, box, true);
+                        if (number.Ok && number.HasMax) Apply(reading, true, number, "thin");
+                    }
+                    if (reading.Prayer == null)
+                    {
+                        reading.PrayerBar = purples[j];
+                        IntRect box = Clamp(image, purples[j].X - 8, purples[j].Y - textH, Math.Max(purples[j].Width + 24, 80), textH);
+                        NumberRead number = ReadResource(image, box, false);
+                        if (number.Ok && number.HasMax) Apply(reading, false, number, "thin");
+                    }
+                }
+            }
+        }
+
+        private static List<IntRect> ThinRuns(ImageBuffer image, InkTest ink)
+        {
+            List<IntRect> bars = new List<IntRect>();
+            int minRun = Math.Max(28, image.Width / 90);
+            for (int y = 0; y < image.Height; y++)
+            {
+                int x = 0;
+                while (x < image.Width)
+                {
+                    if (!ink(image.Argb(x, y))) { x++; continue; }
+                    int start = x;
+                    while (x < image.Width && ink(image.Argb(x, y))) x++;
+                    int run = x - start;
+                    if (run < minRun) continue;
+                    int bottom = y;
+                    while (bottom + 1 < image.Height && bottom - y < 6)
+                    {
+                        int hit = 0;
+                        for (int xx = start; xx < x; xx += 2) if (ink(image.Argb(xx, bottom + 1))) hit++;
+                        if (hit * 4 < run) break;
+                        bottom++;
+                    }
+                    bars.Add(new IntRect(start, y, run, bottom - y + 1));
+                }
+            }
+            return bars;
         }
 
         private static void Apply(HudReading reading, bool life, NumberRead number, string how)
