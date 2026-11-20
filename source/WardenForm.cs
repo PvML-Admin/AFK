@@ -1287,10 +1287,11 @@ namespace KavrosAfkWarden
             }
             else
             {
-                bool skillPill = engine.Skilling && grab.SkillView;
-                panel.Idle.Pill = engine.IdleLatched ? "Idle" : skillPill ? "Skilling" : "Moving";
+                bool skillPill = engine.Skilling;
+                int still = (int)engine.StillFor.TotalSeconds;
+                panel.Idle.Pill = engine.IdleLatched ? "Idle" : skillPill ? "Skilling" : (still > 0 ? "Still" : "Moving");
                 panel.Idle.Tone = engine.IdleLatched ? PillTone.Bad : PillTone.Ok;
-                panel.Idle.Value = !pixels ? "No view" : (engine.Skilling && !grab.SkillView) ? "No XP view" : ((int)engine.StillFor.TotalSeconds).ToString() + (skillPill ? "s since XP" : "s still");
+                panel.Idle.Value = !pixels ? "No view" : still.ToString() + (skillPill ? "s since XP" : "s still");
             }
             panel.Hp.Pill = engine.HpLatched ? "Low HP" : "Hitpoints";
             panel.Hp.Tone = engine.HpLatched ? PillTone.Bad : !pixels || lastHud.Hp == null ? PillTone.Example : PillTone.Ok;
@@ -1299,10 +1300,12 @@ namespace KavrosAfkWarden
             panel.Prayer.Tone = engine.PrayerLatched ? PillTone.Warn : !pixels || lastHud.Prayer == null ? PillTone.Example : PillTone.Ok;
             panel.Prayer.Value = !pixels ? "No view" : prayerGate.Stale ? Stale(shownPrayer) : shownPrayer == null ? "Unread" : Format(shownPrayer, shownPrayerMax, lastHud.PrayerFromOrb);
             string potionName = buffClock.Name == null || buffClock.Name.Length == 0 ? "Potions" : buffClock.Name;
-            panel.Potion.Pill = engine.PotionLatched ? "Potion low" : potionName;
+            string roster = buffClock.Detail ?? "";
+            bool several = roster.IndexOf('·') >= 0;
+            panel.Potion.Pill = engine.PotionLatched ? "Potion low" : (several ? "Potions" : potionName);
             panel.Potion.Tone = engine.PotionLatched ? PillTone.Warn : !shownPotion.HasValue ? PillTone.Example : PillTone.Ok;
-            panel.Potion.Value = shownPotion.HasValue && !settings.Paused
-                ? potionName + " " + TimeSpan.FromSeconds(shownPotion.Value).ToString(@"m\:ss") + " left"
+            panel.Potion.Value = roster.Length > 0 && !settings.Paused
+                ? roster
                 : (!pixels ? "No view" : "No potion timer");
             int left = Math.Max(0, (int)engine.AfkRemaining.TotalSeconds);
             panel.Afk.Pill = engine.AfkLatched ? "AFK soon" : "AFK timer";

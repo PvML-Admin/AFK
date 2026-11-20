@@ -525,6 +525,8 @@ namespace KavrosAfkWarden
         public string Name;
         // Scale-normalised colour grid. Icons move, so this is the identity.
         public string Signature;
+        // True when the flask matches one of the live icon templates.
+        public bool Strong;
     }
 
     public static class PotionKind
@@ -537,7 +539,7 @@ namespace KavrosAfkWarden
         public static string Name(string kind)
         {
             if (kind == "elder") return "Elder";
-            if (kind == "aggression") return "Aggression";
+            if (kind == "aggression") return "Aggro";
             if (kind == "overload" || kind == "potion") return "Overload";
             return "";
         }
@@ -570,33 +572,37 @@ namespace KavrosAfkWarden
 
         public int? Tick(List<BuffIcon> icons, bool barFound, DateTime now)
         {
-            if (!barFound)
+            // An empty or missed buff frame must not wipe a pending confirm or a
+            // clock that is still counting. Clocks only age out after a minute.
+            if (!barFound || icons == null || icons.Count == 0)
             {
+                Age(now, false);
                 Publish(now);
-                Log = "missed";
                 return Shown;
             }
             for (int i = 0; i < clocks.Count; i++) clocks[i].Used = false;
             System.Text.StringBuilder log = new System.Text.StringBuilder();
-            if (icons != null)
+            for (int i = 0; i < icons.Count; i++)
             {
-                for (int i = 0; i < icons.Count; i++)
-                {
-                    string decision = Consider(icons[i], now);
-                    if (log.Length > 0) log.Append(" ");
-                    BuffIcon icon = icons[i];
-                    string time = !icon.HasTime ? "notime" : icon.Minutes ? icon.Value.ToString() + "m" : icon.Value.ToString() + "s";
-                    log.Append(icon.X.ToString()).Append(",").Append(icon.Kind ?? "").Append(",").Append(time).Append(",").Append(decision);
-                }
+                string decision = Consider(icons[i], now);
+                if (log.Length > 0) log.Append(" ");
+                BuffIcon icon = icons[i];
+                string time = !icon.HasTime ? "notime" : icon.Minutes ? icon.Value.ToString() + "m" : icon.Value.ToString() + "s";
+                log.Append(icon.X.ToString()).Append(",").Append(icon.Kind ?? "").Append(",").Append(time).Append(",").Append(decision);
             }
-            for (int i = clocks.Count - 1; i >= 0; i--)
-            {
-                if (clocks[i].Used) continue;
-                if ((now - clocks[i].LastSeen).TotalSeconds > 30) clocks.RemoveAt(i);
-            }
+            Age(now, true);
             Publish(now);
             Log = log.ToString();
             return Shown;
+        }
+
+        private void Age(DateTime now, bool unusedOnly)
+        {
+            for (int i = clocks.Count - 1; i >= 0; i--)
+            {
+                if (unusedOnly && clocks[i].Used) continue;
+                if ((now - clocks[i].LastSeen).TotalSeconds > 60) clocks.RemoveAt(i);
+            }
         }
 
         public int? Current(DateTime now)
@@ -606,13 +612,18 @@ namespace KavrosAfkWarden
         }
 
         public int? Shown;
+        // One line for the panel: "Elder 11:40 · Aggro 11:40 · Overload 10:02".
+        public string Detail = "";
 
         private string Consider(BuffIcon icon, DateTime now)
         {
             if (!PotionKind.IsPotion(icon.Kind)) return "rejected";
-            if (!icon.HasTime || icon.Value <= 0)
+            string identity = icon.Strong && icon.Kind != null && icon.Kind.Length > 0
+                ? icon.Kind
+                : (icon.Signature == null ? "" : icon.Signature);
+            if (!icon.HasTime || icon.Value < 1 || icon.Value > 60)
             {
-                Clock seen = Match(icon.Signature == null ? "" : icon.Signature, -1, now, false);
+                Clock seen = Match(identity, -1, now, false);
                 if (seen != null) { seen.Used = true; seen.LastSeen = now; }
                 return "rejected";
             }
@@ -623,10 +634,11 @@ namespace KavrosAfkWarden
                 if (icon.Value < 1 || icon.Value > 60) return "rejected";
                 seconds = icon.Value * 60;
             }
-            string sig = icon.Signature == null ? "" : icon.Signature;
+            string sig = identity;
             Clock clock = Match(sig, seconds, now, true);
             if (clock == null)
             {
+                if (icon.Strong) return AdoptNow(icon, sig, seconds, now);
                 if (!minute) return "rejected";
                 return AdoptNew(icon, sig, seconds, now);
             }
@@ -634,7 +646,7 @@ namespace KavrosAfkWarden
             clock.LastSeen = now;
             if (!minute)
             {
-                if (!clock.SawMinutes) return "rejected";
+                if (!clock.SawMinutes && !icon.Strong) return "rejected";
                 double expected = Expected(clock, now);
                 if (Math.Abs(expected - seconds) > 90) return "rejected";
                 clock.Anchor = seconds;
@@ -666,15 +678,42 @@ namespace KavrosAfkWarden
             return "rejected";
         }
 
-        private string AdoptNew(BuffIcon icon, string sig, int seconds, DateTime now)
+        private string AdoptNow(BuffIcon icon, string sig, int seconds, DateTime now)
         {
-            Clock pending = null;
+            Clock pending = FindPending(sig);
+            if (pending == null)
+            {
+                pending = new Clock();
+                pending.Name = icon.Name == null || icon.Name.Length == 0 ? PotionKind.Name(icon.Kind) : icon.Name;
+                if (pending.Name.Length == 0) pending.Name = "Potion";
+                pending.Signature = sig;
+                clocks.Add(pending);
+            }
+            pending.Used = true;
+            pending.LastSeen = now;
+            pending.SawMinutes = icon.Minutes || seconds >= 60;
+            pending.Anchor = seconds;
+            pending.AnchorTime = now;
+            pending.Confirmed = 2;
+            pending.PendingCount = 0;
+            pending.PendingValue = seconds;
+            return "accepted";
+        }
+
+        private Clock FindPending(string sig)
+        {
             for (int i = 0; i < clocks.Count; i++)
             {
                 Clock c = clocks[i];
                 if (c.Confirmed >= 2 || c.Used) continue;
-                if (Distance(c.Signature, sig) <= 4) { pending = c; break; }
+                if (Distance(c.Signature, sig) <= 4) return c;
             }
+            return null;
+        }
+
+        private string AdoptNew(BuffIcon icon, string sig, int seconds, DateTime now)
+        {
+            Clock pending = FindPending(sig);
             if (pending == null)
             {
                 pending = new Clock();
@@ -745,19 +784,29 @@ namespace KavrosAfkWarden
             Alertable = false;
             Shown = null;
             Name = "";
+            Detail = "";
             double best = 0;
+            System.Text.StringBuilder line = new System.Text.StringBuilder();
             for (int i = 0; i < clocks.Count; i++)
             {
                 Clock c = clocks[i];
                 if (c.Confirmed < 2) continue;
                 double left = Expected(c, now);
-                if (Tracking && left >= best) continue;
-                Tracking = true;
-                Alertable = true;
-                best = left;
-                Shown = (int)Math.Ceiling(left);
-                Name = c.Name;
+                int shown = (int)Math.Ceiling(left);
+                if (!Tracking || left < best)
+                {
+                    Tracking = true;
+                    Alertable = true;
+                    best = left;
+                    Shown = shown;
+                    Name = c.Name;
+                }
+                if (line.Length > 0) line.Append(" · ");
+                int mins = shown / 60;
+                int secs = shown % 60;
+                line.Append(c.Name).Append(" ").Append(mins.ToString()).Append(":").Append(secs.ToString("00"));
             }
+            Detail = line.ToString();
         }
 
         // Lowest potion timer. Only icons classified as potions count, including

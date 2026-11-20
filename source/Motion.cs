@@ -427,7 +427,7 @@ namespace KavrosAfkWarden
             int r = ImageBuffer.R(color), g = ImageBuffer.G(color), b = ImageBuffer.B(color);
             // Orange floating "+N xp" text, including the darker outline.
             // Near-white scenery is not included; it joins the glyphs into one blob.
-            return r >= 165 && g >= 80 && g <= 220 && b <= 150 && r >= g + 12 && r >= b + 35;
+            return r >= 140 && g >= 55 && g <= 220 && b <= 160 && r + 8 >= g && r >= b + 20;
         }
 
         private sealed class InkBand
@@ -472,6 +472,101 @@ namespace KavrosAfkWarden
     public static class PackWatch
     {
         public static IntRect Find(ImageBuffer image)
+        {
+            IntRect live = FindLive(image);
+            if (live.Width > 8) return live;
+            return FindSquare(image);
+        }
+
+        // The live backpack is a 4-column grid of gold-brown borders in the
+        // lower right. Slots are wider than they are tall, and the window
+        // often clips the bottom rows, so a 4x7 square search misses it.
+        private static IntRect FindLive(ImageBuffer image)
+        {
+            if (image == null || image.Width < 400 || image.Height < 300) return new IntRect();
+            int cellW0 = Math.Max(16, image.Width * 16 / 1000);
+            int cellW1 = Math.Max(cellW0 + 2, image.Width * 22 / 1000);
+            int cellH0 = Math.Max(14, image.Height * 28 / 1000);
+            int cellH1 = Math.Max(cellH0 + 2, image.Height * 36 / 1000);
+            int stepW = Math.Max(2, (cellW1 - cellW0) / 3);
+            int stepH = Math.Max(2, (cellH1 - cellH0) / 3);
+            int xStart = image.Width * 68 / 100;
+            int yStart = image.Height * 78 / 100;
+            int bestHits = 0;
+            int bestAvg = 9999;
+            IntRect found = new IntRect();
+            for (int cellH = cellH0; cellH <= cellH1; cellH += stepH)
+            {
+                for (int cellW = cellW0; cellW <= cellW1; cellW += stepW)
+                {
+                    int gridW = cellW * 4;
+                    int gridH = cellH * 3;
+                    if (xStart + gridW >= image.Width || yStart + gridH >= image.Height) continue;
+                    int step = Math.Max(3, cellW / 10);
+                    for (int y = yStart; y + gridH < image.Height; y += step)
+                    {
+                        for (int x = xStart; x + gridW < image.Width; x += step)
+                        {
+                            int hits;
+                            int avg;
+                            if (!ScoreLive(image, x, y, cellW, cellH, out hits, out avg)) continue;
+                            if (hits > bestHits || (hits == bestHits && avg < bestAvg))
+                            {
+                                bestHits = hits;
+                                bestAvg = avg;
+                                found = new IntRect(x, y, gridW, gridH);
+                            }
+                        }
+                    }
+                }
+            }
+            if (bestHits < 9) return new IntRect();
+            return found;
+        }
+
+        private static bool ScoreLive(ImageBuffer image, int x, int y, int cellW, int cellH, out int hits, out int avg)
+        {
+            hits = 0;
+            int sum = 0;
+            int cells = 0;
+            for (int row = 0; row < 3; row++)
+            {
+                for (int col = 0; col < 4; col++)
+                {
+                    int left = x + col * cellW;
+                    int top = y + row * cellH;
+                    int cx = left + cellW / 2;
+                    int cy = top + cellH / 2;
+                    if (cx >= image.Width || cy >= image.Height) continue;
+                    int center = Lum(image.Argb(cx, cy));
+                    int edge = center;
+                    for (int dx = 0; dx < 4; dx++)
+                    {
+                        int sample = Lum(image.Argb(Math.Min(image.Width - 1, left + dx), cy));
+                        if (sample > edge) edge = sample;
+                    }
+                    int topEdge = center;
+                    for (int dy = 0; dy < 3; dy++)
+                    {
+                        int sample = Lum(image.Argb(cx, Math.Min(image.Height - 1, top + dy)));
+                        if (sample > topEdge) topEdge = sample;
+                    }
+                    int inside = Lum(image.Argb(Math.Min(image.Width - 1, left + Math.Max(6, cellW / 6)), cy));
+                    if (edge > center + 22 && edge > inside + 8 && topEdge > center + 14 && center < 220) hits++;
+                    sum += center;
+                    cells++;
+                }
+            }
+            avg = cells == 0 ? 9999 : sum / cells;
+            return hits >= 9 && avg < 140;
+        }
+
+        private static int Lum(int color)
+        {
+            return ImageBuffer.R(color) + ImageBuffer.G(color) + ImageBuffer.B(color);
+        }
+
+        private static IntRect FindSquare(ImageBuffer image)
         {
             if (image == null) return new IntRect();
             int best = 0;

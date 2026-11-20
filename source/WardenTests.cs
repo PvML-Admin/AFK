@@ -41,6 +41,7 @@ namespace KavrosAfkWarden
                 Skilling();
                 XpDropFixture(root);
                 ScaleFixtures(root);
+                LiveFlasks(root);
                 Manifest(root);
             }
             catch (Exception ex)
@@ -221,6 +222,12 @@ namespace KavrosAfkWarden
             xp.SkillProgress = true;
             engine.Tick(xp, settings);
             Check(!engine.IdleLatched && engine.StillFor == TimeSpan.Zero, "an XP drop resets skilling idle");
+            WatchSample clicked = Sample(t.AddSeconds(50), true, true, false, true);
+            engine.Tick(clicked, settings);
+            Check(engine.StillFor == TimeSpan.Zero, "a click or key resets skilling idle");
+            engine.Tick(Sample(t.AddSeconds(51), true, true, false, false), settings);
+            engine.Tick(Sample(t.AddSeconds(80), true, true, false, false), settings);
+            Check(engine.StillFor >= TimeSpan.FromSeconds(29), "idle counts up when the clicks, XP and backpack stop");
             WardenEngine combat = new WardenEngine();
             WardenSettings normal = new WardenSettings();
             normal.IdleSeconds = 12; normal.HpEnabled = false; normal.PrayerEnabled = false; normal.AfkEnabled = false;
@@ -283,8 +290,32 @@ namespace KavrosAfkWarden
             elder.Add(PotionIcon("elder", "mmmmmmmmmmmmmmmm", true, 11, 20));
             grace.Tick(elder, true, t);
             grace.Tick(elder, true, t.AddSeconds(1));
-            Check(grace.Tick(new List<BuffIcon>(), true, t.AddSeconds(20)) != null, "a potion keeps counting for about 30 seconds when its digits vanish");
-            Check(grace.Tick(new List<BuffIcon>(), true, t.AddSeconds(40)) == null, "the potion clock drops after the grace period");
+            Check(grace.Tick(new List<BuffIcon>(), true, t.AddSeconds(20)) != null, "a potion keeps counting when its digits vanish");
+            Check(grace.Tick(new List<BuffIcon>(), true, t.AddSeconds(50)) != null, "an empty buff frame does not drop the clock inside a minute");
+            Check(grace.Tick(new List<BuffIcon>(), true, t.AddSeconds(70)) == null, "the potion clock drops after a minute with no icon");
+            BuffClock fast = new BuffClock();
+            List<BuffIcon> live = new List<BuffIcon>();
+            BuffIcon elderIcon = PotionIcon("elder", "elder", true, 12, 10);
+            elderIcon.Strong = true;
+            live.Add(elderIcon);
+            int? quick = fast.Tick(live, true, t);
+            Check(quick != null && quick.Value >= 700 && quick.Value <= 720 && fast.Detail.IndexOf("Elder") >= 0, "a strong flask template is adopted on the first read, got " + (fast.Detail ?? ""));
+            Check(fast.Tick(new List<BuffIcon>(), true, t.AddSeconds(40)) != null, "empty frames between reads keep the adopted clock");
+            BuffIcon aggroIcon = PotionIcon("aggression", "aggression", true, 11, 40);
+            aggroIcon.Strong = true;
+            live.Add(aggroIcon);
+            fast.Tick(live, true, t.AddSeconds(41));
+            Check(fast.Detail.IndexOf("Elder") >= 0 && fast.Detail.IndexOf("Aggro") >= 0, "each potion is listed with its own time, got " + fast.Detail);
+            live[0] = PotionIcon("elder", "elder", true, 2, 10);
+            live[0] = WithStrong(live[0]);
+            int? held = fast.Tick(live, true, t.AddSeconds(42));
+            Check(held != null && held.Value > 600, "one short read does not replace a confirmed timer, got " + (held == null ? "none" : held.Value.ToString()));
+        }
+
+        private static BuffIcon WithStrong(BuffIcon icon)
+        {
+            icon.Strong = true;
+            return icon;
         }
 
         private static void DrawPlus(ImageBuffer image, int x, int y, int scale, int color)
@@ -304,6 +335,14 @@ namespace KavrosAfkWarden
             DrawGlyph(synthetic, 9, 82, 80, 2, orange);
             var drop = SceneActivity.XpWatch.Read(synthetic);
             Check(drop.Found && drop.Plus && drop.X < 200 && drop.Y > 40 && drop.Y < 200, "a floating +589 on the left of the view is an XP drop, got " + drop.Trace);
+            ImageBuffer faded = ImageBuffer.Blank(640, 360, ImageBuffer.Pack(24, 40, 22));
+            int dim = ImageBuffer.Pack(150, 95, 45);
+            DrawPlus(faded, 40, 80, 2, dim);
+            DrawGlyph(faded, 5, 54, 80, 2, dim);
+            DrawGlyph(faded, 8, 68, 80, 2, dim);
+            DrawGlyph(faded, 9, 82, 80, 2, dim);
+            var fadedDrop = SceneActivity.XpWatch.Read(faded);
+            Check(fadedDrop.Found && fadedDrop.Plus, "a faded +589 still counts while the drop floats away, got " + fadedDrop.Trace);
             SkillSense sense = new SkillSense();
             sense.Observe(synthetic, null);
             Check(!sense.XpEvent, "the first look at a drop is not yet progress");
@@ -329,7 +368,46 @@ namespace KavrosAfkWarden
             var gone = SceneActivity.XpWatch.Read(cleared);
             Check(!gone.Found, "the same frame with the orange text removed is not an XP drop, got " + gone.Trace);
             IntRect pack = SceneActivity.PackWatch.Find(live);
-            Check(pack.Width == 0 || pack.Y > live.Height / 2, "the backpack anchor is not a false grid at the top of the screen, got " + pack.X.ToString() + "," + pack.Y.ToString());
+            Check(pack.Width > 8 && pack.X > live.Width / 2 && pack.Y > live.Height * 70 / 100, "the backpack is the lower-right slot grid, got " + pack.X.ToString() + "," + pack.Y.ToString() + " " + pack.Width.ToString() + "x" + pack.Height.ToString());
+        }
+
+        private static void LiveFlasks(string root)
+        {
+            if (root == null || root.Length == 0) return;
+            string dir = Path.Combine(root, "verification", "fixtures", "live0211");
+            string[] files = new string[] { "elder-overload-12m.png", "aggression-12m.png", "overload-11m.png" };
+            string[] kinds = new string[] { "elder", "aggression", "overload" };
+            int[] minutes = new int[] { 12, 12, 11 };
+            double[] scales = new double[] { 1.0, 1.5, 2.0 };
+            string[] names = new string[] { "100%", "150%", "200%" };
+            for (int s = 0; s < scales.Length; s++)
+            {
+                for (int i = 0; i < files.Length; i++)
+                {
+                    string path = Path.Combine(dir, files[i]);
+                    if (!File.Exists(path)) { Check(false, "missing " + files[i]); continue; }
+                    HudReading bar = HudReader.Read(PngImage.Load(path).Scale(scales[s]), new WardenSettings());
+                    BuffIcon icon = new BuffIcon();
+                    bool found = false;
+                    if (bar.Buffs != null)
+                    {
+                        for (int b = 0; b < bar.Buffs.Count; b++)
+                        {
+                            if (bar.Buffs[b].Kind == kinds[i]) { icon = bar.Buffs[b]; found = true; break; }
+                        }
+                    }
+                    Check(found && icon.Strong && icon.HasTime && icon.Minutes && icon.Value == minutes[i],
+                        files[i] + " at " + names[s] + " is " + kinds[i] + " " + minutes[i].ToString() + "m, got " + (bar.BuffTrace ?? ""));
+                }
+                string wood = Path.Combine(root, "verification", "fixtures", "live029", "xpdrop-woodcutting-589.png");
+                if (File.Exists(wood) && scales[s] != 1.0)
+                {
+                    ImageBuffer frame = PngImage.Load(wood).Scale(scales[s]);
+                    IntRect grid = SceneActivity.PackWatch.Find(frame);
+                    Check(grid.Width > 8 && grid.X > frame.Width / 2 && grid.Y > frame.Height * 70 / 100,
+                        "backpack at " + names[s] + " stays in the lower right, got " + grid.X.ToString() + "," + grid.Y.ToString());
+                }
+            }
         }
 
         private static void ScaleFixtures(string root)
@@ -1172,7 +1250,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.11" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.12" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -1183,10 +1261,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.11\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.12\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.11.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.12.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

@@ -236,7 +236,8 @@ namespace KavrosAfkWarden
         internal static bool Orange(int color)
         {
             int r = ImageBuffer.R(color), g = ImageBuffer.G(color), b = ImageBuffer.B(color);
-            return r >= 165 && g >= 80 && g <= 220 && b <= 150 && r >= g + 12 && r >= b + 35;
+            // Includes a faded drop, not only the bright frame at the start of the float.
+            return r >= 140 && g >= 55 && g <= 220 && b <= 160 && r + 8 >= g && r >= b + 20;
         }
     }
 }

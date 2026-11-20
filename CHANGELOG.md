@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.12
+
+- A potion is recognised from the flask itself: Elder is the dark teal flask, Aggro the purple flask, and Overload the green flask with a dark rim. The first clean 1–60 minute or second read is kept. A later read can correct it, and one odd reading does not replace a timer that is already counting. An empty buff frame leaves the clocks alone for a minute. The panel lists each potion with the time it has left.
+- The backpack is the lower-right grid of slot borders, including when the window cuts off the bottom rows, at 100%, 150% and 200%.
+- Orange XP drops stay visible while they float and fade. The hitpoint and prayer bars keep the last place they were found. Idle counts clicks, keys, XP drops and backpack changes, and the seconds keep moving on the panel.
+
 ## 0.2.11
 
 - Buff times, hitpoints and prayer are matched against glyph stamps cut from the live captures, at 100%, 150% and 200%. A thin "1m" is not kept when the rest of the timer is still readable.

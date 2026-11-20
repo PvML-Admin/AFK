@@ -142,6 +142,8 @@ namespace KavrosAfkWarden
         private IntRect buffStrip;
         private IntRect xpBox;
         private IntRect packBox;
+        private IntRect heldLife;
+        private IntRect heldPrayer;
         private bool haveBoxes;
         private int missedLocks;
         private DateTime nextFullSearch = DateTime.MinValue;
@@ -314,6 +316,7 @@ namespace KavrosAfkWarden
             {
                 lastClient=hwnd; lastSize=client.Size; lastSettings=settings;
                 lifeBox=prayerBox=buffStrip=xpBox=packBox=new IntRect();
+                heldLife=heldPrayer=new IntRect();
                 haveBoxes=false; missedLocks=0; nextFullSearch=DateTime.MinValue;
             }
             bool visible = RectOnGame(hwnd, client, new IntRect(0, 0, client.Width, client.Height));
@@ -383,14 +386,22 @@ namespace KavrosAfkWarden
                     Math.Min(image.Width,foundBuff.Right+margin)-Math.Max(0,foundBuff.X-margin),
                     Math.Min(image.Height,foundBuff.Bottom+4)-Math.Max(0,foundBuff.Y-3));
             }
+            if (xpBox.Width < 8)
+            {
+                xpBox = new IntRect(image.Width / 5, 0, image.Width * 3 / 5, Math.Max(48, image.Height * 45 / 100));
+            }
             IntRect xp = SceneActivity.XpWatch.Find(image);
             if (xp.Width > 8)
             {
-                int grow = Math.Max(16, xp.Height);
-                xpBox = new IntRect(Math.Max(0, xp.X - 8), Math.Max(0, xp.Y - grow), xp.Width + 16, xp.Height + grow + 8);
+                // The drop floats upward and fades, so the locked band stays tall.
+                int left = Math.Max(0, xp.X - image.Width / 8);
+                int right = Math.Min(image.Width, xp.Right + image.Width / 6);
+                int bottom = Math.Min(image.Height, Math.Max(xp.Bottom + xp.Height * 3, image.Height * 45 / 100));
+                xpBox = new IntRect(left, 0, Math.Max(32, right - left), Math.Max(48, bottom));
             }
             IntRect pack = SceneActivity.PackWatch.Find(image);
             if (pack.Width > 8) packBox = pack;
+            RememberBars(reading);
             haveBoxes = lifeBox.Width > 8 || prayerBox.Width > 8 || buffStrip.Width>8;
             bool complete = reading.HpMax.HasValue && reading.PrayerMax.HasValue;
             failedFull = complete ? 0 : failedFull + 1;
@@ -453,12 +464,22 @@ namespace KavrosAfkWarden
                     nextFullSearch=DateTime.UtcNow.AddSeconds(3);
             }
             else missedLocks = 0;
+            RememberBars(reading);
             if (!slow) return reading;
             ImageBuffer xp = xpBox.Width > 8 ? Grab(hwnd, client, xpBox, 4) : null;
             ImageBuffer pack = packBox.Width > 8 ? Grab(hwnd, client, packBox, 5) : null;
             skills.Observe(xp, pack);
             PublishSkills();
             return reading;
+        }
+
+        private void RememberBars(HudReading reading)
+        {
+            if (reading == null) return;
+            if (reading.LifeBar.Width >= 8 && reading.LifeBar.Y > 0) heldLife = reading.LifeBar;
+            else if (heldLife.Width >= 8) reading.LifeBar = heldLife;
+            if (reading.PrayerBar.Width >= 8 && reading.PrayerBar.Y > 0) heldPrayer = reading.PrayerBar;
+            else if (heldPrayer.Width >= 8) reading.PrayerBar = heldPrayer;
         }
 
         private static bool RowHasTimer(HudReading reading)

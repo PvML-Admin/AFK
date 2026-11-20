@@ -465,7 +465,15 @@ namespace KavrosAfkWarden
                 BuffIcon icon = ReadIconTime(image, icons[i]);
                 icon.Kind = ClassifyBuff(image, icons[i]);
                 icon.Name = PotionKind.Name(icon.Kind);
-                icon.Signature = IconSignature(image, icons[i]);
+                string shaped = PotionTemplates.Match(image, icons[i]);
+                if (shaped.Length > 0)
+                {
+                    icon.Kind = shaped;
+                    icon.Name = PotionKind.Name(shaped);
+                    icon.Strong = true;
+                    icon.Signature = shaped;
+                }
+                else icon.Signature = IconSignature(image, icons[i]);
                 reading.Buffs.Add(icon);
                 reading.BuffRects.Add(icons[i]);
                 if (icon.HasTime && icon.Kind == "potion") reading.PotionCount++;
@@ -763,6 +771,8 @@ namespace KavrosAfkWarden
         internal static string ClassifyBuff(ImageBuffer image, IntRect icon)
         {
             if (image == null || icon.Width < 8 || icon.Height < 8) return "other";
+            string shaped = PotionTemplates.Match(image, icon);
+            if (shaped.Length > 0) return shaped;
             int bodyBottom = icon.Y + (icon.Height * 62) / 100;
             int inset = Math.Max(2, icon.Width / 8);
             int purple = 0, blue = 0, green = 0, red = 0, samples = 0;
