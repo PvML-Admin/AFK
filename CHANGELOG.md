@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.8
+
+- The game is read while it is behind other windows. A visible slot is still a small screen copy. A covered slot is taken from the window itself, and a black result falls back to the screen.
+- Potion times keep minutes and seconds apart. The buff strip widens when the icons move, and one missed read does not drop a timer that is already counting down.
+- XP drops and backpack changes count as skilling without a mode switch. Idle waits through the skilling gap, including while other motion is on screen, then warns when skilling stops.
+
 ## 0.2.7
 
 - Life and prayer stay readable when the coloured fill is too short to find. Implausible values are dropped, and the panel moves when two of three reads agree.
