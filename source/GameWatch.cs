@@ -114,6 +114,8 @@ namespace KavrosAfkWarden
         internal HudReading Reading = new HudReading();
         internal bool XpActivity;
         internal bool PackActivity;
+        internal bool SkillView;
+        internal string SkillTrace = "xp=none pack=none";
         internal Rectangle PanelBounds;
 
         private readonly object gate = new object();
@@ -130,6 +132,9 @@ namespace KavrosAfkWarden
         private string publishedNote = "Waiting for the Kavros window.";
         private bool publishedXp;
         private bool publishedPack;
+        private bool publishedSkillView;
+        private string publishedSkillTrace = "xp=none pack=none";
+        private readonly SkillSense skills = new SkillSense();
         private int publishedMs;
         private readonly bool[] keyDown = new bool[256];
         private IntRect lifeBox;
@@ -139,10 +144,6 @@ namespace KavrosAfkWarden
         private IntRect packBox;
         private bool haveBoxes;
         private int missedLocks;
-        private int lastXpHash;
-        private int lastPackHash;
-        private bool haveXpHash;
-        private bool havePackHash;
         private DateTime nextFullSearch = DateTime.MinValue;
         private DateTime nextDebugImage = DateTime.MinValue;
         private readonly Bitmap[] pads = new Bitmap[6];
@@ -203,6 +204,8 @@ namespace KavrosAfkWarden
                 Note = publishedNote;
                 XpActivity = publishedXp;
                 PackActivity = publishedPack;
+                SkillView = publishedSkillView;
+                SkillTrace = publishedSkillTrace;
                 LastTickMs = publishedMs;
                 publishedXp = false;
                 publishedPack = false;
@@ -311,7 +314,7 @@ namespace KavrosAfkWarden
             {
                 lastClient=hwnd; lastSize=client.Size; lastSettings=settings;
                 lifeBox=prayerBox=buffStrip=xpBox=packBox=new IntRect();
-                haveBoxes=haveXpHash=havePackHash=false; missedLocks=0; nextFullSearch=DateTime.MinValue;
+                haveBoxes=false; missedLocks=0; nextFullSearch=DateTime.MinValue;
             }
             bool visible = RectOnGame(hwnd, client, new IntRect(0, 0, client.Width, client.Height));
             HudReading reading = new HudReading();
@@ -372,7 +375,7 @@ namespace KavrosAfkWarden
             if (reading.PrayerText.Width > 8) prayerBox = reading.PrayerText;
             IntRect foundBuff = Union(reading.BuffRects);
             if(settings.HasBuffPin) buffStrip=new IntRect((int)(settings.BuffPinX*image.Width),(int)(settings.BuffPinY*image.Height),(int)Math.Ceiling(settings.BuffPinW*image.Width),(int)Math.Ceiling(settings.BuffPinH*image.Height));
-            else if(foundBuff.Width>0)
+            else if(foundBuff.Width>0 && RowHasTimer(reading))
             {
                 // Keep a few neighbouring slots in view when buffs reorder after a dose.
                 int margin=Math.Max(16,foundBuff.Height*2);
@@ -381,7 +384,11 @@ namespace KavrosAfkWarden
                     Math.Min(image.Height,foundBuff.Bottom+4)-Math.Max(0,foundBuff.Y-3));
             }
             IntRect xp = SceneActivity.XpWatch.Find(image);
-            if (xp.Width > 8) xpBox = xp;
+            if (xp.Width > 8)
+            {
+                int grow = Math.Max(16, xp.Height);
+                xpBox = new IntRect(Math.Max(0, xp.X - 8), Math.Max(0, xp.Y - grow), xp.Width + 16, xp.Height + grow + 8);
+            }
             IntRect pack = SceneActivity.PackWatch.Find(image);
             if (pack.Width > 8) packBox = pack;
             haveBoxes = lifeBox.Width > 8 || prayerBox.Width > 8 || buffStrip.Width>8;
@@ -436,13 +443,8 @@ namespace KavrosAfkWarden
                     reading.BuffTrace = buffs.BuffTrace;
                     reading.PotionCount = buffs.PotionCount;
                 }
-                if (!reading.BuffBarFound)
-                {
-                    int grown = buffStrip.Width + 64;
-                    int x = Math.Max(0, buffStrip.X - 32);
-                    int w = Math.Min(client.Width - x, grown);
-                    buffStrip = new IntRect(x, buffStrip.Y, w, buffStrip.Height);
-                }
+                // A single miss does not walk the lock onto scenery. The strip
+                // moves only when a later search finds a buff row that has timers.
             }
             if (reading.HpMax == null || reading.PrayerMax == null || (buffStrip.Width>8 && slow && !reading.BuffBarFound))
             {
@@ -453,23 +455,18 @@ namespace KavrosAfkWarden
             else missedLocks = 0;
             if (!slow) return reading;
             ImageBuffer xp = xpBox.Width > 8 ? Grab(hwnd, client, xpBox, 4) : null;
-            if (xp != null)
-            {
-                int hash = SceneActivity.XpWatch.Hash(xp, new IntRect(0, 0, xp.Width, xp.Height));
-                if (haveXpHash && hash != lastXpHash) lock (gate) { publishedXp = true; }
-                lastXpHash = hash;
-                haveXpHash = true;
-            }
-            // A new log, ore or fish is progress whether or not skilling mode is ticked.
             ImageBuffer pack = packBox.Width > 8 ? Grab(hwnd, client, packBox, 5) : null;
-            if (pack != null)
-            {
-                int hash = SceneActivity.PackWatch.Hash(pack, new IntRect(0, 0, pack.Width, pack.Height));
-                if (havePackHash && hash != lastPackHash) lock (gate) { publishedPack = true; }
-                lastPackHash = hash;
-                havePackHash = true;
-            }
+            skills.Observe(xp, pack);
+            PublishSkills();
             return reading;
+        }
+
+        private static bool RowHasTimer(HudReading reading)
+        {
+            if (reading == null || reading.Buffs == null) return false;
+            for (int i = 0; i < reading.Buffs.Count; i++)
+                if (reading.Buffs[i].HasTime) return true;
+            return false;
         }
 
         private static IntRect Union(IntRect a, IntRect b)
@@ -490,19 +487,18 @@ namespace KavrosAfkWarden
 
         private void NoteActivity(ImageBuffer image)
         {
-            if (xpBox.Width > 8)
+            skills.Observe(image, image);
+            PublishSkills();
+        }
+
+        private void PublishSkills()
+        {
+            lock (gate)
             {
-                int hash = SceneActivity.XpWatch.Hash(image, xpBox);
-                if (haveXpHash && hash != lastXpHash) lock (gate) { publishedXp = true; }
-                lastXpHash = hash;
-                haveXpHash = true;
-            }
-            if (packBox.Width > 8)
-            {
-                int hash = SceneActivity.PackWatch.Hash(image, packBox);
-                if (havePackHash && hash != lastPackHash) lock (gate) { publishedPack = true; }
-                lastPackHash = hash;
-                havePackHash = true;
+                if (skills.XpEvent) publishedXp = true;
+                if (skills.PackEvent) publishedPack = true;
+                publishedSkillTrace = skills.Trace;
+                publishedSkillView = skills.View;
             }
         }
 

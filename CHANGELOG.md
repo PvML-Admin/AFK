@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.10
+
+- Each potion keeps its own clock, matched by how the icon looks rather than where it sits, because buffs move. A reading is kept only after it agrees twice. A shorter reading replaces a longer one only when it repeats. A missed timer keeps counting for about 30 seconds. Prayer, stack counts, and a red ring with no flask or crystal are ignored. The panel shows the soonest confirmed potion by name.
+- Woodcutting XP is the orange "+N xp" text above the player, not a hash of the scenery. Scene noise no longer holds the Skilling pill at 0 seconds. A backpack change is a slot filling or emptying.
+
 ## 0.2.9
 
 - The whole screen no longer flashes black. The periodic capture never calls PrintWindow. A visible client is a small screen copy, focused or not. A covered client is left unread, and hitpoints, prayer and idle stay on the last good values. A black frame cannot raise an alert. The panel's topmost state changes only when that state changes.

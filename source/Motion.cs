@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace KavrosAfkWarden
 {
@@ -280,40 +281,179 @@ namespace KavrosAfkWarden
     {
         public static IntRect Find(ImageBuffer image)
         {
-            if (image == null) return new IntRect();
-            // XP drops sit near the top, often by the minimap, at any scale.
-            // The left side and the lower view are scenery and are not searched.
-            int left = image.Width * 32 / 100;
-            int bottom = Math.Max(1, image.Height * 55 / 100);
-            int minX = image.Width, minY = bottom, maxX = 0, maxY = 0, count = 0;
-            int step = image.Width > 900 ? 2 : 1;
-            for (int y = 0; y < bottom; y += step)
-                for (int x = left; x < image.Width; x += step)
-                {
-                    int color = image.Argb(x, y);
-                    int r = ImageBuffer.R(color), g = ImageBuffer.G(color), b = ImageBuffer.B(color);
-                    if (r < 170 || g < 140 || b > 210 || r + g <= b * 2 + 40) continue;
-                    count++;
-                    if (x < minX) minX = x;
-                    if (y < minY) minY = y;
-                    if (x > maxX) maxX = x;
-                    if (y > maxY) maxY = y;
-                }
-            if (count < 12 || maxX <= minX || maxY < minY) return new IntRect();
-            if (maxX - minX > 280 || maxY - minY > 110) return new IntRect();
-            return new IntRect(Math.Max(0, minX - 4), Math.Max(0, minY - 4), Math.Min(image.Width, maxX + 5) - Math.Max(0, minX - 4), Math.Min(image.Height, maxY + 5) - Math.Max(0, minY - 4));
+            XpSight sight = Read(image);
+            return sight.Found ? sight.Rect : new IntRect();
         }
 
-        public static int Hash(ImageBuffer image, IntRect box)
+        // A drop is "+N" text, or a compact counter whose digits can be read.
+        // The box is the glyphs only. Scenery behind them is not part of the match.
+        public static XpSight Read(ImageBuffer image)
         {
-            if (image == null || box.Width < 4 || box.Height < 4) return 0;
-            int hash = 17;
-            int step = Math.Max(1, Math.Min(box.Width, box.Height) / 12);
-            for (int y = box.Y; y < box.Bottom && y < image.Height; y += step)
-                for (int x = box.X; x < box.Right && x < image.Width; x += step)
-                    hash = unchecked(hash * 31 + image.Argb(x, y));
-            return hash;
+            XpSight best = new XpSight();
+            if (image == null || image.Width < 12 || image.Height < 12) return best;
+            List<InkBand> bands = new List<InkBand>();
+            int guard = 0;
+            int limit = image.Height * 70 / 100;
+            for (int y = 0; y < limit && guard < 6000; y++)
+            {
+                int x = 0;
+                while (x < image.Width && guard < 6000)
+                {
+                    if (!Ink(image.Argb(x, y))) { x++; continue; }
+                    int x0 = x;
+                    while (x < image.Width && Ink(image.Argb(x, y))) x++;
+                    if (x - x0 < 2) continue;
+                    guard++;
+                    InkBand band = null;
+                    for (int i = bands.Count - 1; i >= 0 && i >= bands.Count - 24; i--)
+                    {
+                        if (bands[i].Touches(x0, y, x)) { band = bands[i]; break; }
+                    }
+                    if (band == null)
+                    {
+                        band = new InkBand();
+                        bands.Add(band);
+                    }
+                    band.Add(x0, y, x);
+                }
+            }
+            for (int i = 0; i < bands.Count; i++)
+            {
+                InkBand band = bands[i];
+                if (band.Dead) continue;
+                XpSight sight = Parse(image, band);
+                if (!sight.Found) continue;
+                if (!best.Found || (sight.Plus && !best.Plus) || (sight.Plus == best.Plus && sight.Y < best.Y)) best = sight;
+            }
+            return best;
         }
+
+        private static XpSight Parse(ImageBuffer image, InkBand band)
+        {
+            XpSight sight = new XpSight();
+            int w = band.X1 - band.X0;
+            int h = band.Y1 - band.Y0 + 1;
+            if (band.Y0 > image.Height * 70 / 100) return sight;
+            if (h < 6 || h > 48 || w < 8 || w > 420) return sight;
+            bool[] mask = new bool[w * h];
+            int ink = 0;
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                    if (Ink(image.Argb(band.X0 + x, band.Y0 + y))) { mask[y * w + x] = true; ink++; }
+            if (ink < 8 || ink * 3 > w * h) return sight;
+            string text = "";
+            bool plus = false;
+            bool digit = false;
+            int others = 0;
+            int cursor = 0;
+            while (cursor < w)
+            {
+                if (!Column(mask, w, h, cursor)) { cursor++; continue; }
+                int start = cursor;
+                while (cursor < w && Column(mask, w, h, cursor)) cursor++;
+                int gw = cursor - start;
+                int top = h, bottom = 0;
+                for (int y = 0; y < h; y++)
+                    for (int x = start; x < cursor; x++)
+                        if (mask[y * w + x])
+                        {
+                            if (y < top) top = y;
+                            if (y > bottom) bottom = y;
+                        }
+                int gh = bottom - top + 1;
+                if (gw < 2 || gh < 5) continue;
+                if (IsPlus(mask, w, start, top, gw, gh)) { text += "+"; plus = true; continue; }
+                int value = DigitFont.Match(Sample(mask, w, start, top, gw, gh));
+                if (value >= 0) { text += value.ToString(); digit = true; }
+                else others++;
+            }
+            if (plus && !digit && others >= 2) digit = true;
+            if (!digit || !plus) return sight;
+            sight.Found = true;
+            sight.Plus = plus;
+            sight.Text = text;
+            sight.Rect = new IntRect(band.X0, band.Y0, w, h);
+            sight.Trace = "xp=" + text + "@" + band.X0.ToString() + "," + band.Y0.ToString() + " " + w.ToString() + "x" + h.ToString();
+            return sight;
+        }
+
+        private static bool Column(bool[] mask, int stride, int height, int x)
+        {
+            for (int y = 0; y < height; y++) if (mask[y * stride + x]) return true;
+            return false;
+        }
+
+        private static bool IsPlus(bool[] mask, int stride, int left, int top, int w, int h)
+        {
+            if (w + 2 < h / 2 || w > h + 3) return false;
+            int row = 0;
+            int midY = top + h / 2;
+            for (int x = left; x < left + w; x++) if (mask[midY * stride + x]) row++;
+            int col = 0;
+            int midX = left + w / 2;
+            for (int y = top; y < top + h; y++) if (mask[y * stride + midX]) col++;
+            int area = 0;
+            for (int y = top; y < top + h; y++)
+                for (int x = left; x < left + w; x++)
+                    if (mask[y * stride + x]) area++;
+            return row * 5 >= w * 3 && col * 5 >= h * 3 && area * 3 < w * h;
+        }
+
+        private static int[,] Sample(bool[] mask, int stride, int left, int top, int w, int h)
+        {
+            int[,] grid = new int[7, 5];
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                    if (mask[(top + y) * stride + left + x])
+                        grid[Math.Min(6, y * 7 / h), Math.Min(4, x * 5 / w)] = 1;
+            return grid;
+        }
+
+        private static bool Ink(int color)
+        {
+            int r = ImageBuffer.R(color), g = ImageBuffer.G(color), b = ImageBuffer.B(color);
+            // Orange floating "+N xp" text, including the darker outline.
+            // Near-white scenery is not included; it joins the glyphs into one blob.
+            return r >= 165 && g >= 80 && g <= 220 && b <= 150 && r >= g + 12 && r >= b + 35;
+        }
+
+        private sealed class InkBand
+        {
+            public int X0, Y0, X1, Y1;
+            public bool Dead;
+            private bool any;
+
+            public bool Touches(int x0, int y, int x1)
+            {
+                if (Dead || !any) return false;
+                if (y > Y1 + 2 || y + 2 < Y0) return false;
+                return x1 >= X0 - 6 && x0 <= X1 + 6;
+            }
+
+            public void Add(int x0, int y, int x1)
+            {
+                if (!any) { X0 = x0; X1 = x1; Y0 = y; Y1 = y; any = true; }
+                else
+                {
+                    if (x0 < X0) X0 = x0;
+                    if (x1 > X1) X1 = x1;
+                    if (y < Y0) Y0 = y;
+                    if (y > Y1) Y1 = y;
+                }
+                if (X1 - X0 > 420 || Y1 - Y0 > 48) Dead = true;
+            }
+        }
+    }
+
+    public sealed class XpSight
+    {
+        public bool Found;
+        public bool Plus;
+        public string Text = "";
+        public string Trace = "xp=none";
+        public IntRect Rect;
+        public int X { get { return Rect.X; } }
+        public int Y { get { return Rect.Y; } }
     }
 
     public static class PackWatch
@@ -340,20 +480,49 @@ namespace KavrosAfkWarden
             return found;
         }
 
-        public static int Hash(ImageBuffer image, IntRect grid)
+        public static int[] Slots(ImageBuffer image, IntRect grid)
         {
-            if (image == null || grid.Width < 16 || grid.Height < 16) return 0;
+            int[] slots = new int[28];
+            if (image == null || grid.Width < 16 || grid.Height < 16) return slots;
             int cellW = grid.Width / 4;
             int cellH = grid.Height / 7;
-            if (cellW < 4 || cellH < 4) return 0;
-            int hash = 17;
+            if (cellW < 4 || cellH < 4) return slots;
             for (int row = 0; row < 7; row++)
                 for (int col = 0; col < 4; col++)
                 {
-                    int x = grid.X + col * cellW + cellW / 2;
-                    int y = grid.Y + row * cellH + cellH / 2;
-                    hash = unchecked(hash * 31 + image.Argb(x, y));
+                    int x0 = grid.X + col * cellW + cellW / 4;
+                    int y0 = grid.Y + row * cellH + cellH / 4;
+                    int x1 = x0 + Math.Max(1, cellW / 2);
+                    int y1 = y0 + Math.Max(1, cellH / 2);
+                    int sum = 0, n = 0, r = 0, g = 0, b = 0;
+                    for (int y = y0; y < y1 && y < image.Height; y += 2)
+                        for (int x = x0; x < x1 && x < image.Width; x += 2)
+                        {
+                            int color = image.Argb(x, y);
+                            r += ImageBuffer.R(color);
+                            g += ImageBuffer.G(color);
+                            b += ImageBuffer.B(color);
+                            sum += ImageBuffer.R(color) + ImageBuffer.G(color) + ImageBuffer.B(color);
+                            n++;
+                        }
+                    if (n < 1 || sum / n < 90) continue;
+                    slots[row * 4 + col] = 1 + (r / n) / 48 + 8 * ((g / n) / 48) + 64 * ((b / n) / 48);
                 }
+            return slots;
+        }
+
+        public static bool SameSlots(int[] a, int[] b)
+        {
+            if (a == null || b == null || a.Length != b.Length) return false;
+            for (int i = 0; i < a.Length; i++) if (a[i] != b[i]) return false;
+            return true;
+        }
+
+        public static int Hash(ImageBuffer image, IntRect grid)
+        {
+            int[] slots = Slots(image, grid);
+            int hash = 17;
+            for (int i = 0; i < slots.Length; i++) hash = unchecked(hash * 31 + slots[i]);
             return hash;
         }
 
@@ -422,6 +591,74 @@ namespace KavrosAfkWarden
                 if (x >= box.X && x < box.Right && y >= box.Y && y < box.Bottom) return true;
             }
             return false;
+        }
+    }
+
+    // Confirms an XP drop or a backpack change on the second identical look,
+    // so one noisy frame cannot reset the idle timer.
+    public sealed class SkillSense
+    {
+        public bool XpEvent;
+        public bool PackEvent;
+        public bool View;
+        public string Trace = "xp=none pack=none";
+        private string shown = "";
+        private int hits;
+        private string fired = "";
+        private int quiet;
+        private bool ever;
+        private int[] pendingSlots;
+        private int slotHits;
+        private int[] confirmedSlots;
+
+        public void Observe(ImageBuffer xpImage, ImageBuffer packImage)
+        {
+            XpEvent = false;
+            PackEvent = false;
+            bool saw = false;
+            string xpText = "xp=none";
+            if (xpImage != null)
+            {
+                var sight = SceneActivity.XpWatch.Read(xpImage);
+                if (sight.Found)
+                {
+                    saw = true;
+                    ever = true;
+                    xpText = sight.Trace;
+                    if (sight.Text == shown) hits++;
+                    else { shown = sight.Text; hits = 1; }
+                    if (hits == 2 && fired != shown)
+                    {
+                        XpEvent = true;
+                        fired = shown;
+                    }
+                }
+            }
+            string packText = "pack=none";
+            if (packImage != null)
+            {
+                IntRect grid = SceneActivity.PackWatch.Find(packImage);
+                if (grid.Width > 8)
+                {
+                    saw = true;
+                    ever = true;
+                    int[] now = SceneActivity.PackWatch.Slots(packImage, grid);
+                    packText = "pack@" + grid.X.ToString() + "," + grid.Y.ToString() + " slots";
+                    if (pendingSlots == null || !SceneActivity.PackWatch.SameSlots(pendingSlots, now))
+                    {
+                        pendingSlots = now;
+                        slotHits = 1;
+                    }
+                    else slotHits++;
+                    if (slotHits >= 2 && confirmedSlots != null && !SceneActivity.PackWatch.SameSlots(confirmedSlots, now))
+                        PackEvent = true;
+                    if (slotHits >= 2) confirmedSlots = now;
+                }
+            }
+            if (saw) quiet = 0;
+            else if (quiet < 4) quiet++;
+            View = saw || (ever && quiet < 3);
+            Trace = xpText + " " + packText + (XpEvent ? " xp-event" : "") + (PackEvent ? " pack-event" : "");
         }
     }
 }

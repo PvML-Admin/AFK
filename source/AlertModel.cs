@@ -522,67 +522,242 @@ namespace KavrosAfkWarden
         public bool Minutes;
         public int Value;
         public string Kind;
+        public string Name;
+        // Scale-normalised colour grid. Icons move, so this is the identity.
+        public string Signature;
     }
 
-    // A plain number on a buff icon can be a stack count. It becomes a potion
-    // timer only after that icon has shown minutes, or after the number counts down.
-    public sealed class BuffClock
+    public static class PotionKind
     {
-        private struct Slot
+        public static bool IsPotion(string kind)
         {
-            public int X;
-            public bool SawMinutes;
-            public bool Fell;
-            public bool Have;
-            public int Last;
-            public bool Seen;
+            return kind == "potion" || kind == "elder" || kind == "overload" || kind == "aggression";
         }
 
-        private readonly List<Slot> slots = new List<Slot>();
-
-        public int? Tick(List<BuffIcon> icons)
+        public static string Name(string kind)
         {
-            for (int i = 0; i < slots.Count; i++)
+            if (kind == "elder") return "Elder";
+            if (kind == "aggression") return "Aggression";
+            if (kind == "overload" || kind == "potion") return "Overload";
+            return "";
+        }
+    }
+
+    // One clock per potion. Identity is the icon's appearance, not its x position,
+    // because buffs slide along the bar. Two icons that look the same are told
+    // apart by which clock's countdown is closer to the new read.
+    public sealed class BuffClock
+    {
+        private sealed class Clock
+        {
+            public string Name = "";
+            public string Signature = "";
+            public double Anchor;
+            public DateTime AnchorTime;
+            public DateTime LastSeen;
+            public int Confirmed;
+            public int PendingValue;
+            public int PendingCount;
+            public bool SawMinutes;
+            public bool Used;
+        }
+
+        private readonly List<Clock> clocks = new List<Clock>();
+        public string Log = "";
+        public string Name = "";
+        public bool Tracking;
+        public bool Alertable;
+
+        public int? Tick(List<BuffIcon> icons, bool barFound, DateTime now)
+        {
+            if (!barFound)
             {
-                Slot slot = slots[i];
-                slot.Seen = false;
-                slots[i] = slot;
+                Publish(now);
+                Log = "missed";
+                return Shown;
             }
-            int best = -1;
+            for (int i = 0; i < clocks.Count; i++) clocks[i].Used = false;
+            System.Text.StringBuilder log = new System.Text.StringBuilder();
             if (icons != null)
             {
                 for (int i = 0; i < icons.Count; i++)
                 {
+                    string decision = Consider(icons[i], now);
+                    if (log.Length > 0) log.Append(" ");
                     BuffIcon icon = icons[i];
-                    if (!icon.HasTime) continue;
-                    if (icon.Kind != null && icon.Kind.Length > 0 && icon.Kind != "potion") continue;
-                    int index = -1;
-                    for (int s = 0; s < slots.Count; s++)
-                        if (Math.Abs(slots[s].X - icon.X) <= 18) { index = s; break; }
-                    Slot slot = index < 0 ? new Slot() : slots[index];
-                    slot.X = icon.X;
-                    slot.Seen = true;
-                    int seconds;
-                    if (icon.Minutes)
-                    {
-                        slot.SawMinutes = true;
-                        seconds = icon.Value * 60;
-                    }
-                    else
-                    {
-                        if (slot.Have && icon.Value < slot.Last) slot.Fell = true;
-                        slot.Last = icon.Value;
-                        slot.Have = true;
-                        seconds = icon.Value;
-                        if (!slot.SawMinutes && !slot.Fell) seconds = -1;
-                    }
-                    if (index < 0) slots.Add(slot);
-                    else slots[index] = slot;
-                    if (seconds >= 0 && (best < 0 || seconds < best)) best = seconds;
+                    string time = !icon.HasTime ? "notime" : icon.Minutes ? icon.Value.ToString() + "m" : icon.Value.ToString() + "s";
+                    log.Append(icon.X.ToString()).Append(",").Append(icon.Kind ?? "").Append(",").Append(time).Append(",").Append(decision);
                 }
             }
-            for (int i = slots.Count - 1; i >= 0; i--) if (!slots[i].Seen) slots.RemoveAt(i);
-            return best < 0 ? (int?)null : best;
+            for (int i = clocks.Count - 1; i >= 0; i--)
+            {
+                if (clocks[i].Used) continue;
+                if ((now - clocks[i].LastSeen).TotalSeconds > 30) clocks.RemoveAt(i);
+            }
+            Publish(now);
+            Log = log.ToString();
+            return Shown;
+        }
+
+        public int? Current(DateTime now)
+        {
+            Publish(now);
+            return Shown;
+        }
+
+        public int? Shown;
+
+        private string Consider(BuffIcon icon, DateTime now)
+        {
+            if (!PotionKind.IsPotion(icon.Kind)) return "rejected";
+            if (!icon.HasTime || icon.Value <= 0)
+            {
+                Clock seen = Match(icon.Signature == null ? "" : icon.Signature, -1, now, false);
+                if (seen != null) { seen.Used = true; seen.LastSeen = now; }
+                return "rejected";
+            }
+            bool minute = icon.Minutes;
+            int seconds = icon.Value;
+            if (minute)
+            {
+                if (icon.Value < 1 || icon.Value > 60) return "rejected";
+                seconds = icon.Value * 60;
+            }
+            string sig = icon.Signature == null ? "" : icon.Signature;
+            Clock clock = Match(sig, seconds, now, true);
+            if (clock == null)
+            {
+                if (!minute) return "rejected";
+                return AdoptNew(icon, sig, seconds, now);
+            }
+            clock.Used = true;
+            clock.LastSeen = now;
+            if (!minute)
+            {
+                if (!clock.SawMinutes) return "rejected";
+                double expected = Expected(clock, now);
+                if (Math.Abs(expected - seconds) > 90) return "rejected";
+                clock.Anchor = seconds;
+                clock.AnchorTime = now;
+                clock.Confirmed = Math.Max(clock.Confirmed, 2);
+                return "accepted";
+            }
+            clock.SawMinutes = true;
+            if (clock.Confirmed < 2) return AdoptNew(icon, sig, seconds, now);
+            double left = Expected(clock, now);
+            bool shorter = seconds + 90 < left;
+            if (!shorter && seconds <= left + 90)
+            {
+                if (seconds < left) { clock.Anchor = seconds; clock.AnchorTime = now; }
+                clock.PendingValue = seconds;
+                clock.PendingCount = 0;
+                return "accepted";
+            }
+            if (Math.Abs(clock.PendingValue - seconds) <= 60) clock.PendingCount++;
+            else { clock.PendingValue = seconds; clock.PendingCount = 1; }
+            if (shorter && clock.PendingCount >= 2)
+            {
+                clock.Anchor = seconds;
+                clock.AnchorTime = now;
+                clock.PendingCount = 0;
+                clock.Confirmed = Math.Max(clock.Confirmed, 2);
+                return "accepted";
+            }
+            return "rejected";
+        }
+
+        private string AdoptNew(BuffIcon icon, string sig, int seconds, DateTime now)
+        {
+            Clock pending = null;
+            for (int i = 0; i < clocks.Count; i++)
+            {
+                Clock c = clocks[i];
+                if (c.Confirmed >= 2 || c.Used) continue;
+                if (Distance(c.Signature, sig) <= 4) { pending = c; break; }
+            }
+            if (pending == null)
+            {
+                pending = new Clock();
+                pending.Name = icon.Name == null || icon.Name.Length == 0 ? PotionKind.Name(icon.Kind) : icon.Name;
+                if (pending.Name.Length == 0) pending.Name = "Potion";
+                pending.Signature = sig;
+                pending.Anchor = seconds;
+                pending.AnchorTime = now;
+                clocks.Add(pending);
+            }
+            pending.Used = true;
+            pending.LastSeen = now;
+            pending.SawMinutes = true;
+            if (Math.Abs(pending.PendingValue - seconds) <= 60 && pending.PendingCount > 0) pending.PendingCount++;
+            else { pending.PendingValue = seconds; pending.PendingCount = 1; }
+            if (pending.PendingCount >= 2)
+            {
+                pending.Anchor = seconds;
+                pending.AnchorTime = now;
+                pending.Confirmed = 2;
+                pending.PendingCount = 0;
+                return "accepted";
+            }
+            return "rejected";
+        }
+
+        private Clock Match(string sig, int seconds, DateTime now, bool useTime)
+        {
+            Clock best = null;
+            int bestDist = 99;
+            double bestGap = 0;
+            for (int i = 0; i < clocks.Count; i++)
+            {
+                Clock c = clocks[i];
+                if (c.Confirmed < 2 || c.Used) continue;
+                int dist = Distance(c.Signature, sig);
+                if (dist > 4) continue;
+                double gap = useTime ? Math.Abs(Expected(c, now) - seconds) : 0;
+                if (best == null || dist < bestDist || (dist == bestDist && gap < bestGap))
+                {
+                    best = c;
+                    bestDist = dist;
+                    bestGap = gap;
+                }
+            }
+            return best;
+        }
+
+        private static double Expected(Clock clock, DateTime now)
+        {
+            double left = clock.Anchor - (now - clock.AnchorTime).TotalSeconds;
+            return left < 0 ? 0 : left;
+        }
+
+        private static int Distance(string a, string b)
+        {
+            if (a == null) a = "";
+            if (b == null) b = "";
+            int n = a.Length < b.Length ? a.Length : b.Length;
+            int diff = Math.Abs(a.Length - b.Length);
+            for (int i = 0; i < n; i++) if (a[i] != b[i]) diff++;
+            return diff;
+        }
+
+        private void Publish(DateTime now)
+        {
+            Tracking = false;
+            Alertable = false;
+            Shown = null;
+            Name = "";
+            double best = 0;
+            for (int i = 0; i < clocks.Count; i++)
+            {
+                Clock c = clocks[i];
+                if (c.Confirmed < 2) continue;
+                double left = Expected(c, now);
+                if (Tracking && left >= best) continue;
+                Tracking = true;
+                Alertable = true;
+                best = left;
+                Shown = (int)Math.Ceiling(left);
+                Name = c.Name;
+            }
         }
 
         // Lowest potion timer. Only icons classified as potions count, including
@@ -594,7 +769,8 @@ namespace KavrosAfkWarden
             for (int i = 0; i < icons.Count; i++)
             {
                 BuffIcon icon = icons[i];
-                if (icon.Kind != "potion" || !icon.HasTime || icon.Value <= 0) continue;
+                if (!PotionKind.IsPotion(icon.Kind) || !icon.HasTime || icon.Value <= 0) continue;
+                if (icon.Minutes && (icon.Value < 1 || icon.Value > 60)) continue;
                 int seconds = icon.Minutes ? icon.Value * 60 : icon.Value;
                 if (best < 0 || seconds < best) best = seconds;
             }

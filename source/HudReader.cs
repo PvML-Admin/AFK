@@ -19,6 +19,7 @@ namespace KavrosAfkWarden
         public int PotionCount;
         public string PotionHow = "";
         public bool BuffBarFound;
+        public bool BuffScanned;
         public bool StripFound;
         public IntRect LifeText;
         public IntRect PrayerText;
@@ -448,6 +449,7 @@ namespace KavrosAfkWarden
                 ? Pin(image, settings.BuffPinX, settings.BuffPinY, settings.BuffPinW, settings.BuffPinH)
                 : new IntRect(0, 0, image.Width, image.Height);
             List<IntRect> icons = FindBuffIcons(image, region);
+            reading.BuffScanned = true;
             reading.Buffs = new List<BuffIcon>();
             reading.BuffRects = new List<IntRect>();
             if (icons.Count == 0)
@@ -462,6 +464,8 @@ namespace KavrosAfkWarden
             {
                 BuffIcon icon = ReadIconTime(image, icons[i]);
                 icon.Kind = ClassifyBuff(image, icons[i]);
+                icon.Name = PotionKind.Name(icon.Kind);
+                icon.Signature = IconSignature(image, icons[i]);
                 reading.Buffs.Add(icon);
                 reading.BuffRects.Add(icons[i]);
                 if (icon.HasTime && icon.Kind == "potion") reading.PotionCount++;
@@ -528,7 +532,7 @@ namespace KavrosAfkWarden
                     foreach (IntRect icon in row)
                     {
                         BuffIcon clock = ReadIconTime(image, icon);
-                        if (clock.HasTime && ClassifyBuff(image, icon) == "potion") score += 12;
+                        if (clock.HasTime && PotionKind.IsPotion(ClassifyBuff(image, icon))) score += 12;
                     }
                 }
                 if (score > bestScore) { bestScore = score; best = row; }
@@ -588,7 +592,7 @@ namespace KavrosAfkWarden
             if (image == null || icon.Width < 8 || icon.Height < 8) return "other";
             int bodyBottom = icon.Y + (icon.Height * 62) / 100;
             int inset = Math.Max(2, icon.Width / 8);
-            int purple = 0, blue = 0, green = 0, samples = 0;
+            int purple = 0, blue = 0, green = 0, red = 0, samples = 0;
             int redEdge = 0, redCore = 0, edgeN = 0, coreN = 0;
             int topInk = 0, midInk = 0, topN = 0, midN = 0;
             int midY0 = icon.Y + icon.Height / 5;
@@ -611,6 +615,7 @@ namespace KavrosAfkWarden
                     if (isPurple) purple++;
                     else if (isBlue) blue++;
                     if (isGreen) green++;
+                    if (isRed) red++;
                     int dx = x - cx;
                     int dy = y - cy;
                     if (dx * dx + dy * dy <= coreR * coreR) { coreN++; if (isRed) redCore++; }
@@ -622,7 +627,7 @@ namespace KavrosAfkWarden
             }
             if (samples < 8) return "other";
             if (purple * 100 / samples >= 28 && purple > blue) return "prayer";
-            if (blue * 100 / samples >= 10 && blue > purple) return "potion";
+            if (blue * 100 / samples >= 10 && blue > purple) return "overload";
             int magenta = 0, cork = 0, dark = 0;
             int topCut = icon.Y + icon.Height * 2 / 5;
             for (int y = icon.Y + 2; y < icon.Bottom - 2; y++)
@@ -637,11 +642,54 @@ namespace KavrosAfkWarden
                     if (r + g + b < 90) dark++;
                 }
             }
-            if (magenta >= 24) return "potion";
-            if (dark >= 80 && cork >= 8 && cork <= 45) return "potion";
-            bool ring = edgeN > 0 && redEdge * 100 / edgeN >= 25 && (coreN == 0 || redEdge > redCore);
-            if (ring) return "potion";
+            // A red rim alone is not a potion. Prayer, a stack count, and a heart
+            // stay out. Elder is the magenta crystal, overload is a blue or pink
+            // flask, aggression is the dark green flask.
+            if (magenta * 100 / Math.Max(1, samples) >= 18 && red > 20) return "elder";
+            if (cork >= 8 && magenta >= 8) return "overload";
+            if (cork >= 8 && dark >= 40) return "aggression";
             return "other";
+        }
+
+        internal static string IconSignature(ImageBuffer image, IntRect icon)
+        {
+            if (image == null || icon.Width < 8 || icon.Height < 8) return "";
+            char[] cells = new char[16];
+            int inset = Math.Max(2, icon.Width / 10);
+            int innerW = Math.Max(1, icon.Width - inset * 2);
+            int innerH = Math.Max(1, icon.Height - inset * 2);
+            for (int gy = 0; gy < 4; gy++)
+            {
+                for (int gx = 0; gx < 4; gx++)
+                {
+                    int x0 = icon.X + inset + gx * innerW / 4;
+                    int y0 = icon.Y + inset + gy * innerH / 4;
+                    int x1 = icon.X + inset + (gx + 1) * innerW / 4;
+                    int y1 = icon.Y + inset + (gy + 1) * innerH / 4;
+                    if (x1 <= x0) x1 = x0 + 1;
+                    if (y1 <= y0) y1 = y0 + 1;
+                    int r = 0, g = 0, b = 0, n = 0;
+                    for (int y = y0; y < y1 && y < image.Height; y++)
+                        for (int x = x0; x < x1 && x < image.Width; x++)
+                        {
+                            int color = image.Argb(x, y);
+                            r += ImageBuffer.R(color);
+                            g += ImageBuffer.G(color);
+                            b += ImageBuffer.B(color);
+                            n++;
+                        }
+                    if (n < 1) n = 1;
+                    r /= n; g /= n; b /= n;
+                    char bucket = 'n';
+                    if (b > r + 15 && b > g) bucket = 'b';
+                    else if (r > 100 && b > 50 && r > g + 10) bucket = 'm';
+                    else if (g > r + 15 && g > b + 8) bucket = 'g';
+                    else if (r > 140 && r > g + 30 && r > b + 30) bucket = 'r';
+                    else if (r + g + b < 140) bucket = 'd';
+                    cells[gy * 4 + gx] = bucket;
+                }
+            }
+            return new string(cells);
         }
 
         private static NumberRead ReadIconLine(ImageBuffer image, IntRect icon, int textH, out bool minutes)

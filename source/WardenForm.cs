@@ -896,6 +896,8 @@ namespace KavrosAfkWarden
                     + " prayerText=" + (reading.PrayerTrace ?? "")
                     + " pixels=" + pixels
                     + " activity=" + activity.Reason
+                    + " skill=" + (grab.SkillTrace ?? "")
+                    + " icons=" + (buffClock.Log ?? "")
                     + " idleReset=" + (moving ? "yes" : "no")
                     + "\r\n";
                 string logPath = Path.Combine(dir, "debug-log.txt");
@@ -1235,8 +1237,6 @@ namespace KavrosAfkWarden
             int? hpMax = hpGate.Max;
             int? prayer = prayerGate.Value;
             int? prayerMax = prayerGate.Max;
-            int? potion = pixels && lastHud.BuffBarFound ? BuffClock.ShownSeconds(lastHud.Buffs) : (int?)null;
-            bool barWithoutPotion = pixels && lastHud.BuffBarFound && potion == null;
             bool hpComparable = hp != null && WardenSettings.Comparable(settings.HpPercent, lastHud.HpFromOrb, hpMax != null);
             bool prayerComparable = prayer != null && WardenSettings.Comparable(settings.PrayerPercent, lastHud.PrayerFromOrb, prayerMax != null);
             WatchSample sample = new WatchSample();
@@ -1250,16 +1250,17 @@ namespace KavrosAfkWarden
             shownHpMax = hpMax;
             shownPrayer = prayer;
             shownPrayerMax = prayerMax;
-            // The potion clock counts down on every tick; a new frame re-anchors it.
-            shownPotion = freshFrame
-                ? potionDisplay.Observe(potion, barWithoutPotion, sampleTime)
-                : potionDisplay.Current(sampleTime);
+            // Each potion keeps its own clock. A frame that did not scan the buff
+            // bar leaves those clocks running.
+            shownPotion = freshFrame && lastHud.BuffScanned
+                ? buffClock.Tick(lastHud.Buffs, true, sampleTime)
+                : buffClock.Current(sampleTime);
             sample.Hp = freshFrame && lastHud.HpMax.HasValue && !hpGate.Stale && hpComparable ? hp : (int?)null;
             sample.HpMax = hpMax;
             sample.Prayer = freshFrame && lastHud.PrayerMax.HasValue && !prayerGate.Stale && prayerComparable ? prayer : (int?)null;
             sample.PrayerMax = prayerMax;
-            sample.PotionSeconds = potionDisplay.Alertable ? shownPotion : null;
-            sample.PotionClear = freshFrame && lastHud.BuffBarFound && !potionDisplay.Tracking;
+            sample.PotionSeconds = buffClock.Alertable ? shownPotion : null;
+            sample.PotionClear = freshFrame && lastHud.BuffScanned && !buffClock.Tracking;
             List<AlertEvent> events = engine.Tick(sample, settings);
             for (int i = 0; i < events.Count; i++)
             {
@@ -1286,9 +1287,10 @@ namespace KavrosAfkWarden
             }
             else
             {
-                panel.Idle.Pill = engine.IdleLatched ? "Idle" : engine.Skilling ? "Skilling" : "Moving";
+                bool skillPill = engine.Skilling && grab.SkillView;
+                panel.Idle.Pill = engine.IdleLatched ? "Idle" : skillPill ? "Skilling" : "Moving";
                 panel.Idle.Tone = engine.IdleLatched ? PillTone.Bad : PillTone.Ok;
-                panel.Idle.Value = !pixels ? "No view" : ((int)engine.StillFor.TotalSeconds).ToString() + (engine.Skilling ? "s since XP" : "s still");
+                panel.Idle.Value = !pixels ? "No view" : (engine.Skilling && !grab.SkillView) ? "No XP view" : ((int)engine.StillFor.TotalSeconds).ToString() + (skillPill ? "s since XP" : "s still");
             }
             panel.Hp.Pill = engine.HpLatched ? "Low HP" : "Hitpoints";
             panel.Hp.Tone = engine.HpLatched ? PillTone.Bad : !pixels || lastHud.Hp == null ? PillTone.Example : PillTone.Ok;
@@ -1296,10 +1298,11 @@ namespace KavrosAfkWarden
             panel.Prayer.Pill = engine.PrayerLatched ? "Low prayer" : "Prayer";
             panel.Prayer.Tone = engine.PrayerLatched ? PillTone.Warn : !pixels || lastHud.Prayer == null ? PillTone.Example : PillTone.Ok;
             panel.Prayer.Value = !pixels ? "No view" : prayerGate.Stale ? Stale(shownPrayer) : shownPrayer == null ? "Unread" : Format(shownPrayer, shownPrayerMax, lastHud.PrayerFromOrb);
-            panel.Potion.Pill = engine.PotionLatched ? "Potion low" : "Potions";
-            panel.Potion.Tone = engine.PotionLatched ? PillTone.Warn : !shownPotion.HasValue || potionDisplay.Estimated ? PillTone.Example : PillTone.Ok;
+            string potionName = buffClock.Name == null || buffClock.Name.Length == 0 ? "Potions" : buffClock.Name;
+            panel.Potion.Pill = engine.PotionLatched ? "Potion low" : potionName;
+            panel.Potion.Tone = engine.PotionLatched ? PillTone.Warn : !shownPotion.HasValue ? PillTone.Example : PillTone.Ok;
             panel.Potion.Value = shownPotion.HasValue && !settings.Paused
-                ? TimeSpan.FromSeconds(shownPotion.Value).ToString(@"m\:ss")+(potionDisplay.Estimated?" left (est.)":" left")
+                ? potionName + " " + TimeSpan.FromSeconds(shownPotion.Value).ToString(@"m\:ss") + " left"
                 : (!pixels ? "No view" : "No potion timer");
             int left = Math.Max(0, (int)engine.AfkRemaining.TotalSeconds);
             panel.Afk.Pill = engine.AfkLatched ? "AFK soon" : "AFK timer";
