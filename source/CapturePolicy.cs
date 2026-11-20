@@ -120,6 +120,26 @@ namespace KavrosAfkWarden
         }
     }
 
+    // PrintWindow paints the whole window in physical pixels. The client area
+    // sits inside that bitmap at the difference of the two screen rects.
+    // The scale factor is not applied: 150% and 200% stay in physical pixels.
+    public static class WindowCrop
+    {
+        public static void Client(int windowX, int windowY, int windowW, int windowH, int clientX, int clientY, int clientW, int clientH, out int ox, out int oy, out int w, out int h)
+        {
+            ox = clientX - windowX;
+            oy = clientY - windowY;
+            if (ox < 0) ox = 0;
+            if (oy < 0) oy = 0;
+            w = clientW;
+            h = clientH;
+            if (ox + w > windowW) w = windowW - ox;
+            if (oy + h > windowH) h = windowH - oy;
+            if (w < 0) w = 0;
+            if (h < 0) h = 0;
+        }
+    }
+
     // Steady state copies the locked slots twice a second. A full client
     // search is only for startup, a lost lock, and a slow refresh.
     public static class CapturePlan
@@ -146,6 +166,12 @@ namespace KavrosAfkWarden
         public static bool ShouldRead(bool minimized, bool paused)
         {
             return !minimized && !paused;
+        }
+
+        // Focus and cover do not stop a read. Only a minimized client has no picture.
+        public static bool ContinueReading(bool minimized, bool focused, bool covered)
+        {
+            return !minimized;
         }
 
         public static bool PreferWindowPixels(bool regionOnScreen)

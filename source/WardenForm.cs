@@ -20,13 +20,12 @@ namespace KavrosAfkWarden
         {
             if (args.Length > 0 && args[0] == "--self-test")
                 return WardenTests.Run(args.Length > 1 ? args[1] : "test-results.txt", FindRoot());
+            NativeMethods.MakePerMonitorAware();
             CrashLog.Install();
             NetSecurity.EnableModernTls();
             try
             {
                 AppUpdates.Start();
-                try { NativeMethods.SetProcessDpiAwarenessContext(new IntPtr(-4)); }
-                catch (EntryPointNotFoundException) { NativeMethods.SetProcessDPIAware(); }
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);

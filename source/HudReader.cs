@@ -98,8 +98,8 @@ namespace KavrosAfkWarden
 
         // Shapes sampled from the Kavros HUD font (outlined, about 8px). The
         // prototype glyphs above still match the self-test's drawn digits.
-        private static readonly int[] ExtraDigits = { 1, 2, 3, 4, 5, 6, 9, 0, 0 };
-        private static readonly string[] ExtraPatterns = {
+        internal static readonly int[] ExtraDigits = { 1, 2, 3, 4, 5, 6, 9, 0, 0 };
+        internal static readonly string[] ExtraPatterns = {
             "00100111000010000100001000010011111",
             "01110000100001100010001000100011110",
             "01100000100001001110000100001111110",
@@ -227,13 +227,17 @@ namespace KavrosAfkWarden
             // empties. The number stays over the whole slot, whose pitch is the
             // distance from this fill's left edge to the next icon.
             int pitch = 0;
-            if (yellow.Width > 0 && yellow.X > red.X + 40) pitch = yellow.X - red.X;
-            else if (purple.X > red.X + 40) pitch = (purple.X - red.X) / 2;
-            if (pitch < 48) pitch = Math.Max(Math.Max(red.Width, purple.Width), 80) + 36;
-            int textW = Math.Max(pitch - 16, Math.Max(red.Width, purple.Width) + 12);
+            int slotGap = Math.Max(24, image.Width / 80);
+            if (yellow.Width > 0 && yellow.X > red.X + slotGap) pitch = yellow.X - red.X;
+            else if (purple.X > red.X + slotGap) pitch = (purple.X - red.X) / 2;
+            int minPitch = Math.Max(36, image.Width / 70);
+            if (pitch < minPitch) pitch = Math.Max(Math.Max(red.Width, purple.Width), minPitch) + Math.Max(24, minPitch / 2);
+            int inset = Math.Max(8, pitch / 10);
+            int textW = Math.Max(pitch - inset, Math.Max(red.Width, purple.Width) + inset);
             int textH = Math.Max(26, Math.Max(red.Height, purple.Height) * 6);
-            IntRect lifeText = Clamp(image, red.X - 2, red.Y - textH, textW, textH);
-            IntRect prayerText = Clamp(image, purple.X - 2, purple.Y - textH, textW, textH);
+            int textPad = Math.Max(2, textH / 12);
+            IntRect lifeText = Clamp(image, red.X - textPad, red.Y - textH, textW, textH);
+            IntRect prayerText = Clamp(image, purple.X - textPad, purple.Y - textH, textW, textH);
             reading.LifeBar = red;
             reading.PrayerBar = purple;
             reading.LifeText = lifeText;
@@ -272,16 +276,19 @@ namespace KavrosAfkWarden
                     for (int i = 0; i < sets[a].Count; i++)
                     {
                         IntRect left = sets[a][i];
-                        if (left.Height > 9) continue;
+                        int maxBar = Math.Max(9, image.Height / 80);
+                        if (left.Height > maxBar) continue;
                         for (int j = 0; j < sets[b].Count; j++)
                         {
                             IntRect right = sets[b][j];
-                            if (right.Height > 9) continue;
-                            if (Math.Abs(left.Y - right.Y) > 4 || Math.Abs(left.Height - right.Height) > 3) continue;
+                            if (right.Height > maxBar) continue;
+                            if (Math.Abs(left.Y - right.Y) > Math.Max(4, maxBar / 2) || Math.Abs(left.Height - right.Height) > Math.Max(3, maxBar / 3)) continue;
                             int steps = b - a;
                             int dx = right.X - left.X;
                             int pitch = (int)Math.Round(dx / (double)steps);
-                            if (pitch < 60 || pitch > 260) continue;
+                            int minPitch = Math.Max(36, image.Width / 70);
+                            int maxPitch = Math.Max(320, image.Width / 5);
+                            if (pitch < minPitch || pitch > maxPitch) continue;
                             if (left.Width > pitch || right.Width > pitch) continue;
                             if (++attempts > 8) return false;
                             if (ReadInferred(image, reading, reds, purples, left.X - a * pitch, left.Y, Math.Max(left.Height, right.Height), pitch, wantLife, wantPrayer)) return true;
@@ -296,18 +303,19 @@ namespace KavrosAfkWarden
             // starts a little left of the predicted fill and the reader skips the
             // slot icon the same way it does for the paired bars.
             int margin = Math.Max(6, pitch / 12);
-            int textW = pitch - 16 + margin;
+            int textW = pitch - Math.Max(8, pitch / 10) + margin;
             int textH = Math.Max(26, barHeight * 6);
+            int textPad = Math.Max(2, textH / 12);
             int prayerX = lifeX + 2 * pitch;
             // A fill that is still there is the exact slot edge; use it.
             int lifeEdge = FillNear(reds, lifeX, y, pitch);
             int prayerEdge = FillNear(purples, prayerX, y, pitch);
             IntRect lifeText = lifeEdge >= 0
-                ? Clamp(image, lifeEdge - 2, y - textH, pitch - 16, textH)
-                : Clamp(image, lifeX - 2 - margin, y - textH, textW, textH);
+                ? Clamp(image, lifeEdge - textPad, y - textH, textW, textH)
+                : Clamp(image, lifeX - textPad - margin, y - textH, textW, textH);
             IntRect prayerText = prayerEdge >= 0
-                ? Clamp(image, prayerEdge - 2, y - textH, pitch - 16, textH)
-                : Clamp(image, prayerX - 2 - margin, y - textH, textW, textH);
+                ? Clamp(image, prayerEdge - textPad, y - textH, textW, textH)
+                : Clamp(image, prayerX - textPad - margin, y - textH, textW, textH);
             bool any = false;
             if (wantLife && lifeText.Width > 24)
             {
@@ -402,7 +410,8 @@ namespace KavrosAfkWarden
         {
             // Digits sit immediately above the fill. A bright scene above the HUD
             // otherwise wins the row-ink vote over the actual numeric line.
-            int height = Math.Min(box.Height, 17);
+            // The band grows with the slot so a larger interface is not clipped at 17px.
+            int height = Math.Min(box.Height, Math.Max(17, box.Height * 2 / 3));
             IntRect band = new IntRect(box.X, box.Bottom - height, box.Width, height);
             NumberRead sample = ReadNumber(image, band, WhiteInk);
             if (sample.HasMax) return sample;
@@ -482,7 +491,9 @@ namespace KavrosAfkWarden
                     while (start > region.X && x - start < 99 && BorderGreen(image.Argb(start-1,y))) start--;
                     while (x < region.Right && x - start < 100 && BorderGreen(image.Argb(x, y))) x++;
                     int span = x - start;
-                    if (span < 12 || span > 96) continue;
+                    int minSpan = Math.Max(8, image.Width / 320);
+                    int maxSpan = Math.Max(120, image.Width / 12);
+                    if (span < minSpan || span > maxSpan) continue;
                     if (!IconAt(image, start, y, span)) continue;
                     bool overlap = false;
                     for (int i = 0; i < found.Count; i++)
@@ -506,7 +517,8 @@ namespace KavrosAfkWarden
                 foreach (IntRect cand in found)
                 {
                     int gap = cand.X - last.Right;
-                    if (gap < -1 || gap > 9 || Math.Abs(cand.Y-first.Y)>3 || Math.Abs(cand.Width-first.Width)>3) continue;
+                    int gapLimit = Math.Max(9, first.Width / 3);
+                    if (gap < -1 || gap > gapLimit || Math.Abs(cand.Y - first.Y) > Math.Max(3, first.Height / 6) || Math.Abs(cand.Width - first.Width) > Math.Max(3, first.Width / 6)) continue;
                     row.Add(cand); last=cand;
                 }
                 int score = row.Count * 3;
@@ -900,6 +912,7 @@ namespace KavrosAfkWarden
                 if (yy >= bestTop && yy <= bestBottom) continue;
                 for (int x = 0; x < width; x++) mask[yy * width + x] = false;
             }
+            int typical = TypicalHeight(mask, width, height, minDigit);
             bool[] column = new bool[width];
             for (int y = 0; y < height; y++)
                 for (int x = 0; x < width; x++)
@@ -917,11 +930,29 @@ namespace KavrosAfkWarden
                 if (!column[cursor]) { cursor++; continue; }
                 int start = cursor;
                 while (cursor < width && column[cursor]) cursor++;
+                int end = cursor;
+                if (typical > 0 && end - start > typical)
+                {
+                    int edge = Math.Max(2, typical / 4);
+                    int seam = -1;
+                    int seamInk = int.MaxValue;
+                    for (int x = start + edge; x < end - edge; x++)
+                    {
+                        int inkCount = 0;
+                        for (int y = 0; y < height; y++) if (mask[y * width + x]) inkCount++;
+                        if (inkCount < seamInk) { seamInk = inkCount; seam = x; }
+                    }
+                    if (seam > start && seamInk * 4 <= typical)
+                    {
+                        end = seam;
+                        cursor = seam;
+                    }
+                }
                 int top = height;
                 int bottom = 0;
                 int area = 0;
                 for (int yy = 0; yy < height; yy++)
-                    for (int xx = start; xx < cursor; xx++)
+                    for (int xx = start; xx < end; xx++)
                         if (mask[yy * width + xx])
                         {
                             area++;
@@ -931,8 +962,8 @@ namespace KavrosAfkWarden
                 int ww = cursor - start;
                 int hh = bottom - top + 1;
                 if (area < 3 || hh < 3) continue;
-                int commaHeight = Math.Max(3, minDigit - 1);
-                if (hh <= commaHeight && ww <= commaHeight + 1 && area <= 14) { trace.Append(" ,"); continue; }
+                int commaHeight = Math.Max(3, typical / 3);
+                if (hh <= commaHeight && ww <= commaHeight + 1 && area <= commaHeight * commaHeight + 4) { trace.Append(" ,"); continue; }
                 Blob blob = new Blob();
                 blob.Left = start;
                 blob.Top = top;
@@ -941,9 +972,15 @@ namespace KavrosAfkWarden
                 blob.Area = area;
                 if (inMax && max.Length > 0 && digitRight > 0 && start - digitRight > Math.Max(14, hh * 2)) break;
                 int digit = -1;
-                if (ww <= 28 && hh >= minDigit && hh <= 40)
+                int digitMin = Math.Max(4, typical * 3 / 5);
+                int digitMaxH = typical + typical / 2;
+                int digitMaxW = Math.Max(typical, typical + typical / 2);
+                if (ww <= digitMaxW && hh >= digitMin && hh <= digitMaxH)
+                {
                     digit = DigitFont.Match(Sample(mask, width, blob));
-                bool slash = !allowLetter && digit < 0 && hh >= 8 && ww <= 8 && ww * 2 <= hh + 4 && IsDiagonal(mask, width, blob);
+                    if (digit < 0 && !allowLetter) digit = MatchScaled(mask, width, blob);
+                }
+                bool slash = !allowLetter && digit < 0 && hh >= digitMin && ww <= hh && ww * 2 <= hh + 4 && IsDiagonal(mask, width, blob);
                 if (digit >= 0)
                 {
                     trace.Append(" ").Append(digit);
@@ -964,7 +1001,7 @@ namespace KavrosAfkWarden
                     trace.Append(minuteMark ? " m" : " s");
                     if (minuteMark) minutes = true;
                 }
-                else if (hh >= minDigit && ww >= 2)
+                else if (hh >= digitMin && ww >= 2)
                 {
                     trace.Append(" ?");
                     unknown = true;
@@ -983,6 +1020,39 @@ namespace KavrosAfkWarden
                 result.HasMax = true;
             }
             return result;
+        }
+
+        // Median height of digit-like columns, so a 1440p or 4K interface and a
+        // smaller one share the same templates after the glyph is normalized.
+        private static int TypicalHeight(bool[] mask, int width, int height, int minDigit)
+        {
+            List<int> heights = new List<int>();
+            bool[] column = new bool[width];
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                    if (mask[y * width + x]) column[x] = true;
+            int cursor = 0;
+            while (cursor < width)
+            {
+                if (!column[cursor]) { cursor++; continue; }
+                int start = cursor;
+                while (cursor < width && column[cursor]) cursor++;
+                int top = height, bottom = 0, area = 0;
+                for (int y = 0; y < height; y++)
+                    for (int x = start; x < cursor; x++)
+                        if (mask[y * width + x])
+                        {
+                            area++;
+                            if (y < top) top = y;
+                            if (y > bottom) bottom = y;
+                        }
+                int ww = cursor - start;
+                int hh = bottom - top + 1;
+                if (area >= 4 && hh >= Math.Max(4, minDigit) && ww <= hh * 2) heights.Add(hh);
+            }
+            if (heights.Count == 0) return Math.Max(8, minDigit);
+            heights.Sort();
+            return heights[heights.Count / 2];
         }
 
         private static bool TryParse(string text, out int value)
@@ -1025,6 +1095,47 @@ namespace KavrosAfkWarden
                 }
             int diag = main > anti ? main : anti;
             return blob.Area >= 6 && diag * 2 > blob.Area;
+        }
+
+        // Compare the blob with each prototype drawn at the blob's own size.
+        // Squashing a 1440p or 4K glyph into 5x7 aliases the 4 and the 9.
+        private static int MatchScaled(bool[] mask, int stride, Blob blob)
+        {
+            if (blob.Width < 2 || blob.Height < 4) return -1;
+            int best = -1;
+            int bestErr = int.MaxValue;
+            int second = int.MaxValue;
+            for (int digit = 0; digit < DigitFont.Glyphs.Length; digit++)
+                ScorePattern(mask, stride, blob, DigitFont.Glyphs[digit], digit, ref best, ref bestErr, ref second);
+            for (int i = 0; i < DigitFont.ExtraPatterns.Length; i++)
+                ScorePattern(mask, stride, blob, DigitFont.ExtraPatterns[i], DigitFont.ExtraDigits[i], ref best, ref bestErr, ref second);
+            int total = blob.Width * blob.Height;
+            if (best < 0 || bestErr * 5 > total) return -1;
+            if (second < int.MaxValue && second - bestErr < Math.Max(2, total / 25) && bestErr * 8 > total) return -1;
+            return best;
+        }
+
+        private static void ScorePattern(bool[] mask, int stride, Blob blob, string pattern, int digit, ref int best, ref int bestErr, ref int second)
+        {
+            int err = 0;
+            for (int y = 0; y < blob.Height; y++)
+            {
+                int sy = Math.Min(6, y * 7 / blob.Height);
+                for (int x = 0; x < blob.Width; x++)
+                {
+                    int sx = Math.Min(4, x * 5 / blob.Width);
+                    bool on = pattern[sy * 5 + sx] == '1';
+                    bool ink = mask[(blob.Top + y) * stride + blob.Left + x];
+                    if (on != ink) err++;
+                }
+            }
+            if (err < bestErr)
+            {
+                second = bestErr;
+                bestErr = err;
+                best = digit;
+            }
+            else if (err < second) second = err;
         }
 
         private static int[,] Sample(bool[] mask, int stride, Blob blob)
@@ -1115,7 +1226,8 @@ namespace KavrosAfkWarden
         {
             List<IntRect> bars = new List<IntRect>();
             region = Clamp(image, region.X, region.Y, region.Width, region.Height);
-            const int minRun = 36;
+            int minRun = Math.Max(36, region.Width / 80);
+            int maxH = Math.Max(22, region.Height / 40);
             for (int y = region.Y; y < region.Bottom; y++)
             {
                 int probe = region.X + minRun - 1;
@@ -1129,7 +1241,7 @@ namespace KavrosAfkWarden
                     probe=end+minRun;
                     if (run<minRun) continue;
                     int bottom=y;
-                    while (bottom+1<region.Bottom && bottom-y<22)
+                    while (bottom+1<region.Bottom && bottom-y<maxH)
                     {
                         int overlap=0;
                         for (int xx=start; xx<end; xx++) if (ink(image.Argb(xx,bottom+1))) overlap++;
@@ -1137,12 +1249,12 @@ namespace KavrosAfkWarden
                         bottom++;
                     }
                     int h=bottom-y+1;
-                    if(h<3 || h>22)continue;
+                    if(h<3 || h>maxH)continue;
                     bool covered=false;
                     for(int i=bars.Count-1;i>=0;i--)
                     {
                         IntRect prior=bars[i];
-                        if(prior.Y<y-22)break;
+                        if(prior.Y<y-maxH)break;
                         if(prior.Bottom>y && prior.X<=start && prior.Right>=end){covered=true;break;}
                     }
                     if(!covered)bars.Add(new IntRect(start,y,run,h));

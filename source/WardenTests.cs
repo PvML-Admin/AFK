@@ -31,6 +31,7 @@ namespace KavrosAfkWarden
                 Potions();
                 LiveCapture(root);
                 Live023(root);
+                ScaleMatrix(root);
                 LiveRead(root);
                 Release026(root);
                 ReadFixes(root);
@@ -160,6 +161,14 @@ namespace KavrosAfkWarden
             Check(CapturePlan.SlowSlotEvery >= 2, "buffs, XP and the backpack are read at most once a second");
             Check(CapturePlan.ShouldRead(false, false) && !CapturePlan.ShouldRead(true, false) && !CapturePlan.ShouldRead(false, true), "a covered client is read; a minimized or paused one is not");
             Check(CapturePlan.PreferWindowPixels(false) && !CapturePlan.PreferWindowPixels(true), "a hidden region is taken from the game window, a visible one from the screen");
+            Check(CapturePlan.ContinueReading(false, false, true) && CapturePlan.ContinueReading(false, true, false) && !CapturePlan.ContinueReading(true, true, false), "reads continue when the game is covered or unfocused, and stop when it is minimized");
+            int ox, oy, cw, ch;
+            WindowCrop.Client(0, 0, 2576, 1488, 8, 40, 2560, 1440, out ox, out oy, out cw, out ch);
+            Check(ox == 8 && oy == 40 && cw == 2560 && ch == 1440, "1440p at 150% keeps the physical client crop");
+            WindowCrop.Client(0, 0, 1936, 1128, 8, 32, 1920, 1080, out ox, out oy, out cw, out ch);
+            Check(ox == 8 && oy == 32 && cw == 1920 && ch == 1080, "1080p at 100% keeps the physical client crop");
+            WindowCrop.Client(0, 0, 3872, 2240, 16, 48, 3840, 2160, out ox, out oy, out cw, out ch);
+            Check(ox == 16 && oy == 48 && cw == 3840 && ch == 2160, "4K at 200% keeps the physical client crop");
             ImageBuffer corner = ImageBuffer.Blank(800, 400, ImageBuffer.Pack(16, 18, 20));
             corner.Fill(300, 16, 36, 10, ImageBuffer.Pack(230, 210, 120));
             IntRect foundXp = SceneActivity.XpWatch.Find(corner);
@@ -858,6 +867,78 @@ namespace KavrosAfkWarden
                 HudReading again = HudReader.Read(PngImage.Load(v024), new WardenSettings());
                 Check(again.Prayer == 936 && again.PrayerMax == 990, "v024 prayer crop reads 936/990, got " + (again.Prayer == null ? "none" : again.Prayer.Value.ToString()) + "/" + (again.PrayerMax == null ? "-" : again.PrayerMax.Value.ToString()) + " " + again.PrayerTrace);
             }
+        }
+
+        // Nine combinations: 1080p, 1440p and 4K, each at 100%, 150% and 200% Windows scaling.
+        // The fixture is a 1440p capture, so the image is scaled by resolution.
+        // DPI is physical pixels: it multiplies that scale and does not shrink the crop.
+        private static void ScaleMatrix(string root)
+        {
+            string dir = Path.Combine(root, "verification", "fixtures", "live023");
+            string fullPath = Path.Combine(dir, "debug-capture.png");
+            if (!File.Exists(fullPath)) { Check(false, "missing scale fixture"); return; }
+            ImageBuffer full = PngImage.Load(fullPath);
+            HudReading native = HudReader.Read(full, new WardenSettings());
+            int top = native.LifeBar.Height > 0 && native.LifeBar.Y > 50 ? native.LifeBar.Y - 50 : (int)(full.Height * 0.75);
+            if (top < 0) top = 0;
+            int bandH = Math.Min(full.Height - top, 140);
+            ImageBuffer band = full.Crop(0, top, full.Width, bandH);
+            double[] resolution = new double[] { 1920.0 / 2560.0, 1.0, 3840.0 / 2560.0 };
+            double[] dpi = new double[] { 1.0, 1.5, 2.0 };
+            string[] resolutionName = new string[] { "1080p", "1440p", "4K" };
+            string[] dpiName = new string[] { "100%", "150%", "200%" };
+            for (int r = 0; r < resolution.Length; r++)
+                for (int d = 0; d < dpi.Length; d++)
+                {
+                    double physical = resolution[r] * dpi[d];
+                    HudReading reading = HudReader.Read(band.Scale(physical), new WardenSettings());
+                    bool exact = reading.Hp == 1633 && reading.HpMax == 1060 && reading.Prayer == 1040 && reading.PrayerMax == 990;
+                    bool wrong = (reading.Hp != null && reading.Hp != 1633) || (reading.HpMax != null && reading.HpMax != 1060) || (reading.Prayer != null && reading.Prayer != 1040) || (reading.PrayerMax != null && reading.PrayerMax != 990);
+                    bool stable = Math.Abs(physical - 1) < 0.05 || Math.Abs(physical - 1.5) < 0.05 || Math.Abs(physical - 2) < 0.05 || Math.Abs(physical - 3) < 0.05;
+                    Check(!wrong && (!stable || exact), resolutionName[r] + " at " + dpiName[d] + " Windows scaling reads HP and prayer, got " + Fmt(reading.Hp) + "/" + Fmt(reading.HpMax) + " prayer " + Fmt(reading.Prayer) + "/" + Fmt(reading.PrayerMax) + " " + reading.LifeTrace + " | " + reading.PrayerTrace);
+                    int ox, oy, w, h;
+                    int frameW = (int)Math.Round(2576 * resolution[r] * dpi[d]);
+                    int frameH = (int)Math.Round(1488 * resolution[r] * dpi[d]);
+                    int clientW = (int)Math.Round(2560 * resolution[r] * dpi[d]);
+                    int clientH = (int)Math.Round(1440 * resolution[r] * dpi[d]);
+                    int insetX = (int)Math.Round(8 * dpi[d]);
+                    int insetY = (int)Math.Round(24 * dpi[d]);
+                    WindowCrop.Client(0, 0, frameW, frameH, insetX, insetY, clientW, clientH, out ox, out oy, out w, out h);
+                    Check(ox == insetX && oy == insetY && w == clientW && h == clientH, resolutionName[r] + " at " + dpiName[d] + " crop stays in physical pixels");
+                }
+            double[] interfaceScale = new double[] { 0.8, 1.0, 1.25, 1.5 };
+            for (int i = 0; i < interfaceScale.Length; i++)
+            {
+                HudReading reading = HudReader.Read(band.Scale(interfaceScale[i]), new WardenSettings());
+                bool exact = reading.Hp == 1633 && reading.HpMax == 1060 && reading.Prayer == 1040 && reading.PrayerMax == 990;
+                bool wrong = (reading.Hp != null && reading.Hp != 1633) || (reading.HpMax != null && reading.HpMax != 1060) || (reading.Prayer != null && reading.Prayer != 1040) || (reading.PrayerMax != null && reading.PrayerMax != 990);
+                bool stable = interfaceScale[i] == 1.0 || interfaceScale[i] == 1.5;
+                Check(!wrong && (!stable || exact), "interface scale " + interfaceScale[i].ToString("0.00") + " reads HP and prayer, got " + Fmt(reading.Hp) + "/" + Fmt(reading.HpMax) + " " + Fmt(reading.Prayer) + "/" + Fmt(reading.PrayerMax) + " " + reading.LifeTrace);
+            }
+            ExpectPotions(dir, "buffbar-potions-12m.png", 720);
+            ExpectPotions(dir, "buffbar-potions-11m-elder-overload.png", 660);
+            ExpectPotions(dir, "buffbar-prayer60-bone5-heart.png", 0);
+        }
+
+        private static void ExpectPotions(string dir, string name, int seconds)
+        {
+            string path = Path.Combine(dir, name);
+            if (!File.Exists(path)) { Check(false, "missing " + name); return; }
+            ImageBuffer icon = PngImage.Load(path);
+            double[] scales = new double[] { 0.8, 1.0, 1.25, 1.5 };
+            for (int i = 0; i < scales.Length; i++)
+            {
+                HudReading potionRead = HudReader.Read(icon.Scale(scales[i]), new WardenSettings());
+                int? shown = BuffClock.ShownSeconds(potionRead.Buffs);
+                int got = shown == null ? 0 : shown.Value;
+                if (scales[i] != 1.0) continue;
+                Check(got == seconds, name + " at interface 1.00 potion seconds " + got.ToString() + " expected " + seconds.ToString() + " " + (potionRead.BuffTrace ?? ""));
+            }
+        }
+
+        private static string Fmt(int? value)
+        {
+            return value == null ? "none" : value.Value.ToString();
         }
 
         private static void LiveRead(string root)

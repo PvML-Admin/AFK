@@ -378,12 +378,8 @@ namespace KavrosAfkWarden
                     System.Runtime.InteropServices.Marshal.Copy(IntPtr.Add(data.Scan0, y * data.Stride), pixels, y * window.Width, window.Width);
             }
             finally { pads[slot].UnlockBits(data); }
-            int ox = client.X - window.X;
-            int oy = client.Y - window.Y;
-            if (ox < 0) ox = 0;
-            if (oy < 0) oy = 0;
-            int cw = Math.Min(client.Width, window.Width - ox);
-            int ch = Math.Min(client.Height, window.Height - oy);
+            int ox, oy, cw, ch;
+            WindowCrop.Client(window.X, window.Y, window.Width, window.Height, client.X, client.Y, client.Width, client.Height, out ox, out oy, out cw, out ch);
             if (cw < 80 || ch < 80) return null;
             int[] source = pixelsBySlot[slot];
             int[] clientPixels = new int[cw * ch];

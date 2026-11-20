@@ -72,6 +72,41 @@ namespace KavrosAfkWarden
         public static int G(int c) { return (c >> 8) & 255; }
         public static int B(int c) { return c & 255; }
 
+        public ImageBuffer Scale(double factor)
+        {
+            if (factor <= 0) factor = 1;
+            int w = Math.Max(1, (int)Math.Round(Width * factor));
+            int h = Math.Max(1, (int)Math.Round(Height * factor));
+            int[] pixels = new int[w * h];
+            for (int y = 0; y < h; y++)
+            {
+                int y0 = (int)Math.Floor(y * (double)Height / h);
+                int y1 = (int)Math.Ceiling((y + 1) * (double)Height / h) - 1;
+                if (y0 < 0) y0 = 0;
+                if (y1 < y0) y1 = y0;
+                if (y1 >= Height) y1 = Height - 1;
+                for (int x = 0; x < w; x++)
+                {
+                    int x0 = (int)Math.Floor(x * (double)Width / w);
+                    int x1 = (int)Math.Ceiling((x + 1) * (double)Width / w) - 1;
+                    if (x0 < 0) x0 = 0;
+                    if (x1 < x0) x1 = x0;
+                    if (x1 >= Width) x1 = Width - 1;
+                    int best = Pixels[y0 * Width + x0];
+                    int lum = R(best) + G(best) + B(best);
+                    for (int yy = y0; yy <= y1; yy++)
+                        for (int xx = x0; xx <= x1; xx++)
+                        {
+                            int color = Pixels[yy * Width + xx];
+                            int sum = R(color) + G(color) + B(color);
+                            if (sum > lum) { lum = sum; best = color; }
+                        }
+                    pixels[y * w + x] = best;
+                }
+            }
+            return new ImageBuffer(w, h, pixels);
+        }
+
         public ImageBuffer Crop(int x, int y, int w, int h)
         {
             if (w < 1 || h < 1) return null;
