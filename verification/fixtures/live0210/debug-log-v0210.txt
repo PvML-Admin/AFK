@@ -1,0 +1,515 @@
+xt=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:30:35 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:30:36 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:30:36 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:30:38 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:30:38 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:30:39 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:30:39 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:30:40 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:30:40 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:30:41 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:30:41 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:30:42 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:30:42 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:30:43 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:30:44 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:30:45 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:30:45 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:30:47 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:30:48 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:30:49 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:30:50 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=1161:other:cols lifeBar=628,1161 83x4 prayerBar=866,1161 83x4 lifeText= prayerText=cols 1 , 0 4 0 / 9 9 0 pixels=True activity=none idleReset=no
+19:30:52 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:30:52 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:30:54 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:30:54 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:30:55 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:30:57 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:30:59 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:00 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:01 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:01 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:02 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:02 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:03 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:04 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:05 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:06 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:06 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:07 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:08 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:08 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:09 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:09 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:10 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:11 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:11 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:12 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:12 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:13 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:13 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:14 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:14 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:15 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:15 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:16 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:16 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:17 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:17 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:19 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:19 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:21 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:23 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:23 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:24 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:24 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:26 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:26 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:27 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:27 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:28 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:30 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:30 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:31 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:31 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:33 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:33 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:34 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:34 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:35 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:36 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:36 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:37 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:37 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:38 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:38 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:39 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:39 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:40 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:40 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:41 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:41 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:42 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:42 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:43 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:43 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:44 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:44 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:45 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:45 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:46 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:46 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:47 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:47 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:48 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:48 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:50 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=1161:other:cols lifeBar=628,1161 83x4 prayerBar=866,1161 83x4 lifeText= prayerText=cols 1 , 0 4 0 / 9 9 0 pixels=True activity=none idleReset=no
+19:31:52 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:53 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:54 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:56 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:57 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:57 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:31:58 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:31:59 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:00 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:01 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:01 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:02 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:03 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:05 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:05 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:06 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:06 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:08 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:09 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:09 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:10 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:10 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:11 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:11 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:12 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:12 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:13 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:13 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:14 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:15 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:15 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:16 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:16 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:17 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:17 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:18 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:18 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:19 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:19 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:20 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:20 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=1161:other:cols lifeBar=628,1161 83x4 prayerBar=866,1161 83x4 lifeText= prayerText=cols 1 , 0 4 0 / 9 9 0 pixels=True activity=pack idleReset=yes
+19:32:21 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:22 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:22 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:23 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:23 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:24 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:26 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:26 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:27 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:28 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:29 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:29 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:30 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:30 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:31 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:31 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:32 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:33 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:34 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:35 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:35 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:36 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:36 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:37 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:37 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:38 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:38 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:40 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:40 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:41 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:41 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:42 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:42 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:43 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:44 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:44 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:45 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:45 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:46 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:46 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:47 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:48 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:49 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:49 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:50 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:50 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:51 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=1161:other:cols lifeBar=628,1161 83x4 prayerBar=866,1161 83x4 lifeText= prayerText=cols 1 , 0 4 0 / 9 9 0 pixels=True activity=none idleReset=no
+19:32:51 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:52 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:52 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:53 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:56 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:56 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:32:57 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:32:58 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:00 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:33:01 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:01 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:33:02 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:02 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:33:03 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:03 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:05 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:07 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:08 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:33:09 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:09 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:10 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:33:10 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:11 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=150:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:33:11 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:13 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key idleReset=yes
+19:33:14 route=Screen hp=1633/1060 prayer=1040/990 buffs=5 buffText=309:prayer:cols 6 0 339:other:cols ? ? 369:other:cols 0 399:potion:cols ? 429:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:33:14 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:15 route=Screen hp=1633/1060 prayer=1040/990 buffs=5 buffText=309:prayer:cols 6 0 339:potion:cols ? ? 369:potion:cols 0 399:potion:cols ? 429:potion:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:33:15 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key idleReset=yes
+19:33:16 route=Screen hp=1633/1060 prayer=1040/990 buffs=5 buffText=309:prayer:cols 6 0 339:other:cols ? ? 369:other:cols 0 399:potion:cols ? 429:potion:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:33:16 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key idleReset=yes
+19:33:17 route=Screen hp=1633/1060 prayer=1040/990 buffs=5 buffText=309:prayer:cols 6 0 339:other:cols ? ? 369:other:cols 0 399:potion:cols ? 429:potion:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key+pack idleReset=yes
+19:33:17 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key idleReset=yes
+19:33:18 route=Screen hp=1633/1060 prayer=1040/990 buffs=5 buffText=309:prayer:cols 6 0 339:other:cols ? ? 369:other:cols 0 399:potion:cols ? 429:potion:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key+pack idleReset=yes
+19:33:18 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key idleReset=yes
+19:33:20 route=Screen hp=1633/1060 prayer=1040/990 buffs=5 buffText=309:prayer:cols 6 0 339:other:cols ? ? 369:other:cols 0 399:potion:cols ? 429:potion:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:33:20 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key idleReset=yes
+19:33:21 route=Screen hp=1633/1060 prayer=1040/990 buffs=5 buffText=1148:prayer:cols 6 0 1178:other:cols ? ? 1208:other:cols 0 1238:potion:cols ? 1268:potion:cols lifeBar=628,1161 83x4 prayerBar=866,1161 83x4 lifeText= prayerText=cols 1 , 0 4 0 / 9 9 0 pixels=True activity=key+pack idleReset=yes
+19:33:21 route=Screen hp=1633/1060 prayer=1040/990 buffs=5 buffText=1148:prayer:cols 6 0 1178:other:cols ? ? 1208:other:cols 0 1238:potion:cols ? 1268:potion:cols lifeBar=628,1161 83x4 prayerBar=866,1161 83x4 lifeText= prayerText=cols 1 , 0 4 0 / 9 9 0 pixels=True activity=key idleReset=yes
+19:33:22 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:23 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key idleReset=yes
+19:33:24 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key idleReset=yes
+19:33:27 route=Screen hp=1633/1060 prayer=1040/990 buffs=5 buffText=21:prayer:cols 6 0 51:other:cols ? ? 81:other:cols 0 111:potion:cols ? 141:potion:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key idleReset=yes
+19:33:29 route=Screen hp=1633/1060 prayer=1040/990 buffs=5 buffText=21:prayer:cols 6 0 51:other:cols ? ? 81:other:cols 0 111:potion:cols ? 141:potion:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key idleReset=yes
+19:33:29 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:30 route=Screen hp=1633/1060 prayer=1040/990 buffs=5 buffText=21:prayer:cols 6 0 51:other:cols ? ? 81:other:cols 0 111:potion:cols ? 141:potion:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key idleReset=yes
+19:33:30 route=Covered hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=False activity=none idleReset=no
+19:33:31 route=Screen hp=1633/1060 prayer=1040/990 buffs=5 buffText=21:prayer:cols 6 0 51:other:cols ? ? 81:other:cols 0 111:potion:cols ? 141:potion:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:33 route=Screen hp=1633/1060 prayer=1040/990 buffs=5 buffText=21:prayer:cols 6 0 51:other:cols ? ? 81:other:cols 0 111:potion:cols ? 141:potion:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:35 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:38 route=Screen hp=1633/1060 prayer=1040/990 buffs=5 buffText=21:prayer:cols 6 0 51:other:cols ? ? 81:other:cols 0 111:potion:cols ? 141:potion:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:40 route=Screen hp=1633/1060 prayer=1040/990 buffs=5 buffText=53:prayer:cols 6 0 83:other:cols ? ? 113:other:cols 0 143:potion:cols ? 173:potion:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:42 route=Screen hp=1633/1060 prayer=1040/990 buffs=5 buffText=53:prayer:cols 6 0 83:other:cols ? ? 113:other:cols 0 143:potion:cols ? 173:potion:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:43 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:33:43 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:44 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:46 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:48 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:50 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:51 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=628,1161 83x4 prayerBar=866,1161 83x4 lifeText= prayerText=cols 1 , 0 4 0 / 9 9 0 pixels=True activity=pack idleReset=yes
+19:33:52 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:53 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:55 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:33:57 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:00 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:02 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:04 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:06 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:09 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:11 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:13 route=Screen hp=1633/1060 prayer=1040/990 buffs=1 buffText=1235:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:16 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:18 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:20 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:22 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:24 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:26 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:29 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:31 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:33 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:35 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:37 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:39 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:41 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:44 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:46 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:48 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:50 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:52 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:54 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:57 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:34:57 route=Screen hp=1633/1060 prayer=1040/990 buffs=5 buffText=181:prayer:cols 6 0 211:potion:cols 6 m 241:other:cols 0 271:potion:cols ? 301:potion:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key idleReset=yes
+19:34:58 route=Minimized hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=False activity=none idleReset=no
+19:34:59 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:01 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:04 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:05 route=Screen hp=none/- prayer=none/- buffs=1 buffText=1249:other:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText=cols , ? ? pixels=True activity=pack idleReset=yes
+19:35:05 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:06 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:08 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=False activity=none idleReset=no
+19:35:10 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:13 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:14 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=False activity=pack idleReset=yes
+19:35:15 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:15 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:16 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:16 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:17 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:17 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:18 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:18 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:19 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:19 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:20 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:20 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:21 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:22 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:22 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:23 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:23 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:24 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:24 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:25 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:25 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:26 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:26 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:27 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=False activity=pack idleReset=yes
+19:35:28 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:28 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:29 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:29 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:30 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:30 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:31 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:31 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:32 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:33 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:33 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:34 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:34 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:35 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:35 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:36 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:36 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:37 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:37 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:38 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:38 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:39 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:39 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:40 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:40 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:41 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:41 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:42 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:42 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:43 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:43 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:44 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:44 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:45 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:45 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:46 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:46 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:47 route=Screen hp=none/- prayer=none/- buffs=1 buffText=1229:other:cols ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:47 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:48 route=Screen hp=none/- prayer=none/- buffs=1 buffText=1229:other:cols ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:48 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:49 route=Screen hp=none/- prayer=none/- buffs=1 buffText=1229:other:cols ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:49 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:50 route=Screen hp=none/- prayer=none/- buffs=1 buffText=1229:other:cols ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=pack idleReset=yes
+19:35:50 route=Screen hp=none/- prayer=none/- buffs=1 buffText=1229:other:cols ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:51 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=False activity=pack idleReset=yes
+19:35:52 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:54 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:56 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:35:58 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:01 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:03 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:05 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:08 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:10 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:12 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:14 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:16 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:18 route=Screen hp=none/- prayer=none/- buffs=1 buffText=1229:other:cols , ? ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:20 route=Screen hp=none/- prayer=none/- buffs=1 buffText=1229:other:cols , ? ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:21 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=False activity=pack idleReset=yes
+19:36:22 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:23 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:25 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:27 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:29 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:31 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:33 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:35 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:37 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:39 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:42 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:44 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:46 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:48 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:50 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:52 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:55 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:57 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:36:59 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:01 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:03 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:05 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:08 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:10 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:12 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:15 route=Screen hp=none/- prayer=none/- buffs=1 buffText=1229:other:cols ? ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:17 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:20 route=Screen hp=none/- prayer=none/- buffs=1 buffText=1229:other:cols ? ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:22 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=1500,354 58x27 prayerBar=1903,364 62x21 lifeText= prayerText=cols ? , ? pixels=True activity=none idleReset=no
+19:37:24 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:26 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:29 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:31 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:33 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:35 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:37 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:39 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:42 route=Screen hp=none/- prayer=none/- buffs=1 buffText=1229:other:cols ? , ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:44 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:46 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:48 route=Screen hp=none/- prayer=none/- buffs=1 buffText=1229:other:cols ? , ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:51 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:53 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:54 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key idleReset=yes
+19:37:55 route=Screen hp=1633/1060 prayer=none/- buffs=5 buffText=85:prayer:cols 6 0 115:other:cols ? ? 145:other:cols 0 175:potion:cols ? 205:potion:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:55 route=Screen hp=1633/1060 prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:56 route=Screen hp=1633/1060 prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key idleReset=yes
+19:37:56 route=Screen hp=1633/1060 prayer=none/- buffs=5 buffText=85:prayer:cols 6 0 115:other:cols ? ? 145:other:cols 0 175:potion:cols ? 205:potion:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:57 route=Screen hp=1633/1060 prayer=none/- buffs=5 buffText=85:prayer:cols 6 0 115:other:cols ? ? 145:other:cols 0 175:potion:cols ? 205:potion:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key idleReset=yes
+19:37:58 route=Screen hp=1633/1060 prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:37:59 route=Screen hp=1633/1060 prayer=none/- buffs=5 buffText=85:prayer:cols 6 0 115:other:cols ? ? 145:other:cols 0 175:potion:cols ? 205:potion:cols lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none idleReset=no
+19:38:03 route=Missing hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=False activity=none skill=xp=none pack=none icons= idleReset=no
+19:38:04 route=Screen hp=1633/1060 prayer=1040/990 buffs=5 buffText=1148:prayer:cols 6 0 1178:overload:cols ? ? 1208:aggression:cols 0 1238:overload:cols ? 1268:aggression:cols lifeBar=628,1161 83x4 prayerBar=866,1161 83x4 lifeText= prayerText=cols 1 , 0 4 0 / 9 9 0 pixels=True activity=key skill=xp=none pack@1920,760 slots icons= idleReset=yes
+19:38:05 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack@48,12 slots icons=1148,prayer,60s,rejected 1178,overload,notime,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected 1268,aggression,notime,rejected idleReset=no
+19:38:08 route=Screen hp=1633/1060 prayer=1040/990 buffs=4 buffText=21:prayer:cols 6 0 51:overload:cols ? ? 81:aggression:cols 0 111:overload:cols ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack@48,12 slots icons=1148,prayer,60s,rejected 1178,overload,notime,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected 1268,aggression,notime,rejected idleReset=no
+19:38:10 route=Screen hp=1633/1060 prayer=1040/990 buffs=4 buffText=21:prayer:cols 6 0 51:overload:cols 2 m 81:aggression:cols 0 111:overload:cols ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack@48,12 slots icons=1148,prayer,60s,rejected 1178,overload,notime,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected 1268,aggression,notime,rejected idleReset=no
+19:38:12 route=Screen hp=1633/1060 prayer=1040/990 buffs=4 buffText=21:prayer:cols 6 0 51:overload:cols 2 m 81:aggression:cols 0 111:overload:cols ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack@48,12 slots icons=1148,prayer,60s,rejected 1178,overload,notime,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected 1268,aggression,notime,rejected idleReset=no
+19:38:14 route=Screen hp=1633/1060 prayer=1040/990 buffs=4 buffText=21:prayer:cols 6 0 51:overload:cols 2 m 81:aggression:cols 0 111:overload:cols ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack@48,12 slots icons=1148,prayer,60s,rejected 1178,overload,notime,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected 1268,aggression,notime,rejected idleReset=no
+19:38:16 route=Screen hp=1633/1060 prayer=1040/990 buffs=4 buffText=21:prayer:cols 6 0 51:overload:cols 2 m 81:aggression:cols 0 111:overload:cols ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack@48,12 slots icons=1148,prayer,60s,rejected 1178,overload,notime,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected 1268,aggression,notime,rejected idleReset=no
+19:38:18 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key skill=xp=none pack@28,12 slots icons=1148,prayer,60s,rejected 1178,overload,notime,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected 1268,aggression,notime,rejected idleReset=yes
+19:38:18 route=Screen hp=1633/1060 prayer=1040/990 buffs=4 buffText=21:prayer:cols 6 0 51:overload:cols 2 m 81:aggression:cols 0 111:overload:cols ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key+pack skill=xp=none pack@28,12 slots pack-event icons=1148,prayer,60s,rejected 1178,overload,notime,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected 1268,aggression,notime,rejected idleReset=yes
+19:38:19 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key skill=xp=none pack@28,12 slots pack-event icons=1148,prayer,60s,rejected 1178,overload,notime,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected 1268,aggression,notime,rejected idleReset=yes
+19:38:21 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key skill=xp=none pack@48,12 slots icons=1148,prayer,60s,rejected 1178,overload,notime,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected 1268,aggression,notime,rejected idleReset=yes
+19:38:22 route=Screen hp=1633/1060 prayer=1040/990 buffs=4 buffText=21:prayer:cols 6 0 51:overload:cols 2 m 81:aggression:cols 0 111:overload:cols ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key+pack skill=xp=none pack@48,12 slots pack-event icons=1148,prayer,60s,rejected 1178,overload,notime,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected 1268,aggression,notime,rejected idleReset=yes
+19:38:23 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key skill=xp=none pack@48,12 slots pack-event icons=1148,prayer,60s,rejected 1178,overload,notime,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected 1268,aggression,notime,rejected idleReset=yes
+19:38:23 route=Screen hp=1633/1060 prayer=1040/990 buffs=4 buffText=21:prayer:cols 6 0 51:overload:cols 2 m 81:aggression:cols 0 111:overload:cols ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key skill=xp=none pack@28,12 slots icons=1148,prayer,60s,rejected 1178,overload,notime,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected 1268,aggression,notime,rejected idleReset=yes
+19:38:24 route=Screen hp=1633/1060 prayer=1040/990 buffs=4 buffText=21:prayer:cols 6 0 51:overload:cols 2 m 81:aggression:cols 0 111:overload:cols ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack@48,12 slots icons=1148,prayer,60s,rejected 1178,overload,notime,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected 1268,aggression,notime,rejected idleReset=no
+19:38:25 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack@48,12 slots icons=1148,prayer,60s,rejected 1178,overload,notime,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected 1268,aggression,notime,rejected idleReset=no
+19:38:28 route=Screen hp=1633/1060 prayer=1040/990 buffs=4 buffText=21:prayer:cols 6 0 51:overload:cols 2 m 81:aggression:cols 0 111:overload:cols ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack@48,12 slots icons=1148,prayer,60s,rejected 1178,overload,notime,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected 1268,aggression,notime,rejected idleReset=no
+19:38:30 route=Screen hp=1633/1060 prayer=1040/990 buffs=4 buffText=21:prayer:cols 6 0 51:overload:cols 2 m 81:aggression:cols 0 111:overload:cols ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack@48,12 slots icons=1148,prayer,60s,rejected 1178,overload,notime,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected 1268,aggression,notime,rejected idleReset=no
+19:38:32 route=Screen hp=1633/1060 prayer=1040/990 buffs=4 buffText=21:prayer:cols 6 0 51:overload:cols 2 m 81:aggression:cols 0 111:overload:cols ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack@48,12 slots icons=1148,prayer,60s,rejected 1178,overload,notime,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected 1268,aggression,notime,rejected idleReset=no
+19:38:34 route=Screen hp=1633/1060 prayer=1040/990 buffs=4 buffText=1148:prayer:cols 6 0 1178:overload:cols 2 m 1208:aggression:cols 0 1238:overload:cols ? lifeBar=628,1161 83x4 prayerBar=866,1161 83x4 lifeText= prayerText=cols 1 , 0 4 0 / 9 9 0 pixels=True activity=key skill=xp=none pack@1640,960 slots icons=1148,prayer,60s,rejected 1178,overload,notime,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected 1268,aggression,notime,rejected idleReset=yes
+19:38:34 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=no
+19:38:35 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=yes
+19:38:36 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=yes
+19:38:37 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=no
+19:38:38 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=yes
+19:38:38 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=yes
+19:38:40 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=no
+19:38:41 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=yes
+19:38:42 route=Screen hp=1633/1060 prayer=1040/990 buffs=4 buffText=21:prayer:cols 6 0 51:elder:cols 1 2 m 81:overload:cols 1 2 m 111:overload:cols 1 2 m lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=no
+19:38:43 route=Screen hp=1633/1060 prayer=1040/990 buffs=4 buffText=21:prayer:cols 6 0 51:elder:cols 1 2 m 81:overload:cols 1 2 m 111:overload:cols 1 2 m lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=no
+19:38:44 route=Screen hp=1633/1060 prayer=1040/990 buffs=4 buffText=21:prayer:cols 6 0 51:elder:cols 1 2 m 81:overload:cols 1 1 m 111:overload:cols 1 2 m lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=yes
+19:38:44 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=no
+19:38:45 route=Screen hp=1633/1060 prayer=1040/990 buffs=3 buffText=51:elder:cols 1 1 m 81:overload:cols 1 1 m 111:overload:cols 1 1 m lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=yes
+19:38:45 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=no
+19:38:47 route=Screen hp=1633/1060 prayer=1040/990 buffs=4 buffText=141:elder:cols 1 1 m 171:overload:cols 2 m 201:aggression:cols 0 231:overload:cols ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=no
+19:38:49 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=yes
+19:38:50 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=no
+19:38:51 route=Covered hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=False activity=none skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=no
+19:38:53 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=no
+19:38:56 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=no
+19:38:58 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=no
+19:39:00 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=no
+19:39:03 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,prayer,60s,rejected 1178,overload,2m,rejected 1208,aggression,0s,rejected 1238,overload,notime,rejected idleReset=no
+19:39:05 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:07 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:09 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:11 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:13 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:15 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:17 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:19 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=yes
+19:39:19 route=Screen hp=1633/1060 prayer=1040/990 buffs=4 buffText=141:elder:cols 1 1 m 171:overload:cols ? ? 201:aggression:cols 0 231:overload:cols ? lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=yes
+19:39:22 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=key skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=yes
+19:39:23 route=Screen hp=1633/1060 prayer=1040/990 buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:24 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:26 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:28 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack@20,460 slots icons=1148,other,notime,rejected idleReset=no
+19:39:30 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:32 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:34 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:37 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:39 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:41 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:43 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:46 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:48 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:50 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=False activity=none skill=xp=none pack@20,460 slots icons=1148,other,notime,rejected idleReset=no
+19:39:52 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:54 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:56 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:39:58 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:40:01 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:40:03 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:40:05 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:40:07 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:40:10 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:40:12 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons=1148,other,notime,rejected idleReset=no
+19:40:14 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=1500,354 58x27 prayerBar=1903,352 62x22 lifeText= prayerText=cols ? ? pixels=True activity=pack skill=xp=none pack@20,460 slots pack-event icons=1148,other,notime,rejected idleReset=yes
+19:40:14 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons= idleReset=no
+19:40:16 route=Screen hp=none/- prayer=none/- buffs=0 buffText= lifeBar=0,0 0x0 prayerBar=0,0 0x0 lifeText= prayerText= pixels=True activity=none skill=xp=none pack=none icons= idleReset=no

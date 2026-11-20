@@ -577,11 +577,152 @@ namespace KavrosAfkWarden
                 number = tight;
                 minutes = tightMinutes;
             }
-            if (!number.Ok) return result;
+            if (number.Ok && number.Current > 0)
+            {
+                result.HasTime = true;
+                result.Minutes = minutes;
+                result.Value = number.Current;
+                return result;
+            }
+            // The wide line included icon art and was rejected. Read only the baseline.
+            int band = Math.Min(14, Math.Max(8, icon.Height / 3));
+            IntRect text = Clamp(image, icon.X + 1, icon.Bottom - band, Math.Max(8, icon.Width - 2), band);
+            bool[] mask = Mask(image, text, TimerInk);
+            int width = text.Width;
+            int height = text.Height;
+            for (int y = 0; y < height; y++)
+            {
+                int ink = 0;
+                for (int x = 0; x < width; x++) if (mask[y * width + x]) ink++;
+                if (ink * 3 > width * 2)
+                    for (int x = 0; x < width; x++) mask[y * width + x] = false;
+            }
+            int baseline = 0;
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                    if (mask[y * width + x] && y > baseline) baseline = y;
+            string current = "";
+            minutes = false;
+            bool secondsMark = false;
+            int cursor = 0;
+            while (cursor < width)
+            {
+                if (!TimerColumn(mask, width, height, cursor)) { cursor++; continue; }
+                int start = cursor;
+                while (cursor < width && TimerColumn(mask, width, height, cursor)) cursor++;
+                int top = height, bottom = 0, area = 0;
+                for (int y = 0; y < height; y++)
+                    for (int x = start; x < cursor; x++)
+                        if (mask[y * width + x])
+                        {
+                            area++;
+                            if (y < top) top = y;
+                            if (y > bottom) bottom = y;
+                        }
+                int gw = cursor - start;
+                int gh = bottom - top + 1;
+                if (area < 4 || gh < 4 || bottom < baseline - 3) continue;
+                if (gw > gh + 1)
+                {
+                    int seam = -1, least = gh;
+                    for (int x = start + 2; x < cursor - 2; x++)
+                    {
+                        int inkc = 0;
+                        for (int y = top; y <= bottom; y++) if (mask[y * width + x]) inkc++;
+                        if (inkc < least) { least = inkc; seam = x; }
+                    }
+                        if (seam > start && least * 2 <= gh)
+                    {
+                        AppendTimerGlyph(mask, width, start, seam - start, ref current, ref minutes, ref secondsMark);
+                        cursor = seam + 1;
+                        continue;
+                    }
+                }
+                AppendTimerGlyph(mask, width, start, gw, ref current, ref minutes, ref secondsMark);
+            }
+            LastTrace = "cols " + current + (minutes ? " m" : secondsMark ? " s" : "");
+            int value;
+            if (current.Length == 0 || current.Length > 4 || !int.TryParse(current, out value) || value <= 0) return result;
+            if (!minutes && !secondsMark && current == "1") return result;
             result.HasTime = true;
-            result.Minutes = minutes;
-            result.Value = number.Current;
+            result.Minutes = minutes && !secondsMark;
+            result.Value = value;
             return result;
+        }
+
+        private static void AppendTimerGlyph(bool[] mask, int width, int start, int gw, ref string current, ref bool minutes, ref bool secondsMark)
+        {
+            int height = mask.Length / width;
+            while (gw > 1 && !TimerColumn(mask, width, height, start)) { start++; gw--; }
+            while (gw > 1 && !TimerColumn(mask, width, height, start + gw - 1)) gw--;
+            int top = 0, bottom = 0, area = 0;
+            bool any = false;
+            for (int y = 0; y < mask.Length / width; y++)
+                for (int x = start; x < start + gw && x < width; x++)
+                    if (mask[y * width + x])
+                    {
+                        area++;
+                        if (!any || y < top) top = y;
+                        if (y > bottom) bottom = y;
+                        any = true;
+                    }
+            if (!any) return;
+            int gh = bottom - top + 1;
+            if (area < 3 || gh < 4) return;
+            char glyph = GlyphBook.Match(mask, width, start, top, gw, gh);
+            if (glyph == 'm' && gh > gw + 1) glyph = '?';
+            if (glyph >= '0' && glyph <= '9') current += glyph;
+            else if (glyph == 'm') minutes = true;
+            else if (glyph == 's') secondsMark = true;
+            else if (gw <= gh && gh >= 5 && gh <= 16)
+            {
+                int digit = DigitFont.Match(SampleTimer(mask, width, start, top, gw, gh));
+                if (digit > 1 || (digit == 1 && gw * 3 < gh * 2)) current += digit.ToString();
+                else if (StemCount(mask, width, start, top, gw, gh) >= 3) minutes = true;
+            }
+        }
+
+        private static bool TimerInk(int c)
+        {
+            int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
+            int low = Math.Min(r, Math.Min(g, b));
+            int high = Math.Max(r, Math.Max(g, b));
+            return low >= 170 && high - low <= 60;
+        }
+
+        private static bool TimerColumn(bool[] mask, int width, int height, int x)
+        {
+            for (int y = 0; y < height; y++) if (mask[y * width + x]) return true;
+            return false;
+        }
+
+        private static int StemCount(bool[] mask, int width, int left, int top, int gw, int gh)
+        {
+            int best = 0;
+            for (int y = top; y < top + gh; y++)
+            {
+                int runs = 0;
+                bool on = false;
+                for (int x = left; x < left + gw; x++)
+                {
+                    bool ink = mask[y * width + x];
+                    if (ink && !on) runs++;
+                    on = ink;
+                }
+                if (runs > best) best = runs;
+            }
+            return best;
+        }
+
+        private static int[,] SampleTimer(bool[] mask, int stride, int left, int top, int width, int height)
+        {
+            int[,] grid = new int[7, 5];
+            if (width < 1 || height < 1) return grid;
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                    if (mask[(top + y) * stride + left + x])
+                        grid[Math.Min(6, y * 7 / height), Math.Min(4, x * 5 / width)] = 1;
+            return grid;
         }
 
         // Potion buffs are flasks, overload crystals, or a ringed antifire/poison
@@ -647,7 +788,15 @@ namespace KavrosAfkWarden
             // flask, aggression is the dark green flask.
             if (magenta * 100 / Math.Max(1, samples) >= 18 && red > 20) return "elder";
             if (cork >= 8 && magenta >= 8) return "overload";
-            if (cork >= 8 && dark >= 40) return "aggression";
+            int greenBody = 0;
+            for (int y = icon.Y + 2; y < bodyBottom; y++)
+                for (int x = icon.X + inset; x < icon.Right - inset; x++)
+                {
+                    int color = image.Argb(x, y);
+                    int r = ImageBuffer.R(color), g = ImageBuffer.G(color), b = ImageBuffer.B(color);
+                    if (g > 70 && g > r + 10 && g > b + 10) greenBody++;
+                }
+            if (greenBody * 100 / Math.Max(1, samples) >= 12 && dark * 100 / Math.Max(1, samples) >= 15) return "aggression";
             return "other";
         }
 

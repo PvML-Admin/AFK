@@ -40,6 +40,7 @@ namespace KavrosAfkWarden
                 PanelOrder();
                 Skilling();
                 XpDropFixture(root);
+                ScaleFixtures(root);
                 Manifest(root);
             }
             catch (Exception ex)
@@ -324,8 +325,55 @@ namespace KavrosAfkWarden
             Check(liveDrop.Found && liveDrop.Plus && liveDrop.X > 700 && liveDrop.X < 1800 && liveDrop.Y > 80 && liveDrop.Y < 400, "the woodcutting frame finds the orange +xp drop in the upper middle, got " + liveDrop.Trace);
             ImageBuffer cleared = new ImageBuffer(live.Width, live.Height, (int[])live.Pixels.Clone());
             int pad = 6;
-            cleared.Fill(Math.Max(0, liveDrop.X - pad), Math.Max(0, liveDrop.Y - pad), liveDrop.Rect.Width + pad * 2, liveDrop.Rect.Height + pad * 2, ImageBuffer.Pack(36, 48, 28));
-            Check(!SceneActivity.XpWatch.Read(cleared).Found, "the same frame with the orange text removed is not an XP drop");
+            cleared.Fill(Math.Max(0, liveDrop.X - pad), Math.Max(0, liveDrop.Y - 8), 220, 32, ImageBuffer.Pack(36, 48, 28));
+            var gone = SceneActivity.XpWatch.Read(cleared);
+            Check(!gone.Found, "the same frame with the orange text removed is not an XP drop, got " + gone.Trace);
+            IntRect pack = SceneActivity.PackWatch.Find(live);
+            Check(pack.Width == 0 || pack.Y > live.Height / 2, "the backpack anchor is not a false grid at the top of the screen, got " + pack.X.ToString() + "," + pack.Y.ToString());
+        }
+
+        private static void ScaleFixtures(string root)
+        {
+            if (root == null || root.Length == 0) return;
+            string xpPath = Path.Combine(root, "verification", "fixtures", "live029", "xpdrop-woodcutting-589.png");
+            string hudPath = Path.Combine(root, "verification", "fixtures", "live023", "debug-capture.png");
+            string twelve = Path.Combine(root, "verification", "fixtures", "live023", "buffbar-potions-12m.png");
+            string eleven = Path.Combine(root, "verification", "fixtures", "live023", "buffbar-potions-11m-elder-overload.png");
+            string prayer = Path.Combine(root, "verification", "fixtures", "live023", "buffbar-prayer60-bone5-heart.png");
+            double[] scales = new double[] { 1.0, 1.5, 2.0 };
+            string[] names = new string[] { "100%", "150%", "200%" };
+            for (int i = 0; i < scales.Length; i++)
+            {
+                if (File.Exists(xpPath))
+                {
+                    ImageBuffer scaled = PngImage.Load(xpPath).Scale(scales[i]);
+                    var sight = SceneActivity.XpWatch.Read(scaled);
+                    Check(sight.Found && sight.Plus, "XP drop at " + names[i] + " is found, got " + sight.Trace);
+                }
+                if (File.Exists(hudPath))
+                {
+                    ImageBuffer full = PngImage.Load(hudPath);
+                    int top = full.Height * 70 / 100;
+                    ImageBuffer band = full.Crop(0, top, full.Width, full.Height - top).Scale(scales[i]);
+                    HudReading hud = HudReader.Read(band, new WardenSettings());
+                    Check(hud.Hp == 1633 && hud.HpMax == 1060 && hud.Prayer == 1040 && hud.PrayerMax == 990, "HP and prayer at " + names[i] + " got " + (hud.Hp == null ? "none" : hud.Hp.Value.ToString()) + "/" + (hud.HpMax == null ? "-" : hud.HpMax.Value.ToString()) + " prayer " + (hud.Prayer == null ? "none" : hud.Prayer.Value.ToString()) + " " + hud.LifeTrace);
+                }
+                if (File.Exists(twelve))
+                {
+                    HudReading bar = HudReader.Read(PngImage.Load(twelve).Scale(scales[i]), new WardenSettings());
+                    Check(BuffClock.ShownSeconds(bar.Buffs) == 720, "12m flasks at " + names[i] + " got " + (bar.BuffTrace ?? ""));
+                }
+                if (File.Exists(eleven))
+                {
+                    HudReading bar = HudReader.Read(PngImage.Load(eleven).Scale(scales[i]), new WardenSettings());
+                    Check(BuffClock.ShownSeconds(bar.Buffs) == 660, "11m elder row at " + names[i] + " got " + (bar.BuffTrace ?? ""));
+                }
+                if (File.Exists(prayer))
+                {
+                    HudReading bar = HudReader.Read(PngImage.Load(prayer).Scale(scales[i]), new WardenSettings());
+                    Check(BuffClock.ShownSeconds(bar.Buffs) == null, "prayer 60 at " + names[i] + " is not a potion, got " + (bar.BuffTrace ?? ""));
+                }
+            }
         }
 
         private static void Check(bool condition, string message)

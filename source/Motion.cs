@@ -291,6 +291,19 @@ namespace KavrosAfkWarden
         {
             XpSight best = new XpSight();
             if (image == null || image.Width < 12 || image.Height < 12) return best;
+            int plusScale;
+            int plusAt = GlyphBook.FindPlus(image, out plusScale);
+            if (plusAt >= 0)
+            {
+                int px = plusAt % image.Width;
+                int py = plusAt / image.Width;
+                best.Found = true;
+                best.Plus = true;
+                best.Text = "+";
+                best.Rect = new IntRect(px, py, 9 * plusScale / 100, 9 * plusScale / 100);
+                best.Trace = "xp=+@" + px.ToString() + "," + py.ToString() + " scale=" + plusScale.ToString();
+                return best;
+            }
             List<InkBand> bands = new List<InkBand>();
             int guard = 0;
             int limit = image.Height * 70 / 100;
@@ -476,7 +489,9 @@ namespace KavrosAfkWarden
                         if (score > best) { best = score; found = new IntRect(x, y, gridW, gridH); }
                     }
             }
-            if (best < 20) return new IntRect();
+            // A real backpack is a full lattice. A score of 20 is a random UI edge.
+            if (best < 26) return new IntRect();
+            if (found.Y < image.Height * 40 / 100 && best < 28) return new IntRect();
             return found;
         }
 

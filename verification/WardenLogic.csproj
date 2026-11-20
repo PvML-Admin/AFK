@@ -13,6 +13,7 @@
     <Compile Include="..\source\CapturePolicy.cs" />
     <Compile Include="..\source\AlertModel.cs" />
     <Compile Include="..\source\HudReader.cs" />
+    <Compile Include="..\source\GlyphBook.cs" />
     <Compile Include="..\source\PngImage.cs" />
     <Compile Include="..\source\Motion.cs" />
     <Compile Include="..\source\WindowScore.cs" />
