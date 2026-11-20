@@ -47,7 +47,7 @@ namespace KavrosAfkWarden
         [DllImport("user32.dll")] internal static extern bool SetProcessDpiAwarenessContext(IntPtr context);
         [DllImport("shcore.dll")] private static extern int SetProcessDpiAwareness(int awareness);
 
-        // Physical pixels for GetWindowRect, ClientToScreen and PrintWindow.
+        // Physical pixels for GetWindowRect and ClientToScreen.
         // Must run before any window or WinForms call. -4 is PerMonitorV2.
         internal static void MakePerMonitorAware()
         {
@@ -68,8 +68,6 @@ namespace KavrosAfkWarden
             catch (DllNotFoundException) { }
         }
         [DllImport("user32.dll", SetLastError = true)] internal static extern bool SetWindowDisplayAffinity(IntPtr window, uint affinity);
-        [DllImport("user32.dll")] internal static extern bool PrintWindow(IntPtr window, IntPtr dc, uint flags);
-        [DllImport("dwmapi.dll")] internal static extern int DwmFlush();
         [DllImport("dwmapi.dll")] internal static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 
         internal static Rectangle ClientBounds(IntPtr window)

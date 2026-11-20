@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.9
+
+- The whole screen no longer flashes black. The periodic capture never calls PrintWindow. A visible client is a small screen copy, focused or not. A covered client is left unread, and hitpoints, prayer and idle stay on the last good values. A black frame cannot raise an alert. The panel's topmost state changes only when that state changes.
+
 ## 0.2.8
 
 - The game is read while it is behind other windows. A visible slot is still a small screen copy. A covered slot is taken from the window itself, and a black result falls back to the screen.

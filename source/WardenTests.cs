@@ -159,9 +159,11 @@ namespace KavrosAfkWarden
             Check(CapturePlan.ShareGrab(life, prayer), "life and prayer on one HUD row are copied in one grab");
             Check(!CapturePlan.ShareGrab(life, new IntRect(1800, 200, 108, 36)), "slots far apart are copied separately");
             Check(CapturePlan.SlowSlotEvery >= 2, "buffs, XP and the backpack are read at most once a second");
-            Check(CapturePlan.ShouldRead(false, false) && !CapturePlan.ShouldRead(true, false) && !CapturePlan.ShouldRead(false, true), "a covered client is read; a minimized or paused one is not");
-            Check(CapturePlan.PreferWindowPixels(false) && !CapturePlan.PreferWindowPixels(true), "a hidden region is taken from the game window, a visible one from the screen");
-            Check(CapturePlan.ContinueReading(false, false, true) && CapturePlan.ContinueReading(false, true, false) && !CapturePlan.ContinueReading(true, true, false), "reads continue when the game is covered or unfocused, and stop when it is minimized");
+            Check(CapturePlan.ShouldRead(false, false) && !CapturePlan.ShouldRead(true, false) && !CapturePlan.ShouldRead(false, true), "a minimized or paused client is not read");
+            Check(!CapturePlan.PreferWindowPixels(false) && !CapturePlan.PreferWindowPixels(true) && !CapturePlan.UsePrintWindow && !CapturePlan.OfferWindowSurface, "covered pixels are not taken with PrintWindow or a capture border");
+            Check(!CapturePlan.ContinueReading(false, false, true) && CapturePlan.ContinueReading(false, true, false) && !CapturePlan.ContinueReading(true, true, false), "a visible unfocused client is copied; a covered or minimized one is not");
+            Check(!CapturePlan.AcceptFrame(null) && !CapturePlan.AcceptFrame(ImageBuffer.Blank(32, 32, ImageBuffer.Pack(0, 0, 0))) && CapturePlan.AcceptFrame(ImageBuffer.Blank(32, 32, ImageBuffer.Pack(180, 40, 40))), "a black or failed frame is not a reading");
+            Check(!PanelDock.ZOrderChanged(true, true, true) && !PanelDock.ZOrderChanged(true, false, false) && PanelDock.ZOrderChanged(false, false, true) && PanelDock.ZOrderChanged(true, false, true), "the panel z-order changes only when topmost changes");
             int ox, oy, cw, ch;
             WindowCrop.Client(0, 0, 2576, 1488, 8, 40, 2560, 1440, out ox, out oy, out cw, out ch);
             Check(ox == 8 && oy == 40 && cw == 2560 && ch == 1440, "1440p at 150% keeps the physical client crop");
@@ -444,7 +446,7 @@ namespace KavrosAfkWarden
             Check(CapturePolicy.Choose(true, false, true, false, true) == CaptureRoute.WindowSurface, "a visible unfocused client uses the window surface when it is offered");
             Check(CapturePolicy.Choose(true, false, true, true, true) == CaptureRoute.WindowSurface, "a covered client is still read from the window surface");
             Check(CapturePolicy.Choose(true, false, true, false, false) == CaptureRoute.Screen, "without window capture, a visible client is read from the screen");
-            Check(CapturePolicy.Choose(true, false, true, true, false) == CaptureRoute.Covered, "a covered client cannot be read from the screen alone");
+            Check(CapturePolicy.Choose(true, false, true, true, CapturePlan.OfferWindowSurface) == CaptureRoute.Covered, "a covered client is left unread instead of forcing a window repaint");
             Check(!CapturePolicy.PixelsAvailable(CaptureRoute.Minimized) && CapturePolicy.PixelsAvailable(CaptureRoute.Screen), "only real frames count as pixels");
             bool[] clear = new bool[] { true, true, true, true, true, true, true, true, true };
             bool[] partial = new bool[] { true, false, false, false, false, false, false, false, false };
@@ -1020,7 +1022,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.8" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.9" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -1031,10 +1033,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.8\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.9\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.8.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.9.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

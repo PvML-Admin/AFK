@@ -978,7 +978,7 @@ namespace KavrosAfkWarden
             // Settings in front does not count: the panel must not cover it.
             bool own = front != IntPtr.Zero && front == panel.Handle;
             bool want = PanelDock.WantTopMost(exists, minimized, foreground, own, DateTime.UtcNow < raiseUntil);
-            if (panelTopKnown && want == panelTop) return;
+            if (!PanelDock.ZOrderChanged(panelTopKnown, panelTop, want)) return;
             const uint flags = 0x0001 | 0x0002 | 0x0010; // NOSIZE | NOMOVE | NOACTIVATE
             if (want) NativeMethods.SetWindowPos(panel.Handle, new IntPtr(-1), 0, 0, 0, 0, flags);
             else

@@ -43,6 +43,13 @@ namespace KavrosAfkWarden
             return true;
         }
 
+        // The z-order call is sent only when the wanted state changes. Repeating
+        // SetWindowPos every tick is enough to flash the desktop.
+        public static bool ZOrderChanged(bool known, bool currentTop, bool wantTop)
+        {
+            return !known || currentTop != wantTop;
+        }
+
         // Topmost only while the player is looking at the game (or at the panel
         // or Settings themselves), and briefly after an explicit launch so a
         // Companion start cannot leave it behind a client that is about to be
@@ -120,9 +127,9 @@ namespace KavrosAfkWarden
         }
     }
 
-    // PrintWindow paints the whole window in physical pixels. The client area
-    // sits inside that bitmap at the difference of the two screen rects.
-    // The scale factor is not applied: 150% and 200% stay in physical pixels.
+    // Client origin inside a window bitmap, in physical pixels. The scale factor
+    // is not applied: 150% and 200% stay in physical pixels. The capture loop
+    // does not build that bitmap with PrintWindow.
     public static class WindowCrop
     {
         public static void Client(int windowX, int windowY, int windowW, int windowH, int clientX, int clientY, int clientW, int clientH, out int ox, out int oy, out int w, out int h)
@@ -160,23 +167,36 @@ namespace KavrosAfkWarden
         // backs off 3, 6, 12, 24 then 30 seconds, so a hidden HUD, an empty
         // prayer bar or a loading screen does not copy the whole client every
         // three seconds.
-        // A minimized client has no picture. Any other client is read, focused or not.
-        // A region that is actually on screen stays a tiny CopyFromScreen. A region
-        // hidden behind another window is taken from the game window itself.
+        // A minimized client has no picture. A covered client is not copied either:
+        // PrintWindow with PW_RENDERFULLCONTENT flashes the whole desktop black.
         public static bool ShouldRead(bool minimized, bool paused)
         {
             return !minimized && !paused;
         }
 
-        // Focus and cover do not stop a read. Only a minimized client has no picture.
+        // An unfocused client that is still visible is a screen copy. A covered
+        // or minimized client is not copied. focused is unused on purpose.
         public static bool ContinueReading(bool minimized, bool focused, bool covered)
         {
-            return !minimized;
+            return !minimized && !covered;
         }
 
+        // Never pull pixels out of the game window. That path was PrintWindow.
         public static bool PreferWindowPixels(bool regionOnScreen)
         {
-            return !regionOnScreen;
+            return false;
+        }
+
+        public static bool UsePrintWindow { get { return false; } }
+
+        // Borderless Graphics Capture needs a Win11 consent call that this
+        // unpackaged .NET 4.8 build cannot confirm without risking the yellow
+        // border. Covered windows are left unread instead.
+        public static bool OfferWindowSurface { get { return false; } }
+
+        public static bool AcceptFrame(ImageBuffer image)
+        {
+            return image != null && !ImageBuffer.MostlyBlack(image);
         }
 
         public static int NextFullSeconds(bool lifeAndPrayerRead, bool buffLocked, int failedInARow)

@@ -36,6 +36,9 @@ namespace KavrosAfkWarden
 
         internal void Ensure(IntPtr hwnd)
         {
+            // Borderless consent cannot be confirmed from this unpackaged build.
+            // Starting a session would show the yellow capture border, so never start one.
+            unsupported = true;
             if (unsupported || hwnd == IntPtr.Zero) return;
             if (hwnd == target && session != null)
             {
