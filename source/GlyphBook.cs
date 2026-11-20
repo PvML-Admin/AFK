@@ -30,7 +30,15 @@ namespace KavrosAfkWarden
             S('2', 5, 8, "0111010001000010001000100010001000011111"),
             S('6', 5, 8, "0011001001100101011011001100011000101110"),
             S('m', 5, 5, "0101010101101011010110101"),
-            S('0', 5, 8, "0111010001100011000110001100011000101110")
+            S('0', 5, 8, "0111010001100011000110001100011000101110"),
+            // Hitpoint and prayer glyphs from the 1440p capture, trimmed to the ink.
+            S('1', 4, 8, "01001100010001000100010001001111"),
+            S('3', 5, 8, "0110000010000100111000010000110001011110"),
+            S('4', 5, 8, "0001100111001010100111001111110000100001"),
+            S('6', 5, 8, "0011001000100001111010001100011100101110"),
+            S('9', 5, 8, "0111010011100011000101111000010001011110"),
+            S('0', 5, 8, "0111011001100011000110001100011000101110"),
+            S('/', 3, 9, "001001001010010010100100100")
         };
 
         // A 150% nearest-neighbour "2" cut from the 12m flask fixture. The
@@ -70,17 +78,18 @@ namespace KavrosAfkWarden
             return list.ToArray();
         }
 
+        // Nearest-pixel scale, matching ImageBuffer.Scale when it enlarges.
         private static Stamp Scale(Stamp stamp, int percent)
         {
-            int w = Math.Max(1, stamp.Width * percent / 100);
-            int h = Math.Max(1, stamp.Height * percent / 100);
+            int w = Math.Max(1, (int)Math.Round(stamp.Width * (percent / 100.0)));
+            int h = Math.Max(1, (int)Math.Round(stamp.Height * (percent / 100.0)));
             char[] bits = new char[w * h];
             for (int y = 0; y < h; y++)
             {
-                int sy = Math.Min(stamp.Height - 1, y * stamp.Height / h);
+                int sy = Math.Min(stamp.Height - 1, (int)((y + 0.5) * stamp.Height / h));
                 for (int x = 0; x < w; x++)
                 {
-                    int sx = Math.Min(stamp.Width - 1, x * stamp.Width / w);
+                    int sx = Math.Min(stamp.Width - 1, (int)((x + 0.5) * stamp.Width / w));
                     bits[y * w + x] = stamp.Bits[sy * stamp.Width + sx];
                 }
             }
@@ -111,29 +120,39 @@ namespace KavrosAfkWarden
                 }
                 else if (score < second) second = score;
             }
-            if (bestScore > 48) return '?';
-            if (second - bestScore < 3 && bestScore > 18) return '?';
+            if (bestScore > 12) return '?';
+            if (second - bestScore < 8) return '?';
             return best;
         }
 
-        // Percent of cells that disagree, after both are stretched to 10x14.
+        // Percent of cells that disagree. The blob is sampled onto the stamp's
+        // own pixels, so the 150% stamp is compared at 150% size.
         private static int Score(bool[] mask, int stride, int left, int top, int width, int height, Stamp stamp)
         {
             int wrong = 0;
-            for (int y = 0; y < 14; y++)
+            int total = stamp.Width * stamp.Height;
+            if (total < 1 || width < 1 || height < 1) return 100;
+            for (int y = 0; y < stamp.Height; y++)
             {
-                int by = Math.Min(height - 1, y * height / 14);
-                int sy = Math.Min(stamp.Height - 1, y * stamp.Height / 14);
-                for (int x = 0; x < 10; x++)
+                int y0 = y * height / stamp.Height;
+                int y1 = (y + 1) * height / stamp.Height - 1;
+                if (y1 < y0) y1 = y0;
+                if (y1 >= height) y1 = height - 1;
+                for (int x = 0; x < stamp.Width; x++)
                 {
-                    int bx = Math.Min(width - 1, x * width / 10);
-                    int sx = Math.Min(stamp.Width - 1, x * stamp.Width / 10);
-                    bool ink = mask[(top + by) * stride + left + bx];
-                    bool on = stamp.Bits[sy * stamp.Width + sx] == '1';
+                    int x0 = x * width / stamp.Width;
+                    int x1 = (x + 1) * width / stamp.Width - 1;
+                    if (x1 < x0) x1 = x0;
+                    if (x1 >= width) x1 = width - 1;
+                    bool ink = false;
+                    for (int yy = y0; yy <= y1 && !ink; yy++)
+                        for (int xx = x0; xx <= x1; xx++)
+                            if (mask[(top + yy) * stride + left + xx]) ink = true;
+                    bool on = stamp.Bits[y * stamp.Width + x] == '1';
                     if (ink != on) wrong++;
                 }
             }
-            return wrong * 100 / 140;
+            return wrong * 100 / total;
         }
 
         internal static int FindPlus(ImageBuffer image, out int scale)
@@ -146,14 +165,14 @@ namespace KavrosAfkWarden
             for (int s = 0; s < scales.Length; s++)
             {
                 Stamp plus = Scaled('+', scales[s]);
-                int step = scales[s] == 100 ? 2 : 3;
+                int step = 1;
                 for (int y = 0; y + plus.Height < limit; y += step)
                 {
                     for (int x = 0; x + plus.Width < image.Width; x += step)
                     {
                         if (!Orange(image.Argb(x + plus.Width / 2, y + plus.Height / 2))) continue;
                         int miss = PlusMiss(image, x, y, plus);
-                        int limitMiss = 5;
+                        int limitMiss = scales[s] == 100 ? 6 : 12;
                         if (miss < bestMiss && miss <= limitMiss && ConfirmXp(image, x, y, scales[s]))
                         {
                             bestMiss = miss;

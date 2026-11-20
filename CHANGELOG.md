@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.11
+
+- Buff times, hitpoints and prayer are matched against glyph stamps cut from the live captures, at 100%, 150% and 200%. A thin "1m" is not kept when the rest of the timer is still readable.
+- The orange "+N xp" drop is found from a plus stamp confirmed by the xp letters. A backpack change counts only when the slots form a real grid.
+- Enlarging a capture by 1.5 or 2 samples one source pixel, so a 12 stays a 12. Hitpoints 1633/1060, prayer 1040/990, the 12 minute flasks and the 11 minute Elder row read at 100%, 150% and 200%.
+
 ## 0.2.10
 
 - Each potion keeps its own clock, matched by how the icon looks rather than where it sits, because buffs move. A reading is kept only after it agrees twice. A shorter reading replaces a longer one only when it repeats. A missed timer keeps counting for about 30 seconds. Prayer, stack counts, and a red ring with no flask or crystal are ignored. The panel shows the soonest confirmed potion by name.

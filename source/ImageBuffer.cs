@@ -78,8 +78,23 @@ namespace KavrosAfkWarden
             int w = Math.Max(1, (int)Math.Round(Width * factor));
             int h = Math.Max(1, (int)Math.Round(Height * factor));
             int[] pixels = new int[w * h];
+            bool shrink = w < Width || h < Height;
+            // Below 1.4x, keeping the brightest source pixel preserves a one-pixel
+            // stroke. At 1.5x that same rule fattens the stroke until digits merge,
+            // so those enlargements take the single nearest pixel instead.
+            bool nearest = !shrink && (double)w / Width >= 1.4;
             for (int y = 0; y < h; y++)
             {
+                if (nearest)
+                {
+                    int sy = Math.Min(Height - 1, (int)((y + 0.5) * Height / h));
+                    for (int x = 0; x < w; x++)
+                    {
+                        int sx = Math.Min(Width - 1, (int)((x + 0.5) * Width / w));
+                        pixels[y * w + x] = Pixels[sy * Width + sx];
+                    }
+                    continue;
+                }
                 int y0 = (int)Math.Floor(y * (double)Height / h);
                 int y1 = (int)Math.Ceiling((y + 1) * (double)Height / h) - 1;
                 if (y0 < 0) y0 = 0;

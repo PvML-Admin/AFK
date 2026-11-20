@@ -577,7 +577,8 @@ namespace KavrosAfkWarden
                 number = tight;
                 minutes = tightMinutes;
             }
-            if (number.Ok && number.Current > 0)
+            bool thinMinute = number.Ok && minutes && number.Current < 10;
+            if (number.Ok && number.Current > 0 && !thinMinute)
             {
                 result.HasTime = true;
                 result.Minutes = minutes;
@@ -642,8 +643,27 @@ namespace KavrosAfkWarden
             }
             LastTrace = "cols " + current + (minutes ? " m" : secondsMark ? " s" : "");
             int value;
-            if (current.Length == 0 || current.Length > 4 || !int.TryParse(current, out value) || value <= 0) return result;
-            if (!minutes && !secondsMark && current == "1") return result;
+            if (current.Length == 0 || current.Length > 4 || !int.TryParse(current, out value) || value <= 0)
+            {
+                if (thinMinute)
+                {
+                    result.HasTime = true;
+                    result.Minutes = true;
+                    result.Value = number.Current;
+                }
+                return result;
+            }
+            if (!minutes && !secondsMark && current == "1")
+            {
+                if (thinMinute)
+                {
+                    result.HasTime = true;
+                    result.Minutes = true;
+                    result.Value = number.Current;
+                }
+                return result;
+            }
+            if (thinMinute && current.Length <= number.Current.ToString().Length) value = number.Current;
             result.HasTime = true;
             result.Minutes = minutes && !secondsMark;
             result.Value = value;
@@ -669,6 +689,11 @@ namespace KavrosAfkWarden
             if (!any) return;
             int gh = bottom - top + 1;
             if (area < 3 || gh < 4) return;
+            while (gh > 5 && RowFilled(mask, width, start, gw, bottom) && RowFilled(mask, width, start, gw, bottom - 1))
+            {
+                bottom--;
+                gh--;
+            }
             char glyph = GlyphBook.Match(mask, width, start, top, gw, gh);
             if (glyph == 'm' && gh > gw + 1) glyph = '?';
             if (glyph >= '0' && glyph <= '9') current += glyph;
@@ -688,6 +713,13 @@ namespace KavrosAfkWarden
             int low = Math.Min(r, Math.Min(g, b));
             int high = Math.Max(r, Math.Max(g, b));
             return low >= 170 && high - low <= 60;
+        }
+
+        private static bool RowFilled(bool[] mask, int width, int start, int gw, int y)
+        {
+            int ink = 0;
+            for (int x = start; x < start + gw && x < width; x++) if (mask[y * width + x]) ink++;
+            return ink * 5 >= gw * 4;
         }
 
         private static bool TimerColumn(bool[] mask, int width, int height, int x)
@@ -1169,6 +1201,7 @@ namespace KavrosAfkWarden
                 blob.Area = area;
                 if (inMax && max.Length > 0 && digitRight > 0 && start - digitRight > Math.Max(14, hh * 2)) break;
                 int digit = -1;
+                bool shapedSlash = false;
                 int digitMin = Math.Max(4, typical * 3 / 5);
                 int digitMaxH = typical + typical / 2;
                 int digitMaxW = Math.Max(typical, typical + typical / 2);
@@ -1176,8 +1209,15 @@ namespace KavrosAfkWarden
                 {
                     digit = DigitFont.Match(Sample(mask, width, blob));
                     if (digit < 0 && !allowLetter) digit = MatchScaled(mask, width, blob);
+                    if (digit < 0)
+                    {
+                        char shaped = GlyphBook.Match(mask, width, start, top, ww, hh);
+                        if (shaped >= '0' && shaped <= '9') digit = shaped - '0';
+                        else if (shaped == '/') shapedSlash = true;
+                        else if (shaped == ',') { trace.Append(" ,"); continue; }
+                    }
                 }
-                bool slash = !allowLetter && digit < 0 && hh >= digitMin && ww <= hh && ww * 2 <= hh + 4 && IsDiagonal(mask, width, blob);
+                bool slash = shapedSlash || (!allowLetter && digit < 0 && hh >= digitMin && ww <= hh && ww * 2 <= hh + 4 && IsDiagonal(mask, width, blob));
                 if (digit >= 0)
                 {
                     trace.Append(" ").Append(digit);
