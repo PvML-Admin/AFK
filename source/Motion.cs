@@ -799,8 +799,9 @@ namespace KavrosAfkWarden
         }
     }
 
-    // Confirms an XP drop or a backpack change on the second identical look,
-    // so one noisy frame cannot reset the idle timer.
+    // A confirmed XP drop resets idle immediately. The same number still
+    // floating on that spot is not a second drop. A backpack grid, once
+    // found, stays put when a later frame misses it.
     public sealed class SkillSense
     {
         public bool XpEvent;
@@ -812,8 +813,11 @@ namespace KavrosAfkWarden
         private int scaleVote;
         private int scaleVotes;
         private string shown = "";
-        private int hits;
-        private string fired = "";
+        private int lastDropX = -1;
+        private int lastDropY = -1;
+        private DateTime lastDropAt = DateTime.MinValue;
+        private IntRect heldPack;
+        private IntRect pendingPack;
         private int quiet;
         private bool ever;
         private int[] pendingSlots;
@@ -839,19 +843,41 @@ namespace KavrosAfkWarden
                     else { scaleVote = sight.Scale; scaleVotes = 1; }
                     if (scaleVotes >= 2 && (sight.Scale == 100 || sight.Scale == 150 || sight.Scale == 200))
                         LockedScale = sight.Scale;
-                    if (sight.Text == shown) hits++;
-                    else { shown = sight.Text; hits = 1; }
-                    if (hits == 2 && fired != shown)
-                    {
-                        XpEvent = true;
-                        fired = shown;
-                    }
+                    // Each confirmed drop resets idle. The same number still
+                    // sitting on that spot about a second later is the drop
+                    // floating, not a second drop.
+                    int cx = sight.X + Math.Max(1, sight.Rect.Width) / 2;
+                    int cy = sight.Y + Math.Max(1, sight.Rect.Height) / 2;
+                    bool close = sight.Text == shown && lastDropX >= 0
+                        && Math.Abs(cx - lastDropX) < 48 && Math.Abs(cy - lastDropY) < 48;
+                    bool recent = lastDropAt != DateTime.MinValue && (DateTime.UtcNow - lastDropAt).TotalSeconds < 1.2;
+                    if (!(close && recent)) XpEvent = true;
+                    shown = sight.Text;
+                    lastDropX = cx;
+                    lastDropY = cy;
+                    lastDropAt = DateTime.UtcNow;
                 }
             }
             string packText = "pack=none";
             if (packImage != null)
             {
                 IntRect grid = SceneActivity.PackWatch.Find(packImage);
+                if (grid.Width > 8)
+                {
+                    if (heldPack.Width < 8 || NearGrid(grid, heldPack) || (pendingPack.Width > 8 && NearGrid(grid, pendingPack)))
+                        heldPack = grid;
+                    else
+                        pendingPack = grid;
+                    grid = heldPack;
+                }
+                else if (heldPack.Width > 8)
+                {
+                    // A locked grab is already the backpack. A full frame that misses keeps the last grid.
+                    if (packImage.Width < 500 && packImage.Height < 500)
+                        grid = new IntRect(0, 0, packImage.Width, packImage.Height);
+                    else
+                        grid = heldPack;
+                }
                 if (grid.Width > 8)
                 {
                     saw = true;
@@ -873,6 +899,13 @@ namespace KavrosAfkWarden
             else if (quiet < 4) quiet++;
             View = saw || (ever && quiet < 3);
             Trace = xpText + " " + packText + (XpEvent ? " xp-event" : "") + (PackEvent ? " pack-event" : "");
+        }
+
+        private static bool NearGrid(IntRect a, IntRect b)
+        {
+            int dx = (a.X + a.Width / 2) - (b.X + b.Width / 2);
+            int dy = (a.Y + a.Height / 2) - (b.Y + b.Height / 2);
+            return dx * dx + dy * dy < 80 * 80;
         }
 
         private static bool HasXpDigit(string text)

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.14
+
+- Live potion timers are read from the buff icons themselves. A full-size bar of four flasks at 4 minutes, a client with 6m, 5m, 6m and 6m, and another account's four flasks at 11 minutes all keep those times. Prayer and a stack count stay off the potion clock.
+- Each confirmed XP drop resets idle. The same number still floating in the same spot for about a second is not a second drop. The backpack grid, once found, stays put when a later frame misses it.
+
 ## 0.2.13
 
 - The buff bar is found by its row of timers, wherever it sits. A still client shot scaled back up reads four potions at 5 minutes. Pasting the same buff bar in another corner still reads.

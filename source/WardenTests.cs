@@ -44,6 +44,7 @@ namespace KavrosAfkWarden
                 LiveFlasks(root);
                 MovedHud(root);
                 LiveClient(root);
+                Live0213(root);
                 Manifest(root);
             }
             catch (Exception ex)
@@ -421,9 +422,9 @@ namespace KavrosAfkWarden
             Check(fadedDrop.Found && fadedDrop.Plus, "a faded +589 still counts while the drop floats away, got " + fadedDrop.Trace);
             SkillSense sense = new SkillSense();
             sense.Observe(synthetic, null);
-            Check(!sense.XpEvent, "the first look at a drop is not yet progress");
+            Check(sense.XpEvent, "the first confirmed +xp drop resets idle");
             sense.Observe(synthetic, null);
-            Check(sense.XpEvent, "the second look at the same +xp drop counts");
+            Check(!sense.XpEvent, "the same drop on the next look is not a second event");
             ImageBuffer shifted = ImageBuffer.Blank(640, 360, ImageBuffer.Pack(24, 40, 22));
             shifted.Fill(200, 30, 40, 20, ImageBuffer.Pack(18, 60, 16));
             DrawPlus(shifted, 40, 60, 2, orange);
@@ -446,6 +447,65 @@ namespace KavrosAfkWarden
             IntRect pack = SceneActivity.PackWatch.Find(live);
             IntRect packAgain = SceneActivity.PackWatch.Find(live);
             Check(pack.Width > 8 && pack.X == packAgain.X && pack.Y == packAgain.Y, "the woodcutting frame finds a stable backpack grid, got " + pack.X.ToString() + "," + pack.Y.ToString() + " " + pack.Width.ToString() + "x" + pack.Height.ToString());
+        }
+
+        private static void Live0213(string root)
+        {
+            if (root == null || root.Length == 0) return;
+            string dir = Path.Combine(root, "verification", "fixtures", "live0213");
+            string crop = Path.Combine(dir, "buffbar-6icons-4m.png");
+            double[] scales = new double[] { 1.0, 1.5, 2.0 };
+            string[] names = new string[] { "100%", "150%", "200%" };
+            for (int s = 0; s < scales.Length; s++)
+            {
+                if (!File.Exists(crop)) { Check(false, "missing buffbar-6icons-4m.png"); break; }
+                HudReading bar = HudReader.Read(PngImage.Load(crop).Scale(scales[s]), new WardenSettings());
+                int fours = PotionMinutes(bar, 4);
+                int? shown = BuffClock.ShownSeconds(bar.Buffs);
+                Check(fours >= 4 && shown == 240, "four potions at 4m on the live buff crop at " + names[s] + ", got " + fours.ToString() + " shown " + (shown == null ? "none" : shown.Value.ToString()) + " " + (bar.BuffTrace ?? ""));
+            }
+            string panel = Path.Combine(dir, "full-client-panel-no-pot-timer.png");
+            if (File.Exists(panel))
+            {
+                HudReading bar = HudReader.Read(PngImage.Load(panel), new WardenSettings());
+                int six = PotionMinutes(bar, 6);
+                int five = PotionMinutes(bar, 5);
+                int? shown = BuffClock.ShownSeconds(bar.Buffs);
+                Check(six >= 1 && five >= 1 && shown == 300, "the panel client reads 6m and 5m, soonest 5m, got " + six.ToString() + " sixes and " + five.ToString() + " fives, shown " + (shown == null ? "none" : shown.Value.ToString()) + " " + (bar.BuffTrace ?? ""));
+            }
+            else Check(false, "missing full-client-panel-no-pot-timer.png");
+            string other = Path.Combine(dir, "full-client-other-account-layout.png");
+            if (File.Exists(other))
+            {
+                HudReading bar = HudReader.Read(PngImage.Load(other), new WardenSettings());
+                int elevens = PotionMinutes(bar, 11);
+                int? shown = BuffClock.ShownSeconds(bar.Buffs);
+                bool shortPotion = false;
+                if (bar.Buffs != null)
+                {
+                    for (int i = 0; i < bar.Buffs.Count; i++)
+                    {
+                        BuffIcon icon = bar.Buffs[i];
+                        if (!PotionKind.IsPotion(icon.Kind) || !icon.HasTime) continue;
+                        int seconds = icon.Minutes ? icon.Value * 60 : icon.Value;
+                        if (seconds < 660) shortPotion = true;
+                    }
+                }
+                Check(elevens >= 4 && shown == 660 && !shortPotion, "the other account reads four 11m potions and nothing sooner, got " + elevens.ToString() + " shown " + (shown == null ? "none" : shown.Value.ToString()) + " " + (bar.BuffTrace ?? ""));
+            }
+            else Check(false, "missing full-client-other-account-layout.png");
+        }
+
+        private static int PotionMinutes(HudReading bar, int minutes)
+        {
+            int count = 0;
+            if (bar.Buffs == null) return 0;
+            for (int i = 0; i < bar.Buffs.Count; i++)
+            {
+                BuffIcon icon = bar.Buffs[i];
+                if (icon.HasTime && icon.Minutes && icon.Value == minutes && PotionKind.IsPotion(icon.Kind)) count++;
+            }
+            return count;
         }
 
         private static void LiveFlasks(string root)
@@ -1331,7 +1391,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.13" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.14" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -1342,10 +1402,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.13\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.14\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.13.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.14.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

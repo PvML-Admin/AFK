@@ -24,11 +24,19 @@ namespace KavrosAfkWarden
             S('x', 8, 8, "1100001101100110011001100011110000111100011001100110011011000011"),
             S('p', 8, 11, "1101110011100110110000111100001111000011110000111100011011111100110000001100000011000000"),
             S('5', 9, 11, "011111111011000000011000000011000000011111100000000110000000011000000011110000011110000110011111100"),
+            // The 5 on a live buff timer whose top serif is detached.
+            S('5', 7, 11, "01111101111110110000011000001111100111111000000110000011100011111111100111100"),
             S('8', 9, 11, "001111100011000110110000011110000011011000110001111100011000110110000011110000011011000110001111100"),
             S('9', 9, 11, "001111100011000110110000011110000011110000011011000111001111011000000011000000110000001100011111000"),
             S('1', 3, 8, "010110010010010010010111"),
             S('2', 5, 8, "0111010001000010001000100010001000011111"),
             S('6', 5, 8, "0011001001100101011011001100011000101110"),
+            // The 6 on a live buff timer, wider than it is tall.
+            S('6', 8, 11, "0001111000111110011100000110000011111100111111101100001111000011011000110111111000011100"),
+            // The 7 on a live buff timer, including the bright bottom edge of the icon.
+            S('7', 9, 14, "111111000111111000111111000111110000111110000110010000111100000111100000111000000111000000111010000110111000110111000111111111"),
+            S('7', 4, 8, "11110001001000100100010010001000"),
+            S('7', 12, 15, "111111100000111111000000111111000000111111000000111110000000111110000000111110000000111100000000111100001010111000010101111000010101111010010101111111010101111111000000111111111000"),
             S('m', 5, 5, "0101010101101011010110101"),
             S('0', 5, 8, "0111010001100011000110001100011000101110"),
             // Hitpoint and prayer glyphs from the 1440p capture, trimmed to the ink.
@@ -114,13 +122,17 @@ namespace KavrosAfkWarden
                 int score = Score(mask, stride, left, top, width, height, stamp);
                 if (score < bestScore)
                 {
-                    second = bestScore;
+                    if (best != '?' && best != stamp.Name) second = bestScore;
                     bestScore = score;
                     best = stamp.Name;
                 }
-                else if (score < second) second = score;
+                else if (stamp.Name != best && score < second) second = score;
             }
-            if (bestScore > 12) return '?';
+            int limit = 12;
+            // A scaled digit keeps its shape but the nearest-neighbour enlargement
+            // disagrees with the stamp on more cells. A wide gap still names it.
+            if (width >= 10 && second - bestScore >= 8) limit = 30;
+            if (bestScore > limit) return '?';
             if (second - bestScore < 8) return '?';
             return best;
         }

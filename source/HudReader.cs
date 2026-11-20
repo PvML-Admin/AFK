@@ -452,12 +452,15 @@ namespace KavrosAfkWarden
                 : new IntRect(0, 0, image.Width, image.Height);
             List<IntRect> icons = FindBuffIcons(image, region);
             List<IntRect> byTime = FindTimerIcons(image, region);
-            // The green border wins when it can already read minute timers. The label
-            // row is only for a shot where that border did not survive.
+            // A real green row already has several icons and a minute timer.
+            // A single green edge with a stray digit is not that row, so the
+            // countdown labels are used instead.
             int greenMinutes = MinuteCount(image, icons);
             int labelScore = MinuteCount(image, byTime) * 10 + FiveCount(image, byTime);
-            if (FiveCount(image, byTime) >= 4 || (greenMinutes == 0 && labelScore >= 4)) icons = byTime;
+            bool greenRow = icons.Count >= 3 && greenMinutes >= 1;
+            if (!greenRow && (FiveCount(image, byTime) >= 4 || labelScore >= 4)) icons = byTime;
             int rowFives = FiveCount(image, icons);
+            int sharedLone = SharedLone(image, icons);
             reading.BuffScanned = true;
             reading.Buffs = new List<BuffIcon>();
             reading.BuffRects = new List<IntRect>();
@@ -484,6 +487,7 @@ namespace KavrosAfkWarden
                 }
                 else icon.Signature = IconSignature(image, icons[i]);
                 if (rowFives >= 3 && icon.HasTime && icon.Value == 5 && !icon.Minutes) icon.Minutes = true;
+                if (sharedLone >= 2 && icon.HasTime && !icon.Minutes && icon.Value == sharedLone) icon.Minutes = true;
                 if (rowFives >= 3 && (icon.Kind == null || icon.Kind == "other") && icon.HasTime && icon.Minutes && !PurpleIcon(image, icons[i]))
                 {
                     icon.Kind = "potion";
@@ -518,6 +522,21 @@ namespace KavrosAfkWarden
                     if (b > 70 && b > g + 15 && r > 40 && g + 20 < r) purple++;
                 }
             return n > 0 && purple * 3 >= n;
+        }
+
+        // A row of the same lone digit is a minute timer whose "m" did not survive scaling.
+        private static int SharedLone(ImageBuffer image, List<IntRect> icons)
+        {
+            int[] hits = new int[10];
+            if (icons == null) return 0;
+            for (int i = 0; i < icons.Count; i++)
+            {
+                BuffIcon clock = ReadIconTime(image, icons[i]);
+                if (clock.HasTime && !clock.Minutes && clock.Value >= 2 && clock.Value <= 9) hits[clock.Value]++;
+            }
+            int best = 0;
+            for (int value = 2; value <= 9; value++) if (hits[value] > hits[best]) best = value;
+            return hits[best] >= 3 ? best : 0;
         }
 
         private static int FiveCount(ImageBuffer image, List<IntRect> icons)
@@ -629,6 +648,50 @@ namespace KavrosAfkWarden
             return g >= 80 && r < 220 && b < 190 && g > r + 12 && g > b + 12;
         }
 
+        // Neighbouring icons sometimes share one green top edge. The bottom edge
+        // is still broken into one run per icon, so split on that.
+        private static List<IntRect> SplitJoinedIcons(ImageBuffer image, int start, int y, int span)
+        {
+            List<IntRect> best = new List<IntRect>();
+            int end = start + span;
+            for (int depth = 24; depth <= 36; depth++)
+            {
+                int row = y + depth;
+                if (row >= image.Height) break;
+                List<IntRect> runs = new List<IntRect>();
+                int x = start;
+                while (x < end)
+                {
+                    if (!BorderGreen(image.Argb(x, row))) { x++; continue; }
+                    int s = x;
+                    while (x < end && BorderGreen(image.Argb(x, row))) x++;
+                    int w = x - s;
+                    if (w >= 24 && w <= 40) runs.Add(new IntRect(s, y, w, w));
+                }
+                if (runs.Count > best.Count) best = runs;
+            }
+            return best;
+        }
+
+        // A small green mark inside an icon must not hide the icon that carries the timer.
+        private static void TryAddIcon(ImageBuffer image, List<IntRect> found, IntRect box)
+        {
+            if (box.Y < 0 || box.X < 0) return;
+            if (!IconAt(image, box.X, box.Y, box.Width)) return;
+            for (int i = 0; i < found.Count; i++)
+            {
+                IntRect old = found[i];
+                bool hit = box.X < old.Right && box.Right > old.X && box.Y < old.Bottom && box.Bottom > old.Y;
+                if (!hit) continue;
+                bool boxTime = ReadIconTime(image, box).HasTime;
+                bool oldTime = ReadIconTime(image, old).HasTime;
+                if (boxTime && !oldTime) found[i] = box;
+                else if (boxTime == oldTime && box.Width > old.Width) found[i] = box;
+                return;
+            }
+            found.Add(box);
+        }
+
         private static List<IntRect> FindBuffIcons(ImageBuffer image, IntRect region)
         {
             List<IntRect> found = new List<IntRect>();
@@ -646,14 +709,13 @@ namespace KavrosAfkWarden
                     int minSpan = Math.Max(8, image.Width / 320);
                     int maxSpan = Math.Max(120, image.Width / 12);
                     if (span < minSpan || span > maxSpan) continue;
-                    if (!IconAt(image, start, y, span)) continue;
-                    bool overlap = false;
-                    for (int i = 0; i < found.Count; i++)
+                    if (span >= 48)
                     {
-                        IntRect old = found[i];
-                        if (start < old.Right && start + span > old.X && y < old.Bottom && y + span > old.Y) overlap = true;
+                        List<IntRect> parts = SplitJoinedIcons(image, start, y, span);
+                        for (int p = 0; p < parts.Count; p++) TryAddIcon(image, found, parts[p]);
+                        if (parts.Count >= 2) continue;
                     }
-                    if (!overlap) found.Add(new IntRect(start, y, span, span));
+                    TryAddIcon(image, found, new IntRect(start, y, span, span));
                 }
             }
             if (found.Count == 0) return found;
@@ -730,7 +792,11 @@ namespace KavrosAfkWarden
                 minutes = tightMinutes;
             }
             bool thinMinute = number.Ok && minutes && number.Current < 10;
-            if (number.Ok && number.Current > 0 && !thinMinute)
+            // A lone digit with no minute mark is often the "4" of "4m" once the
+            // image is scaled and the m no longer parses on the wide line.
+            // The baseline reader below is the one that still sees the pair.
+            bool loneDigit = number.Ok && !minutes && number.Current >= 2 && number.Current <= 9;
+            if (number.Ok && number.Current > 0 && !thinMinute && !loneDigit)
             {
                 result.HasTime = true;
                 result.Minutes = minutes;
@@ -738,7 +804,7 @@ namespace KavrosAfkWarden
                 return result;
             }
             // The wide line included icon art and was rejected. Read only the baseline.
-            int band = Math.Min(14, Math.Max(8, icon.Height / 3));
+            int band = Math.Min(18, Math.Max(16, icon.Height / 2));
             IntRect text = Clamp(image, icon.X + 1, icon.Bottom - band, Math.Max(8, icon.Width - 2), band);
             bool[] mask = Mask(image, text, TimerInk);
             int seen = 0;
@@ -755,7 +821,7 @@ namespace KavrosAfkWarden
             {
                 int ink = 0;
                 for (int x = 0; x < width; x++) if (mask[y * width + x]) ink++;
-                if (ink * 3 > width * 2)
+                if (ink * 10 > width * 9)
                     for (int x = 0; x < width; x++) mask[y * width + x] = false;
             }
             int baseline = 0;
@@ -803,7 +869,7 @@ namespace KavrosAfkWarden
             }
             // A single digit with no seconds mark is the minute timer. The "m" is
             // often too small to match after a rescale, and a lone "1" stays rejected.
-            if (!minutes && !secondsMark && current.Length == 1 && current != "1") minutes = true;
+            if (!minutes && !secondsMark && current.Length == 1 && current != "1" && !loneDigit) minutes = true;
             LastTrace = "cols " + current + (minutes ? " m" : secondsMark ? " s" : "");
             int value;
             if (current.Length == 0 || current.Length > 4 || !int.TryParse(current, out value) || value <= 0)
@@ -812,6 +878,12 @@ namespace KavrosAfkWarden
                 {
                     result.HasTime = true;
                     result.Minutes = true;
+                    result.Value = number.Current;
+                }
+                else if (loneDigit)
+                {
+                    result.HasTime = true;
+                    result.Minutes = false;
                     result.Value = number.Current;
                 }
                 return result;
@@ -857,8 +929,9 @@ namespace KavrosAfkWarden
                 bottom--;
                 gh--;
             }
-            char glyph = GlyphBook.Match(mask, width, start, top, gw, gh);
-            if (glyph == '?' && gw <= 16 && gh <= 18) glyph = TinyTimer(mask, width, start, top, gw, gh);
+            bool[] glyphMask = BridgeLeftStem(mask, width, start, top, gw, gh);
+            char glyph = GlyphBook.Match(glyphMask, width, start, top, gw, gh);
+            if (glyph == '?' && gw <= 16 && gh <= 18) glyph = TinyTimer(glyphMask, width, start, top, gw, gh);
             if (glyph == 'm' && gh > gw + 1) glyph = '?';
             if (glyph >= '0' && glyph <= '9') current += glyph;
             else if (glyph == 'm') minutes = true;
@@ -869,6 +942,37 @@ namespace KavrosAfkWarden
                 if (digit > 1 || (digit == 1 && gw * 3 < gh * 2)) current += digit.ToString();
                 else if (StemCount(mask, width, start, top, gw, gh) >= 3) minutes = true;
             }
+        }
+
+        // The live "6" loses its left stem for a couple of rows, so the bowl is
+        // read as a 5. Fill that left-hand gap only; a 5's opening is on the right.
+        private static bool[] BridgeLeftStem(bool[] mask, int width, int start, int top, int gw, int gh)
+        {
+            bool[] copy = (bool[])mask.Clone();
+            int mid = start + gw / 2;
+            int bottom = top + gh;
+            for (int x = start; x < mid && x < width; x++)
+            {
+                int gap = 0;
+                int gapStart = -1;
+                for (int y = top; y < bottom; y++)
+                {
+                    if (copy[y * width + x])
+                    {
+                        if (gap > 0 && gap <= 2 && gapStart > top)
+                        {
+                            for (int fill = gapStart; fill < gapStart + gap; fill++) copy[fill * width + x] = true;
+                        }
+                        gap = 0;
+                    }
+                    else
+                    {
+                        if (gap == 0) gapStart = y;
+                        gap++;
+                    }
+                }
+            }
+            return copy;
         }
 
         // A 5 or an m that survived as a few pixels. Used only when the normal
@@ -964,7 +1068,7 @@ namespace KavrosAfkWarden
             if (shaped.Length > 0) return shaped;
             int bodyBottom = icon.Y + (icon.Height * 62) / 100;
             int inset = Math.Max(2, icon.Width / 8);
-            int purple = 0, blue = 0, green = 0, red = 0, samples = 0;
+            int purple = 0, blue = 0, green = 0, red = 0, bright = 0, samples = 0;
             int redEdge = 0, redCore = 0, edgeN = 0, coreN = 0;
             int topInk = 0, midInk = 0, topN = 0, midN = 0;
             int midY0 = icon.Y + icon.Height / 5;
@@ -986,6 +1090,7 @@ namespace KavrosAfkWarden
                     bool isGreen = g > 80 && g > r + 20 && g > b + 20;
                     if (isPurple) purple++;
                     else if (isBlue) blue++;
+                    if (r + g + b > 500) bright++;
                     if (isGreen) green++;
                     if (isRed) red++;
                     int dx = x - cx;
@@ -999,7 +1104,8 @@ namespace KavrosAfkWarden
             }
             if (samples < 8) return "other";
             if (purple * 100 / samples >= 28 && purple > blue) return "prayer";
-            if (blue * 100 / samples >= 10 && blue > purple) return "overload";
+            // A bright star is blue in the middle and is not a flask.
+            if (blue * 100 / samples >= 10 && blue > purple && bright * 100 / samples < 55) return "overload";
             int magenta = 0, cork = 0, dark = 0;
             int topCut = icon.Y + icon.Height * 2 / 5;
             for (int y = icon.Y + 2; y < icon.Bottom - 2; y++)
@@ -1018,7 +1124,8 @@ namespace KavrosAfkWarden
             // stay out. Elder is the magenta crystal, overload is a blue or pink
             // flask, aggression is the dark green flask.
             if (magenta * 100 / Math.Max(1, samples) >= 18 && red > 20) return "elder";
-            if (cork >= 8 && magenta >= 8) return "overload";
+            // A brown stack icon can share these colours. A flask still matches
+            // the blue body above, or the icon template.
             int greenBody = 0;
             for (int y = icon.Y + 2; y < bodyBottom; y++)
                 for (int x = icon.X + inset; x < icon.Right - inset; x++)
