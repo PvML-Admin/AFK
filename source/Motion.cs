@@ -281,8 +281,10 @@ namespace KavrosAfkWarden
         public static IntRect Find(ImageBuffer image)
         {
             if (image == null) return new IntRect();
-            int left = image.Width * 55 / 100;
-            int bottom = Math.Max(1, image.Height * 40 / 100);
+            // XP drops sit near the top, often by the minimap, at any scale.
+            // The left side and the lower view are scenery and are not searched.
+            int left = image.Width * 32 / 100;
+            int bottom = Math.Max(1, image.Height * 55 / 100);
             int minX = image.Width, minY = bottom, maxX = 0, maxY = 0, count = 0;
             int step = image.Width > 900 ? 2 : 1;
             for (int y = 0; y < bottom; y += step)
@@ -290,7 +292,7 @@ namespace KavrosAfkWarden
                 {
                     int color = image.Argb(x, y);
                     int r = ImageBuffer.R(color), g = ImageBuffer.G(color), b = ImageBuffer.B(color);
-                    if (r < 200 || g < 180 || b > 170) continue;
+                    if (r < 170 || g < 140 || b > 210 || r + g <= b * 2 + 40) continue;
                     count++;
                     if (x < minX) minX = x;
                     if (y < minY) minY = y;

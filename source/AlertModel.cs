@@ -789,6 +789,8 @@ namespace KavrosAfkWarden
         private readonly LevelWatch hp = new LevelWatch();
         private readonly LevelWatch prayer = new LevelWatch();
         private readonly PotionWatch potion = new PotionWatch();
+        private DateTime lastSkill = DateTime.MinValue;
+        private bool sawSkill;
 
         public TimeSpan StillFor;
         public TimeSpan AfkRemaining = TimeSpan.FromMinutes(25);
@@ -797,6 +799,8 @@ namespace KavrosAfkWarden
         public bool PrayerLatched;
         public bool AfkLatched;
         public bool PotionLatched;
+        // True while XP or the backpack has been changing, with or without the checkbox.
+        public bool Skilling;
 
         public List<AlertEvent> Tick(WatchSample sample, WardenSettings settings)
         {
@@ -807,7 +811,15 @@ namespace KavrosAfkWarden
             // The inactivity timer does not: it keeps running while you are in another app,
             // including while the client is minimized or covered and cannot be read.
             bool see = attached && sample.PixelsFresh;
-            bool active = settings.SkillingMode ? sample.SkillProgress || sample.InputActivity : sample.CharacterMoving;
+            if (sample.SkillProgress) { lastSkill = sample.Time; sawSkill = true; }
+            bool skilling = settings.SkillingMode || (sawSkill && (sample.Time - lastSkill).TotalSeconds <= settings.SkillingIdleSeconds + 2);
+            Skilling = skilling;
+            // Skilling is XP, the backpack, and clicks. Nearby hitsplats do not
+            // replace that. Outside of skilling, movement still counts, and an
+            // XP drop still counts so skilling is noticed without a switch.
+            bool active = skilling
+                ? sample.SkillProgress || sample.InputActivity
+                : sample.CharacterMoving || sample.SkillProgress;
             StillFor = stillness.StillFor(see && active, sample.Time, see);
             inactivity.Observe(sample.InputActivity, sample.Time, attached);
             AfkRemaining = inactivity.Remaining(sample.Time, TimeSpan.FromSeconds(settings.AfkSeconds));
@@ -826,11 +838,11 @@ namespace KavrosAfkWarden
             }
 
             TimeSpan cooldown = TimeSpan.FromSeconds(settings.CooldownSeconds);
-            bool idle = see && settings.IdleEnabled && StillFor >= TimeSpan.FromSeconds(settings.ActiveIdleSeconds);
+            bool idle = see && settings.IdleEnabled && StillFor >= TimeSpan.FromSeconds(skilling ? settings.SkillingIdleSeconds : settings.IdleSeconds);
             IdleLatched = idle;
             if (idleGate.ShouldFire(idle, sample.Time, cooldown))
             {
-                if (settings.SkillingMode)
+                if (skilling)
                     events.Add(Make(settings, "idle", "You stopped skilling", "No XP drop, backpack change or click for " + (int)StillFor.TotalSeconds + "s."));
                 else
                     events.Add(Make(settings, "idle", "You have gone idle", "No animation or movement for " + (int)StillFor.TotalSeconds + "s."));

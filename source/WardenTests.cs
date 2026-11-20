@@ -158,6 +158,15 @@ namespace KavrosAfkWarden
             Check(CapturePlan.ShareGrab(life, prayer), "life and prayer on one HUD row are copied in one grab");
             Check(!CapturePlan.ShareGrab(life, new IntRect(1800, 200, 108, 36)), "slots far apart are copied separately");
             Check(CapturePlan.SlowSlotEvery >= 2, "buffs, XP and the backpack are read at most once a second");
+            Check(CapturePlan.ShouldRead(false, false) && !CapturePlan.ShouldRead(true, false) && !CapturePlan.ShouldRead(false, true), "a covered client is read; a minimized or paused one is not");
+            Check(CapturePlan.PreferWindowPixels(false) && !CapturePlan.PreferWindowPixels(true), "a hidden region is taken from the game window, a visible one from the screen");
+            ImageBuffer corner = ImageBuffer.Blank(800, 400, ImageBuffer.Pack(16, 18, 20));
+            corner.Fill(300, 16, 36, 10, ImageBuffer.Pack(230, 210, 120));
+            IntRect foundXp = SceneActivity.XpWatch.Find(corner);
+            Check(foundXp.Width > 0 && foundXp.X < 400, "an XP drop away from the minimap corner is still found");
+            ImageBuffer side = ImageBuffer.Blank(800, 400, ImageBuffer.Pack(16, 18, 20));
+            side.Fill(8, 16, 36, 10, ImageBuffer.Pack(230, 210, 120));
+            Check(SceneActivity.XpWatch.Find(side).Width == 0, "bright scenery on the far left is not an XP drop");
         }
 
         private static void PanelOrder()
@@ -201,7 +210,11 @@ namespace KavrosAfkWarden
             combat.Tick(Sample(t, true, true, false, false), normal);
             WatchSample onlyXp = Sample(t.AddSeconds(13), true, true, false, false);
             onlyXp.SkillProgress = true;
-            Check(Find(combat.Tick(onlyXp, normal), "idle") != null, "combat mode keeps its own signals");
+            DateTime xpTime = t.AddSeconds(13);
+            onlyXp.Time = xpTime;
+            Check(Find(combat.Tick(onlyXp, normal), "idle") == null && combat.Skilling, "an XP drop is activity without a skilling switch");
+            Check(Find(combat.Tick(Sample(xpTime.AddSeconds(1), true, true, true, false), normal), "idle") == null && combat.Skilling, "nearby motion during a skilling gap is not idle");
+            Check(Find(combat.Tick(Sample(xpTime.AddSeconds(normal.SkillingIdleSeconds + 1), true, true, true, false), normal), "idle") != null, "idle fires after the skilling gap even if the scene is moving");
         }
 
         private static void Check(bool condition, string message)
@@ -663,6 +676,10 @@ namespace KavrosAfkWarden
             Check(icons.BuffBarFound && icons.Buffs.Count == 4, "green-bordered buff icons are found in a row, got " + icons.Buffs.Count.ToString());
             Check(icons.Buffs.Count > 0 && icons.Buffs[0].HasTime && !icons.Buffs[0].Minutes && icons.Buffs[0].Value == 60, "a plain buff number is seconds");
             Check(icons.Buffs.Count > 1 && icons.Buffs[1].Minutes && icons.Buffs[1].Value == 11, "11m is eleven minutes, not eleven seconds, got has=" + (icons.Buffs.Count > 1 && icons.Buffs[1].HasTime) + " min=" + (icons.Buffs.Count > 1 && icons.Buffs[1].Minutes) + " value=" + (icons.Buffs.Count > 1 ? icons.Buffs[1].Value.ToString() : "-"));
+            ImageBuffer secondsIcon = ImageBuffer.Blank(80, 70, ImageBuffer.Pack(12, 18, 28));
+            DrawBuffIcon(secondsIcon, 8, 8, "45s");
+            HudReading secondsRead = HudReader.Read(secondsIcon, new WardenSettings());
+            Check(secondsRead.Buffs != null && secondsRead.Buffs.Count > 0 && secondsRead.Buffs[0].HasTime && !secondsRead.Buffs[0].Minutes && secondsRead.Buffs[0].Value == 45, "45s is forty-five seconds, trace " + (secondsRead.BuffTrace ?? ""));
             Check(icons.Buffs.Count > 2 && icons.Buffs[2].HasTime && !icons.Buffs[2].Minutes && icons.Buffs[2].Value == 4, "a stack count is still read as a number");
             Check(icons.Buffs.Count > 3 && !icons.Buffs[3].HasTime, "an icon with no text has no timer");
             BuffClock clock = new BuffClock();
@@ -708,6 +725,11 @@ namespace KavrosAfkWarden
                     image.Fill(tx + 4, ty + 2, 2, 10, white);
                     image.Fill(tx + 8, ty + 2, 2, 10, white);
                     image.Fill(tx, ty + 2, 10, 2, white);
+                    tx += 12;
+                }
+                else if (ch == 's')
+                {
+                    image.Fill(tx, ty + 2, 8, 10, white);
                     tx += 12;
                 }
             }

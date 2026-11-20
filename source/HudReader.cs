@@ -957,10 +957,12 @@ namespace KavrosAfkWarden
                     inMax = true;
                     digitRight = cursor;
                 }
-                else if (allowLetter && digitRight >= 0 && start + 2 >= digitRight && ww >= 5 && hh >= 5)
+                else if (allowLetter && digitRight >= 0 && start + 2 >= digitRight && ww >= 4 && hh >= 5)
                 {
-                    trace.Append(" m");
-                    minutes = true;
+                    // "m" has a row of three separate stems. "s" is one shape, so 45s stays 45 seconds.
+                    bool minuteMark = MaxHorizontalRuns(mask, width, blob) >= 3;
+                    trace.Append(minuteMark ? " m" : " s");
+                    if (minuteMark) minutes = true;
                 }
                 else if (hh >= minDigit && ww >= 2)
                 {
@@ -988,6 +990,24 @@ namespace KavrosAfkWarden
             value = 0;
             if (text == null || text.Length == 0 || text.Length > 9) return false;
             return int.TryParse(text, out value);
+        }
+
+        private static int MaxHorizontalRuns(bool[] mask, int stride, Blob blob)
+        {
+            int best = 0;
+            for (int y = blob.Top; y <= blob.Bottom; y++)
+            {
+                int runs = 0;
+                bool on = false;
+                for (int x = blob.Left; x <= blob.Right; x++)
+                {
+                    bool ink = mask[y * stride + x];
+                    if (ink && !on) runs++;
+                    on = ink;
+                }
+                if (runs > best) best = runs;
+            }
+            return best;
         }
 
         private static bool IsDiagonal(bool[] mask, int stride, Blob blob)

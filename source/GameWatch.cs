@@ -305,31 +305,112 @@ namespace KavrosAfkWarden
                 Publish(new HudReading(), CaptureRoute.Covered, focused, "Waiting for the Kavros window.");
                 return;
             }
+            // Unfocused or covered clients are still read. PrintWindow supplies
+            // the game's own pixels when the screen shows something else.
+            printed = null;
             if (lastClient != hwnd || lastSize != client.Size || !settings.SamePins(lastSettings))
             {
                 lastClient=hwnd; lastSize=client.Size; lastSettings=settings;
                 lifeBox=prayerBox=buffStrip=xpBox=packBox=new IntRect();
                 haveBoxes=haveXpHash=havePackHash=false; missedLocks=0; nextFullSearch=DateTime.MinValue;
             }
-            if (!focused)
-            {
-                int clear=0;
-                for (int y=1;y<6;y+=2) for(int x=1;x<6;x+=2)
-                    if(WindowLocator.OverGame(hwnd,client.X+client.Width*x/6,client.Y+client.Height*y/6))clear++;
-                if(clear<7){Publish(new HudReading(),CaptureRoute.Covered,false,"Game covered. Waiting for its HUD.");return;}
-            }
             bool full = CapturePlan.WantFull(haveBoxes, DateTime.UtcNow, nextFullSearch);
             HudReading reading;
-            if (full) reading = FullSearch(client, settings, panel);
-            else reading = haveBoxes ? LockedSearch(client, settings) : new HudReading();
-            string note = focused ? "Watching the visible Kavros window." : "Watching Kavros. The window is visible but not focused.";
+            if (full) reading = FullSearch(hwnd, client, settings, panel);
+            else reading = haveBoxes ? LockedSearch(hwnd, client, settings) : new HudReading();
+            string note = focused ? "Watching the visible Kavros window." : "Watching Kavros behind other windows.";
             Publish(reading, CaptureRoute.Screen, focused, note);
         }
 
-        private HudReading FullSearch(Rectangle client, WardenSettings settings, Rectangle panel)
+        private ImageBuffer printed;
+
+        private ImageBuffer Grab(IntPtr hwnd, Rectangle client, IntRect local, int slot)
+        {
+            if (local.Width < 4 || local.Height < 4) return null;
+            if (!CapturePlan.PreferWindowPixels(!RectOnGame(hwnd, client, local)))
+                return CopyScreen(ScreenOf(client, local), slot);
+            ImageBuffer frame = EnsurePrinted(hwnd, client);
+            ImageBuffer crop = CropOf(frame, local);
+            if (crop == null || ImageBuffer.MostlyBlack(crop))
+                return CopyScreen(ScreenOf(client, local), slot);
+            return crop;
+        }
+
+        private bool RectOnGame(IntPtr hwnd, Rectangle client, IntRect local)
+        {
+            Rectangle screen = ScreenOf(client, local);
+            if (screen.Width < 4 || screen.Height < 4) return false;
+            int hits = 0;
+            int[] xs = new int[] { screen.Left + 1, Math.Max(screen.Left + 1, screen.Right - 2) };
+            int[] ys = new int[] { screen.Top + 1, Math.Max(screen.Top + 1, screen.Bottom - 2) };
+            for (int y = 0; y < ys.Length; y++)
+                for (int x = 0; x < xs.Length; x++)
+                    if (WindowLocator.OverGame(hwnd, xs[x], ys[y])) hits++;
+            return hits >= 3;
+        }
+
+        private ImageBuffer EnsurePrinted(IntPtr hwnd, Rectangle client)
+        {
+            if (printed != null) return printed;
+            Rectangle window = NativeMethods.WindowBounds(hwnd);
+            if (window.Width < 80 || window.Height < 80 || window.Width > 4096 || window.Height > 4096) return null;
+            const int slot = 0;
+            if (pads[slot] == null || pads[slot].Width != window.Width || pads[slot].Height != window.Height)
+            {
+                if (pads[slot] != null) pads[slot].Dispose();
+                pads[slot] = new Bitmap(window.Width, window.Height, PixelFormat.Format32bppArgb);
+                pixelsBySlot[slot] = new int[window.Width * window.Height];
+            }
+            using (Graphics graphics = Graphics.FromImage(pads[slot]))
+            {
+                graphics.Clear(Color.Black);
+                IntPtr hdc = graphics.GetHdc();
+                try { NativeMethods.PrintWindow(hwnd, hdc, 2); }
+                finally { graphics.ReleaseHdc(hdc); }
+            }
+            BitmapData data = pads[slot].LockBits(new Rectangle(0, 0, window.Width, window.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            try
+            {
+                int[] pixels = pixelsBySlot[slot];
+                if (data.Stride == window.Width * 4)
+                    System.Runtime.InteropServices.Marshal.Copy(data.Scan0, pixels, 0, pixels.Length);
+                else for (int y = 0; y < window.Height; y++)
+                    System.Runtime.InteropServices.Marshal.Copy(IntPtr.Add(data.Scan0, y * data.Stride), pixels, y * window.Width, window.Width);
+            }
+            finally { pads[slot].UnlockBits(data); }
+            int ox = client.X - window.X;
+            int oy = client.Y - window.Y;
+            if (ox < 0) ox = 0;
+            if (oy < 0) oy = 0;
+            int cw = Math.Min(client.Width, window.Width - ox);
+            int ch = Math.Min(client.Height, window.Height - oy);
+            if (cw < 80 || ch < 80) return null;
+            int[] source = pixelsBySlot[slot];
+            int[] clientPixels = new int[cw * ch];
+            for (int y = 0; y < ch; y++)
+                for (int x = 0; x < cw; x++)
+                    clientPixels[y * cw + x] = source[(oy + y) * window.Width + (ox + x)];
+            printed = new ImageBuffer(cw, ch, clientPixels);
+            if (ImageBuffer.MostlyBlack(printed)) printed = null;
+            return printed;
+        }
+
+        private static ImageBuffer CropOf(ImageBuffer image, IntRect local)
+        {
+            if (image == null) return null;
+            int x = local.X, y = local.Y, w = local.Width, h = local.Height;
+            if (x < 0) { w += x; x = 0; }
+            if (y < 0) { h += y; y = 0; }
+            if (x + w > image.Width) w = image.Width - x;
+            if (y + h > image.Height) h = image.Height - y;
+            if (w < 4 || h < 4) return null;
+            return image.Crop(x, y, w, h);
+        }
+
+        private HudReading FullSearch(IntPtr hwnd, Rectangle client, WardenSettings settings, Rectangle panel)
         {
             nextFullSearch = DateTime.UtcNow.AddSeconds(CapturePlan.NextFullSeconds(false, false, failedFull + 1));
-            ImageBuffer image = CopyScreen(client, 0);
+            ImageBuffer image = Grab(hwnd, client, new IntRect(0, 0, client.Width, client.Height), 0);
             if (image == null || ImageBuffer.MostlyBlack(image))
             {
                 haveBoxes = false;
@@ -363,7 +444,7 @@ namespace KavrosAfkWarden
             return reading;
         }
 
-        private HudReading LockedSearch(Rectangle client, WardenSettings settings)
+        private HudReading LockedSearch(IntPtr hwnd, Rectangle client, WardenSettings settings)
         {
             HudReading reading = new HudReading();
             reading.StripFound = lifeBox.Width>8 || prayerBox.Width>8;
@@ -374,7 +455,7 @@ namespace KavrosAfkWarden
             {
                 // Life and prayer share the HUD row: one screen copy for both.
                 IntRect both = Union(lifeBox, prayerBox);
-                ImageBuffer row = CopyScreen(ScreenOf(client, both), 1);
+                ImageBuffer row = Grab(hwnd, client, both, 1);
                 if (row != null)
                 {
                     life = Slice(row, lifeBox.X - both.X, lifeBox.Y - both.Y, lifeBox.Width, lifeBox.Height);
@@ -383,14 +464,14 @@ namespace KavrosAfkWarden
             }
             else
             {
-                life = CopyScreen(ScreenOf(client, lifeBox), 1);
-                prayer = CopyScreen(ScreenOf(client, prayerBox), 2);
+                life = Grab(hwnd, client, lifeBox, 1);
+                prayer = Grab(hwnd, client, prayerBox, 2);
             }
             if (life != null) HudReader.ReadBox(life, true, reading);
             if (prayer != null) HudReader.ReadBox(prayer, false, reading);
             if (buffStrip.Width > 8 && slow)
             {
-                ImageBuffer strip = CopyScreen(ScreenOf(client, buffStrip), 3);
+                ImageBuffer strip = Grab(hwnd, client, buffStrip, 3);
                 if (strip != null)
                 {
                     WardenSettings pin = new WardenSettings();
@@ -406,6 +487,13 @@ namespace KavrosAfkWarden
                     reading.BuffTrace = buffs.BuffTrace;
                     reading.PotionCount = buffs.PotionCount;
                 }
+                if (!reading.BuffBarFound)
+                {
+                    int grown = buffStrip.Width + 64;
+                    int x = Math.Max(0, buffStrip.X - 32);
+                    int w = Math.Min(client.Width - x, grown);
+                    buffStrip = new IntRect(x, buffStrip.Y, w, buffStrip.Height);
+                }
             }
             if (reading.HpMax == null || reading.PrayerMax == null || (buffStrip.Width>8 && slow && !reading.BuffBarFound))
             {
@@ -415,7 +503,7 @@ namespace KavrosAfkWarden
             }
             else missedLocks = 0;
             if (!slow) return reading;
-            ImageBuffer xp = xpBox.Width > 8 ? CopyScreen(ScreenOf(client, xpBox), 4) : null;
+            ImageBuffer xp = xpBox.Width > 8 ? Grab(hwnd, client, xpBox, 4) : null;
             if (xp != null)
             {
                 int hash = SceneActivity.XpWatch.Hash(xp, new IntRect(0, 0, xp.Width, xp.Height));
@@ -423,9 +511,8 @@ namespace KavrosAfkWarden
                 lastXpHash = hash;
                 haveXpHash = true;
             }
-            // Skilling mode also watches the backpack between full searches:
-            // a new log, ore or fish in a slot is progress.
-            ImageBuffer pack = settings.SkillingMode && packBox.Width > 8 ? CopyScreen(ScreenOf(client, packBox), 5) : null;
+            // A new log, ore or fish is progress whether or not skilling mode is ticked.
+            ImageBuffer pack = packBox.Width > 8 ? Grab(hwnd, client, packBox, 5) : null;
             if (pack != null)
             {
                 int hash = SceneActivity.PackWatch.Hash(pack, new IntRect(0, 0, pack.Width, pack.Height));

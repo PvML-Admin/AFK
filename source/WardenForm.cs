@@ -1287,9 +1287,9 @@ namespace KavrosAfkWarden
             }
             else
             {
-                panel.Idle.Pill = engine.IdleLatched ? "Idle" : settings.SkillingMode ? "Skilling" : "Moving";
+                panel.Idle.Pill = engine.IdleLatched ? "Idle" : engine.Skilling ? "Skilling" : "Moving";
                 panel.Idle.Tone = engine.IdleLatched ? PillTone.Bad : PillTone.Ok;
-                panel.Idle.Value = !pixels ? "No view" : ((int)engine.StillFor.TotalSeconds).ToString() + (settings.SkillingMode ? "s since XP" : "s still");
+                panel.Idle.Value = !pixels ? "No view" : ((int)engine.StillFor.TotalSeconds).ToString() + (engine.Skilling ? "s since XP" : "s still");
             }
             panel.Hp.Pill = engine.HpLatched ? "Low HP" : "Hitpoints";
             panel.Hp.Tone = engine.HpLatched ? PillTone.Bad : !pixels || lastHud.Hp == null ? PillTone.Example : PillTone.Ok;

@@ -140,6 +140,19 @@ namespace KavrosAfkWarden
         // backs off 3, 6, 12, 24 then 30 seconds, so a hidden HUD, an empty
         // prayer bar or a loading screen does not copy the whole client every
         // three seconds.
+        // A minimized client has no picture. Any other client is read, focused or not.
+        // A region that is actually on screen stays a tiny CopyFromScreen. A region
+        // hidden behind another window is taken from the game window itself.
+        public static bool ShouldRead(bool minimized, bool paused)
+        {
+            return !minimized && !paused;
+        }
+
+        public static bool PreferWindowPixels(bool regionOnScreen)
+        {
+            return !regionOnScreen;
+        }
+
         public static int NextFullSeconds(bool lifeAndPrayerRead, bool buffLocked, int failedInARow)
         {
             if (lifeAndPrayerRead) return buffLocked ? FullIntervalSeconds : 15;
