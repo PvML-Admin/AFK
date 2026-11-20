@@ -473,8 +473,11 @@ namespace KavrosAfkWarden
                             if (bar.Buffs[b].Kind == kinds[i]) { icon = bar.Buffs[b]; found = true; break; }
                         }
                     }
-                    Check(found && icon.Strong && icon.HasTime && icon.Minutes && icon.Value == minutes[i],
-                        files[i] + " at " + names[s] + " is " + kinds[i] + " " + minutes[i].ToString() + "m, got " + (bar.BuffTrace ?? ""));
+                    string read = !icon.HasTime ? "unread" : icon.Value.ToString() + (icon.Minutes ? "m" : "s");
+                    int? shown = BuffClock.ShownSeconds(bar.Buffs);
+                    // 12 must stay twelve minutes. A clipped "2m" or a "12" with no minute mark is a miss.
+                    Check(found && icon.Strong && icon.HasTime && icon.Minutes && icon.Value == minutes[i] && icon.Value != 2 && shown == minutes[i] * 60,
+                        files[i] + " at " + names[s] + " is " + minutes[i].ToString() + "m, not 2m or " + minutes[i].ToString() + "s, got " + read + " shown " + (shown == null ? "none" : shown.Value.ToString()) + " " + (bar.BuffTrace ?? ""));
                 }
                 string wood = Path.Combine(root, "verification", "fixtures", "live029", "xpdrop-woodcutting-589.png");
                 if (File.Exists(wood) && scales[s] != 1.0)
