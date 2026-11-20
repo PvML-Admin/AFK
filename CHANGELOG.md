@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.7
+
+- Life and prayer stay readable when the coloured fill is too short to find. Implausible values are dropped, and the panel moves when two of three reads agree.
+- Potion timers keep counting down between reads. A missed frame does not jump the timer.
+- Whole-client copies back off when the HUD cannot be read. Life and prayer share one grab, and slow slots are copied once a second.
+- The panel stays above the game while the game is in front, without taking focus.
+- Skilling idle uses XP drops, backpack changes, and clicks.
+
 ## 0.2.6
 
 - AFK teleport uses the Kavros rates. Normal is 25 minutes. Grandmaster adds 25 minutes and the tree perk adds 15. The two switches are independent and saved. Old 300-second settings migrate to the normal rate. The warning lead is still adjustable.
