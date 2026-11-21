@@ -201,6 +201,8 @@ namespace KavrosAfkWarden
     public static class CapturePlan
     {
         public const int SampleMilliseconds = 500;
+        // Chat is checked several times a second. OCR runs only when the crop changed.
+        public const int ChatMilliseconds = 400;
         public const int FullIntervalSeconds = 30;
         // Buff timers, the XP counter and the backpack change slowly. They are
         // copied on every other sample, about once a second.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.24
+
+- RuneMetrics reads the column headed XP and leaves XP/h alone. A total that starts falling is dropped within a few seconds so the panel is found again.
+- Chat is checked several times a second, and OCR runs only when the box changed. The crop follows the dark chat background down to the input bar, so a new line at the bottom is included.
+
 ## 0.2.23
 
 - The chat crop reaches the newest line, down to the input bar, and the OCR page has room under that line so it is read within a second or two.

@@ -838,6 +838,7 @@ namespace KavrosAfkWarden
             Check(!CapturePlan.WantFull(false, DateTime.UtcNow, DateTime.UtcNow.AddSeconds(3)), "unread HUD backs off between full-frame attempts");
             Check(!CapturePlan.WantFull(true, DateTime.UtcNow, DateTime.UtcNow.AddSeconds(12)), "a locked slot waits out the slow full search");
             Check(CapturePlan.SampleMilliseconds <= 500 && CapturePlan.FullIntervalSeconds >= 10, "steady capture stays at or under 2 Hz");
+            Check(CapturePlan.ChatMilliseconds <= 1000 && CapturePlan.ChatMilliseconds >= 200, "chat is checked about once a second without a tight loop");
         }
 
         private static void Placement()
@@ -1566,6 +1567,7 @@ namespace KavrosAfkWarden
             Check(ChatPhrase.MatchLine("The effects of your Potion have expired.", out kindName, out stateName, out phraseName) && kindName == "aggression" && stateName == "expired", "aggression expired still matches when the word Aggression is missing, got " + kindName + " " + stateName);
             Check(ChatPhrase.MatchLine("The effa:ts of elder overload •exorn off and you fæl normal again.", out kindName, out stateName, out phraseName) && kindName == "elder" && stateName == "expired", "the worn-off OCR line is elder expired, got " + kindName + " " + stateName);
             ReplayPotLogs(root);
+            ReplayMetrics(root);
             string[] chatter = new string[] {
                 "-a ALL CHAT",
                 ". 14KlllS In core",
@@ -1612,7 +1614,7 @@ namespace KavrosAfkWarden
             totals.Observe(false, 0, "no XP row", at.AddSeconds(5));
             Check(totals.Found && totals.Xp == 471, "a missed frame keeps the last total");
             for (int n = 0; n < 5; n++) totals.Observe(true, 7, "xp=7", at.AddSeconds(6 + n));
-            Check(totals.Xp == 7, "the same new total is accepted once it repeats");
+            Check(totals.Found && totals.Xp == 471, "a repeated crash is ignored, got " + totals.Xp.ToString() + " " + totals.Note);
             totals.Observe(false, 0, "no XP row", at.AddSeconds(20));
             totals.Observe(false, 0, "no XP row", at.AddSeconds(26));
             Check(!totals.Found && totals.Note == "lost", "the tracker is lost after it stays missing");
@@ -1726,6 +1728,58 @@ namespace KavrosAfkWarden
             }
             Shots0222(root);
             Shots0223(root);
+        }
+
+        private static void ReplayMetrics(string root)
+        {
+            string path = Path.Combine(root, "verification", "fixtures", "live0224", "debug-log-v0223-a.txt");
+            if (!File.Exists(path))
+            {
+                Check(false, "missing debug-log-v0223-a.txt");
+                return;
+            }
+            MetricsLock watch = new MetricsLock();
+            string[] lines = File.ReadAllLines(path);
+            bool sawFall = false;
+            bool reportedFall = false;
+            bool gotTotal = false;
+            DateTime firstFall = DateTime.MinValue;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                int at = lines[i].IndexOf("metrics=");
+                if (at < 0 || lines[i].Length < 8 || lines[i][2] != ':') continue;
+                string token = lines[i].Substring(at + 8);
+                int end = token.IndexOf(' ');
+                if (end > 0) token = token.Substring(0, end);
+                int hour = 0, minute = 0, second = 0;
+                if (lines[i][2] == ':')
+                {
+                    hour = (lines[i][0] - '0') * 10 + (lines[i][1] - '0');
+                    minute = (lines[i][3] - '0') * 10 + (lines[i][4] - '0');
+                    second = (lines[i][6] - '0') * 10 + (lines[i][7] - '0');
+                }
+                DateTime when = new DateTime(2026, 11, 21, hour, minute, second, DateTimeKind.Utc);
+                if (token == "lost")
+                {
+                    watch.Observe(false, 0, "lost", when);
+                    continue;
+                }
+                if (token.Length < 5 || token[0] != 'x') continue;
+                long xp;
+                if (!long.TryParse(token.Substring(3), out xp)) continue;
+                watch.Observe(true, xp, token, when);
+                if (xp >= 1122000 && xp <= 1124000 && watch.Xp > 0 && watch.Xp < xp)
+                    sawFall = true;
+                if (watch.Xp >= 1122000 && watch.Xp <= 1124000 && watch.Xp < 1123687)
+                    reportedFall = true;
+                if (sawFall && firstFall == DateTime.MinValue && xp < 1123687) firstFall = when;
+                if (firstFall != DateTime.MinValue && (when - firstFall).TotalSeconds >= 4 && watch.Found && watch.Xp >= 1122000 && watch.Xp <= 1124000)
+                    reportedFall = true;
+                if (watch.Found && watch.Xp >= 6000000) gotTotal = true;
+            }
+            Check(!reportedFall, "the falling XP/h values are not kept as the total");
+            Check(gotTotal && watch.Xp >= 6072472, "the real XP total is kept once it is read, got " + watch.Xp.ToString() + " " + watch.Note);
+            notes.Add("debug-log-v0223-a.txt metrics replay: " + (reportedFall ? "FAIL kept a falling total" : "PASS") + ", final " + watch.Xp.ToString());
         }
 
         private static void ReplayPotLogs(string root)
@@ -1976,7 +2030,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.23" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.24" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -1987,10 +2041,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.23\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.24\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.23.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.24.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

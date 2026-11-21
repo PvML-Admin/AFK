@@ -2,7 +2,7 @@
 {
     internal static class AppInfo
     {
-        internal const string Version = "0.2.23";
+        internal const string Version = "0.2.24";
         internal const string Name = "AFK Warden";
         internal const string Author = "Zenity";
         internal const string ModuleId = "afk-warden";

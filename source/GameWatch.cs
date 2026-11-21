@@ -192,6 +192,7 @@ namespace KavrosAfkWarden
         private string ocrTrace = "";
         private string ocrNote = "";
         private int chatBusy;
+        private int lastChatStamp;
         private XpFloat.Sight lastPopup;
         private DateTime popupHold = DateTime.MinValue;
         private HudReading lastGood;
@@ -288,7 +289,7 @@ namespace KavrosAfkWarden
                 {
                     try { ScheduleChat(); }
                     catch (Exception) { }
-                    nextChat = DateTime.UtcNow.AddSeconds(1);
+                    nextChat = DateTime.UtcNow.AddMilliseconds(CapturePlan.ChatMilliseconds);
                 }
                 if (DateTime.UtcNow >= nextSample)
                 {
@@ -778,6 +779,13 @@ namespace KavrosAfkWarden
             }
             chatBox = box;
             ImageBuffer crop = frame.Crop(box.X, box.Y, box.Width, box.Height);
+            int stamp = ChatPrep.Stamp(crop);
+            if (stamp == lastChatStamp)
+            {
+                System.Threading.Interlocked.Exchange(ref chatBusy, 0);
+                return;
+            }
+            lastChatStamp = stamp;
             System.Threading.ThreadPool.QueueUserWorkItem(delegate
             {
                 try { ReadChat(crop); }
@@ -839,6 +847,12 @@ namespace KavrosAfkWarden
         {
             if (reading == null) return;
             xpLock.Observe(metrics.Found, metrics.Xp, metrics.Note, DateTime.UtcNow);
+            if (xpLock.Relocate)
+            {
+                metricsBox = new IntRect();
+                if (nextFullSearch > DateTime.UtcNow.AddSeconds(2))
+                    nextFullSearch = DateTime.UtcNow.AddSeconds(1);
+            }
             reading.MetricsFound = xpLock.Found;
             reading.MetricsXp = xpLock.Xp;
             reading.MetricsNote = xpLock.Note;

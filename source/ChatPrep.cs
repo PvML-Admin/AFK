@@ -53,16 +53,60 @@ namespace KavrosAfkWarden
             int x0 = Math.Max(0, left - 8);
             int y0 = Math.Max(0, top - 6);
             int x1 = Math.Min(image.Width, right + 12);
-            // The newest line sits on the bottom edge, just above the input bar.
-            // A short pad there was clipping it until later lines pushed it up.
-            int y1 = Math.Min(image.Height, bottom + 36);
+            int y1 = Math.Min(image.Height, BottomOfChat(image, left, right, bottom));
             return new IntRect(x0, y0, x1 - x0, y1 - y0);
+        }
+
+        // The newest line can sit on the bottom row, just above the input bar.
+        // Follow the dark chat background down until that bar, or the action bar.
+        private static int BottomOfChat(ImageBuffer image, int left, int right, int bottom)
+        {
+            int span = Math.Max(40, (right - left) / 2);
+            int xBegin = Math.Max(0, left);
+            int xEnd = Math.Min(image.Width, xBegin + span);
+            int limit = Math.Min(image.Height - 1, bottom + 72);
+            int y1 = Math.Min(image.Height, bottom + 8);
+            for (int y = bottom + 1; y <= limit; y++)
+            {
+                int dark = 0;
+                int bright = 0;
+                int width = Math.Max(1, xEnd - xBegin);
+                for (int x = xBegin; x < xEnd; x++)
+                {
+                    int c = image.Argb(x, y);
+                    int sum = ImageBuffer.R(c) + ImageBuffer.G(c) + ImageBuffer.B(c);
+                    if (sum < 140) dark++;
+                    if (sum > 480) bright++;
+                }
+                if (bright > width / 6) break;
+                if (dark * 2 < width) break;
+                y1 = y + 1;
+            }
+            return y1;
+        }
+
+        // Cheap signature so an unchanged chat box is not sent to OCR again.
+        public static int Stamp(ImageBuffer image)
+        {
+            if (image == null) return 0;
+            int step = Math.Max(2, image.Width / 64);
+            int hash = 17;
+            for (int y = 0; y < image.Height; y += step)
+            {
+                for (int x = 0; x < image.Width; x += step)
+                {
+                    if (!Coloured(image.Argb(x, y))) continue;
+                    hash = unchecked(hash * 31 + x);
+                    hash = unchecked(hash * 17 + y);
+                }
+            }
+            return hash;
         }
 
         public static ImageBuffer ForOcr(ImageBuffer image)
         {
             if (image == null) return null;
-            int pad = 16;
+            int pad = 32;
             int w = image.Width * 3;
             int h = (image.Height + pad) * 3;
             if (w < 2 || h < 2) return null;

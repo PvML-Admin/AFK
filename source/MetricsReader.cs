@@ -247,7 +247,7 @@ namespace KavrosAfkWarden
                     {
                         int c = image.Argb(xx, yy);
                         int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
-                        if (r + g + b > 360 && r - Math.Min(r, Math.Min(g, b)) < 90) { on = true; break; }
+                        if (r + g + b > 280 && r - Math.Min(r, Math.Min(g, b)) < 100) { on = true; break; }
                     }
                 }
                 if (on)
@@ -268,8 +268,31 @@ namespace KavrosAfkWarden
                 }
             }
             if (words < 2) return -1;
-            if (wide[1] + 6 >= wide[0]) return -1;
-            return left[1];
+            // A wider second word is "XP/h" sitting after "XP". Keep the first column.
+            if (wide[1] > wide[0] + 4) return -1;
+            // "XP/h" then "XP": the first word is wider, or it contains the slash.
+            if (wide[1] + 4 < wide[0]) return left[1];
+            if (HeaderSlash(image, left[0], left[0] + wide[0], y0, y1)) return left[1];
+            return -1;
+        }
+
+        private static bool HeaderSlash(ImageBuffer image, int x0, int x1, int y0, int y1)
+        {
+            int slash = 0;
+            int ink = 0;
+            for (int x = x0; x < x1 - 1; x++)
+            {
+                for (int y = y0 + 1; y < y1; y++)
+                {
+                    int c = image.Argb(x, y);
+                    int sum = ImageBuffer.R(c) + ImageBuffer.G(c) + ImageBuffer.B(c);
+                    if (sum < 280) continue;
+                    ink++;
+                    int n = image.Argb(x + 1, y - 1);
+                    if (ImageBuffer.R(n) + ImageBuffer.G(n) + ImageBuffer.B(n) > 280) slash++;
+                }
+            }
+            return ink > 6 && slash * 3 >= ink;
         }
 
         private static string ReadGroup(bool[] ink, int width, int height, int top, int x0, int x1)
@@ -470,11 +493,57 @@ namespace KavrosAfkWarden
         private long pending;
         private int pendingCount;
         private DateTime missedSince = DateTime.MinValue;
+        private DateTime fallingSince = DateTime.MinValue;
+        private long fallPeak;
+        public bool Relocate;
 
         public void Observe(bool found, long xp, string rawNote, DateTime now)
         {
             Gain = false;
             Fresh = false;
+            Relocate = false;
+            if (found && have && xp + 15 < locked)
+            {
+                long drop = locked - xp;
+                bool slide = drop < locked / 5;
+                if (!slide)
+                {
+                    Found = true;
+                    Xp = locked;
+                    Note = "held xp=" + locked.ToString() + " reject " + xp.ToString();
+                    return;
+                }
+                // XP/h drifts down. A total does not. Drop the lock quickly.
+                if (fallingSince == DateTime.MinValue) fallingSince = now;
+                if ((now - fallingSince).TotalSeconds >= 3)
+                {
+                    fallPeak = locked;
+                    have = false;
+                    Found = false;
+                    Fresh = false;
+                    pendingCount = 0;
+                    missedSince = DateTime.MinValue;
+                    fallingSince = DateTime.MinValue;
+                    Note = "lost";
+                    Relocate = true;
+                    Xp = 0;
+                    return;
+                }
+                Found = true;
+                Xp = locked;
+                Note = "held xp=" + locked.ToString() + " falling";
+                return;
+            }
+            fallingSince = DateTime.MinValue;
+            // Stay off the column that just slid down. A different column, higher or
+            // well below that peak, is allowed through.
+            if (found && !have && fallPeak > 0 && xp <= fallPeak && xp >= fallPeak - fallPeak / 5)
+            {
+                Found = false;
+                Xp = 0;
+                Note = "reject " + xp.ToString();
+                return;
+            }
             if (found && Accept(xp))
             {
                 if (have && xp > locked) Gain = true;
@@ -521,7 +590,8 @@ namespace KavrosAfkWarden
             long delta = xp - locked;
             long room = locked / 4;
             if (room < 200) room = 200;
-            if (delta >= -5 && delta <= room) return true;
+            if (delta < -15) return false;
+            if (delta <= room) return true;
             if (xp == pending) pendingCount++;
             else { pending = xp; pendingCount = 1; }
             return pendingCount >= 5;
