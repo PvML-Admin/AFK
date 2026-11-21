@@ -39,7 +39,7 @@ namespace KavrosAfkWarden
                     if (runLeft < 0) runLeft = x;
                     runRight = x;
                 }
-                if (count < 14 || runLeft < 0 || runLeft > 160) continue;
+                if (count < 8 || runLeft < 0 || runLeft > 160) continue;
                 int width = runRight - runLeft + 1;
                 if (width < 50 || width > 480) continue;
                 if (count > width * 9 / 10) continue;
@@ -53,20 +53,24 @@ namespace KavrosAfkWarden
             int x0 = Math.Max(0, left - 8);
             int y0 = Math.Max(0, top - 6);
             int x1 = Math.Min(image.Width, right + 12);
-            int y1 = Math.Min(image.Height, bottom + 8);
+            // The newest line sits on the bottom edge, just above the input bar.
+            // A short pad there was clipping it until later lines pushed it up.
+            int y1 = Math.Min(image.Height, bottom + 36);
             return new IntRect(x0, y0, x1 - x0, y1 - y0);
         }
 
         public static ImageBuffer ForOcr(ImageBuffer image)
         {
             if (image == null) return null;
+            int pad = 16;
             int w = image.Width * 3;
-            int h = image.Height * 3;
+            int h = (image.Height + pad) * 3;
             if (w < 2 || h < 2) return null;
             int[] pixels = new int[w * h];
             int white = ImageBuffer.Pack(255, 255, 255);
             int black = ImageBuffer.Pack(0, 0, 0);
-            for (int y = 0; y < h; y++)
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = white;
+            for (int y = 0; y < image.Height * 3; y++)
             {
                 int sy = y / 3;
                 if (sy >= image.Height) sy = image.Height - 1;

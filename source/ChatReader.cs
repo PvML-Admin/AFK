@@ -410,7 +410,9 @@ namespace KavrosAfkWarden
                 bool anchor;
                 bool cue;
                 Score(got, parts[2], out hit, out need, out anchor, out cue);
-                if (!anchor || !cue || need <= 0) continue;
+                if (!cue || need <= 0) continue;
+                if (!anchor && parts[0] != "aggression") continue;
+                if (parts[0] == "aggression" && !anchor && hit < 4) continue;
                 double ratio = (double)hit / (double)need;
                 if (ratio < 0.5) continue;
                 if (hit > bestHit || (hit == bestHit && ratio > bestRatio))
@@ -469,8 +471,7 @@ namespace KavrosAfkWarden
             for (int i = 0; i < words.Length; i++)
             {
                 string word = words[i];
-                if (word.Length == 0 || Stop(word)) continue;
-                need++;
+                if (word.Length < 3 || Stop(word)) continue;
                 int best = 9;
                 for (int g = 0; g < got.Length; g++)
                 {
@@ -478,6 +479,13 @@ namespace KavrosAfkWarden
                     if (d < best) best = d;
                 }
                 int allow = word.Length >= 8 ? 2 : 1;
+                // The word Aggression is often missing. The rest of that sentence is not shared.
+                if (word == Fold("aggression"))
+                {
+                    if (best <= allow) { hit++; anchor = true; }
+                    continue;
+                }
+                need++;
                 if (best > allow) continue;
                 hit++;
                 if (Anchor(word)) anchor = true;

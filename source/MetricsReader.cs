@@ -84,7 +84,7 @@ namespace KavrosAfkWarden
                     if (!Chart(image, x, y)) continue;
                     sawChart = true;
                     long xp;
-                    if (TryRow(image, x + 20, y - 4, 240, 24, out xp))
+                    if (TryTotal(image, x + 16, y - 8, 280, 36, out xp))
                     {
                         result.Found = true;
                         result.Xp = xp;
@@ -151,6 +151,136 @@ namespace KavrosAfkWarden
             int gx = greenX / green;
             int bx = blueX / blue;
             return rx + 1 < gx && gx + 1 < bx && bx - rx >= 4 && bx - rx <= 24;
+        }
+
+        // The bar sits on the first number column. On some layouts that column is
+        // XP/h and the total is the next column, under the shorter "XP" header.
+        private static bool TryTotal(ImageBuffer image, int x, int y, int w, int h, out long xp)
+        {
+            xp = 0;
+            if (x < 0) x = 0;
+            if (y < 0) y = 0;
+            if (x >= image.Width || y >= image.Height) return false;
+            if (x + w > image.Width) w = image.Width - x;
+            if (y + h > image.Height) h = image.Height - y;
+            if (w < 20 || h < 8) return false;
+            bool[] ink = new bool[w * h];
+            for (int yy = 0; yy < h; yy++)
+                for (int xx = 0; xx < w; xx++)
+                    ink[yy * w + xx] = Bright(image.Argb(x + xx, y + yy));
+            int top = 0;
+            int best = -1;
+            for (int yy = 0; yy + 7 < h; yy++)
+            {
+                int n = 0;
+                for (int k = 0; k < 8; k++)
+                    for (int xx = 0; xx < w; xx++)
+                        if (ink[(yy + k) * w + xx]) n++;
+                if (n > best) { best = n; top = yy; }
+            }
+            if (best < 12) return false;
+            int[] starts = new int[8];
+            int[] ends = new int[8];
+            int groups = 0;
+            int col = 0;
+            while (col < w && groups < starts.Length)
+            {
+                while (col < w && !Column(ink, w, top, col)) col++;
+                if (col >= w) break;
+                int start = col;
+                int gap = 0;
+                while (col < w && gap <= 10)
+                {
+                    if (Column(ink, w, top, col)) gap = 0;
+                    else gap++;
+                    col++;
+                }
+                int end = col - gap;
+                if (end < start) end = start;
+                if (end - start >= 4)
+                {
+                    starts[groups] = start;
+                    ends[groups] = end;
+                    groups++;
+                }
+            }
+            if (groups == 0) return false;
+            int chosen = 0;
+            int header = XpAfterRate(image, x, y + top, w);
+            if (header >= 0 && groups > 1)
+            {
+                int nearest = 0;
+                int dist = 9999;
+                for (int i = 0; i < groups; i++)
+                {
+                    int d = Math.Abs((x + starts[i]) - header);
+                    if (d < dist) { dist = d; nearest = i; }
+                }
+                if (dist <= 48) chosen = nearest;
+            }
+            string text = ReadGroup(ink, w, h, top, starts[chosen], ends[chosen]);
+            if (!IsFullTotal(text)) return false;
+            return Parse(text, out xp);
+        }
+
+        // Returns the left edge of the "XP" heading only when a wider "XP/h"
+        // heading sits to its left. Otherwise the first number column is the total.
+        private static int XpAfterRate(ImageBuffer image, int x, int rowY, int width)
+        {
+            int y0 = rowY - 22;
+            int y1 = rowY - 3;
+            if (y0 < 0) y0 = 0;
+            if (y1 <= y0) return -1;
+            int x1 = x + width;
+            if (x1 > image.Width) x1 = image.Width;
+            int[] left = new int[4];
+            int[] wide = new int[4];
+            int words = 0;
+            int run = -1;
+            int last = -1;
+            for (int xx = x; xx <= x1 && words < left.Length; xx++)
+            {
+                bool on = false;
+                if (xx < x1)
+                {
+                    for (int yy = y0; yy < y1; yy++)
+                    {
+                        int c = image.Argb(xx, yy);
+                        int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
+                        if (r + g + b > 360 && r - Math.Min(r, Math.Min(g, b)) < 90) { on = true; break; }
+                    }
+                }
+                if (on)
+                {
+                    if (run < 0) run = xx;
+                    last = xx;
+                }
+                else if (run >= 0 && xx - last > 6)
+                {
+                    int word = last - run + 1;
+                    if (word >= 8 && word <= 48)
+                    {
+                        left[words] = run;
+                        wide[words] = word;
+                        words++;
+                    }
+                    run = -1;
+                }
+            }
+            if (words < 2) return -1;
+            if (wide[1] + 6 >= wide[0]) return -1;
+            return left[1];
+        }
+
+        private static string ReadGroup(bool[] ink, int width, int height, int top, int x0, int x1)
+        {
+            int span = x1 - x0;
+            if (span < 4) return "";
+            bool[] slice = new bool[span * height];
+            for (int yy = 0; yy < height; yy++)
+                for (int xx = 0; xx < span; xx++)
+                    slice[yy * span + xx] = ink[yy * width + x0 + xx];
+            return ReadDigits(slice, span, height, top);
         }
 
         private static bool TryRow(ImageBuffer image, int x, int y, int w, int h, out long xp)

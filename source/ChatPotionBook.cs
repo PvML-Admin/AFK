@@ -16,8 +16,7 @@ namespace KavrosAfkWarden
     {
         private sealed class Seen
         {
-            public string Phrase;
-            public int Y;
+            public string Key;
         }
 
         private sealed class Pot
@@ -47,12 +46,14 @@ namespace KavrosAfkWarden
             if (hits == null) hits = new List<ChatHit>();
             if (!primed)
             {
+                // Only the lines in this first read are old. An empty read still counts,
+                // so a pot line that shows up afterwards is not treated as preexisting.
                 for (int i = 0; i < hits.Count; i++)
                 {
                     Remember(hits[i]);
                     Append(log, hits[i], "skip-preexisting");
                 }
-                if (hits.Count > 0) primed = true;
+                primed = true;
                 Log = log.ToString();
                 Detail = Roster();
                 return notices;
@@ -64,17 +65,12 @@ namespace KavrosAfkWarden
                 if (Drink(hit.Phrase))
                 {
                     Set(hit.Kind, "active");
+                    ForgetKind(hit.Kind);
                     Remember(hit);
                     Append(log, hit, "rearm");
                     continue;
                 }
-                if (!Fresh(hit))
-                {
-                    Append(log, hit, "skip-seen");
-                    continue;
-                }
-                // An expired pot stays quiet until a drink or a warning re-arms it.
-                if (hit.State == "expired" && StateOf(hit.Kind) == "expired")
+                if (Already(hit))
                 {
                     Append(log, hit, "skip-seen");
                     continue;
@@ -94,6 +90,18 @@ namespace KavrosAfkWarden
 
         public void Refresh()
         {
+            Refresh(DateTime.UtcNow);
+        }
+
+        // An expired row is only a moment. After about 45 seconds it leaves,
+        // and the panel goes back to Watching chat unless another pot is still up.
+        public void Refresh(DateTime now)
+        {
+            for (int i = pots.Count - 1; i >= 0; i--)
+            {
+                if (pots[i].State != "expired" || pots[i].Since == DateTime.MinValue) continue;
+                if ((now - pots[i].Since).TotalSeconds >= 45) pots.RemoveAt(i);
+            }
             Detail = Roster();
         }
 
@@ -106,17 +114,37 @@ namespace KavrosAfkWarden
                 .Append(" score=").Append(hit.Score.ToString("0.00")).Append(" \"").Append(hit.Phrase).Append("\"");
         }
 
+        private static string KeyOf(ChatHit hit)
+        {
+            if (hit == null) return "";
+            return (hit.Kind ?? "") + "|" + (hit.State ?? "") + "|" + (hit.Phrase ?? "");
+        }
+
         private void Remember(ChatHit hit)
         {
-            if (hit == null || hit.Phrase == null) return;
+            string key = KeyOf(hit);
+            if (key.Length == 0) return;
             for (int i = 0; i < seen.Count; i++)
-            {
-                if (seen[i].Phrase == hit.Phrase) { seen[i].Y = hit.Y; return; }
-            }
+                if (seen[i].Key == key) return;
             Seen add = new Seen();
-            add.Phrase = hit.Phrase;
-            add.Y = hit.Y;
+            add.Key = key;
             seen.Add(add);
+        }
+
+        private bool Already(ChatHit hit)
+        {
+            string key = KeyOf(hit);
+            for (int i = 0; i < seen.Count; i++)
+                if (seen[i].Key == key) return true;
+            Remember(hit);
+            return false;
+        }
+
+        private void ForgetKind(string kind)
+        {
+            string prefix = (kind ?? "") + "|";
+            for (int i = seen.Count - 1; i >= 0; i--)
+                if (seen[i].Key != null && seen[i].Key.StartsWith(prefix)) seen.RemoveAt(i);
         }
 
         // A drink line re-arms that potion so the next warning can fire.
@@ -137,42 +165,22 @@ namespace KavrosAfkWarden
             return false;
         }
 
-        private bool Fresh(ChatHit hit)
-        {
-            for (int i = 0; i < seen.Count; i++)
-            {
-                Seen old = seen[i];
-                if (old.Phrase != hit.Phrase) continue;
-                // Same line, or the chat scrolled it upward. A new copy sits lower.
-                int dy = hit.Y - old.Y;
-                if (dy <= 8 && dy > -80)
-                {
-                    old.Y = hit.Y;
-                    return false;
-                }
-            }
-            Seen add = new Seen();
-            add.Phrase = hit.Phrase;
-            add.Y = hit.Y;
-            seen.Add(add);
-            return true;
-        }
-
         private void Set(string kind, string state)
         {
             for (int i = 0; i < pots.Count; i++)
             {
                 if (pots[i].Kind == kind)
                 {
+                    bool becameExpired = state == "expired" && pots[i].State != "expired";
                     pots[i].State = state;
-                    if (state == "active") pots[i].Since = DateTime.UtcNow;
+                    if (state == "active" || becameExpired) pots[i].Since = DateTime.UtcNow;
                     return;
                 }
             }
             Pot pot = new Pot();
             pot.Kind = kind;
             pot.State = state;
-            if (state == "active") pot.Since = DateTime.UtcNow;
+            if (state == "active" || state == "expired") pot.Since = DateTime.UtcNow;
             pots.Add(pot);
         }
 

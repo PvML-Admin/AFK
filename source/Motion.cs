@@ -883,7 +883,7 @@ namespace KavrosAfkWarden
             int x0 = image.Width * 20 / 100;
             int x1 = image.Width * 80 / 100;
             int y0 = 0;
-            int y1 = image.Height * 20 / 100;
+            int y1 = image.Height * 40 / 100;
             return Scan(image, x0, x1, y0, y1);
         }
 

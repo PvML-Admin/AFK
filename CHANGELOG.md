@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.23
+
+- The chat crop reaches the newest line, down to the input bar, and the OCR page has room under that line so it is read within a second or two.
+- A potion line that was not on screen at the first read alerts once. Low and expired are separate, so one does not swallow the other. Elder overload still goes Low, then Expired.
+- Aggression is recognised when Windows OCR drops the word itself: "The effects of your Potion will expire in 30 seconds" is Low, and "have expired" is Expired.
+- RuneMetrics reads the column headed XP. A layout that puts XP/h first no longer reports the rate as the total.
+- The XP popup search covers the top 40 percent of the client, so a drop that sits a little below the compass still counts.
+- An Expired potion row clears itself after about 45 seconds. The row then says Watching chat again, unless another tracked pot is still Low or Active.
+
 ## 0.2.22
 
 - The potion row tracks elder overload and aggression only, under those full names. Prayer renewal, antifire and poison are left alone. Low stays orange and expired stays red.

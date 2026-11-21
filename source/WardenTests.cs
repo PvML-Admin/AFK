@@ -1562,6 +1562,10 @@ namespace KavrosAfkWarden
             Check(!ChatPhrase.MatchLine("] Your prayer effect Will 3Ü seconds..", out kindName, out stateName, out phraseName), "the v0.2.21 prayer OCR line is not a pot");
             Check(!ChatPhrase.MatchLine("] Your super antifliE potion IS about to run out...", out kindName, out stateName, out phraseName), "the v0.2.21 antifire OCR line is not a pot");
             Check(!ChatPhrase.MatchLine("] Your Immunity to po•n about to out...", out kindName, out stateName, out phraseName), "the v0.2.21 poison OCR line is not a pot");
+            Check(ChatPhrase.MatchLine("The effazts of pur Potion will expire in 30 saonds.", out kindName, out stateName, out phraseName) && kindName == "aggression" && stateName == "low", "aggression low still matches when the word Aggression is missing, got " + kindName + " " + stateName);
+            Check(ChatPhrase.MatchLine("The effects of your Potion have expired.", out kindName, out stateName, out phraseName) && kindName == "aggression" && stateName == "expired", "aggression expired still matches when the word Aggression is missing, got " + kindName + " " + stateName);
+            Check(ChatPhrase.MatchLine("The effa:ts of elder overload •exorn off and you fæl normal again.", out kindName, out stateName, out phraseName) && kindName == "elder" && stateName == "expired", "the worn-off OCR line is elder expired, got " + kindName + " " + stateName);
+            ReplayPotLogs(root);
             string[] chatter = new string[] {
                 "-a ALL CHAT",
                 ". 14KlllS In core",
@@ -1721,6 +1725,130 @@ namespace KavrosAfkWarden
                 Check(seen.Found && !XpFloat.Changed(seen, again) && XpFloat.Changed(empty, seen) && XpFloat.Changed(seen, moved) && !XpFloat.Changed(seen, empty), "a popup counts when it appears or moves, and the same pixels do not count twice");
             }
             Shots0222(root);
+            Shots0223(root);
+        }
+
+        private static void ReplayPotLogs(string root)
+        {
+            string dir = Path.Combine(root, "verification", "fixtures", "live0223");
+            bool lowAlert = false;
+            bool expiredAlert = false;
+            bool aggroAlert = false;
+            ChatPotionBook book = new ChatPotionBook();
+            book.Attach();
+            string lowLog = Path.Combine(dir, "debug-log-v0222-pots.txt");
+            string expiredLog = Path.Combine(dir, "debug-log-v0222-potsexpired.txt");
+            if (!File.Exists(lowLog) || !File.Exists(expiredLog))
+            {
+                Check(false, "missing v0.2.22 potion logs");
+                return;
+            }
+            Replay(book, File.ReadAllLines(lowLog), ref lowAlert, ref expiredAlert, ref aggroAlert);
+            Check(lowAlert && book.Detail.IndexOf("Elder overload low") >= 0, "replaying the low log raises Elder overload low, got " + book.Detail + " alert " + lowAlert.ToString());
+            book = new ChatPotionBook();
+            book.Attach();
+            lowAlert = false;
+            expiredAlert = false;
+            aggroAlert = false;
+            Replay(book, File.ReadAllLines(expiredLog), ref lowAlert, ref expiredAlert, ref aggroAlert);
+            Check(lowAlert && expiredAlert && book.Detail.IndexOf("Elder overload expired") >= 0, "replaying the expired log takes elder from low to expired, got " + book.Detail);
+            Check(aggroAlert && book.Detail.IndexOf("Aggression low") >= 0, "the line that dropped Aggression still sets Aggression low, got " + book.Detail);
+            List<ChatHit> gone = ChatPhrase.FromOcr("The effects of your Potion have expired.");
+            book.Observe(gone);
+            Check(book.Detail.IndexOf("Aggression expired") >= 0, "the missing bottom line sets Aggression expired, got " + book.Detail);
+            ChatPotionBook fading = new ChatPotionBook();
+            List<ChatHit> both = new List<ChatHit>();
+            both.Add(Hit("The effects of elder overload have worn off and you feel normal again.", "elder", "expired", 20));
+            both.Add(Hit("The effects of your Aggression Potion will expire in 30 seconds.", "aggression", "low", 40));
+            fading.Observe(both);
+            Check(fading.Detail.IndexOf("Elder overload expired") >= 0 && fading.Detail.IndexOf("Aggression low") >= 0, "both pots show before the expiry fades, got " + fading.Detail);
+            fading.Refresh(DateTime.UtcNow.AddSeconds(44));
+            Check(fading.Detail.IndexOf("Elder overload expired") >= 0, "expired is still shown just before 45 seconds, got " + fading.Detail);
+            fading.Refresh(DateTime.UtcNow.AddSeconds(46));
+            Check(fading.Detail.IndexOf("expired") < 0 && fading.Detail.IndexOf("Aggression low") >= 0, "expired clears after 45 seconds and a low pot stays, got " + fading.Detail);
+            ChatPotionBook alone = new ChatPotionBook();
+            List<ChatHit> only = new List<ChatHit>();
+            only.Add(Hit("The effects of elder overload have worn off and you feel normal again.", "elder", "expired", 20));
+            alone.Observe(only);
+            alone.Refresh(DateTime.UtcNow.AddSeconds(46));
+            Check(alone.Detail.Length == 0, "with nothing else tracked the row is empty, so the panel says Watching chat, got " + alone.Detail);
+        }
+
+        private static void Replay(ChatPotionBook book, string[] lines, ref bool lowAlert, ref bool expiredAlert, ref bool aggroAlert)
+        {
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string joined = RawBlock(lines[i]);
+                if (joined.Length == 0) continue;
+                List<ChatHit> hits = ChatPhrase.FromOcr(joined);
+                List<ChatNotice> notices = book.Observe(hits);
+                for (int n = 0; n < notices.Count; n++)
+                {
+                    string title = notices[n].Title ?? "";
+                    if (title.IndexOf("Elder overload") >= 0 && title.IndexOf("low") >= 0) lowAlert = true;
+                    if (title.IndexOf("Elder overload") >= 0 && title.IndexOf("expired") >= 0) expiredAlert = true;
+                    if (title.IndexOf("Aggression") >= 0 && title.IndexOf("low") >= 0) aggroAlert = true;
+                }
+            }
+        }
+
+        private static string RawBlock(string line)
+        {
+            if (line == null) return "";
+            System.Text.StringBuilder text = new System.Text.StringBuilder();
+            int at = 0;
+            while (at < line.Length)
+            {
+                int raw = line.IndexOf("raw=\"", at);
+                if (raw < 0) break;
+                int start = raw + 5;
+                int end = line.IndexOf('"', start);
+                if (end < 0) break;
+                if (text.Length > 0) text.Append('\n');
+                text.Append(line.Substring(start, end - start));
+                at = end + 1;
+            }
+            return text.ToString();
+        }
+
+        private static void Shots0223(string root)
+        {
+            string dir = Path.Combine(root, "verification", "fixtures", "live0223");
+            PopupSome(Path.Combine(dir, "full-client-v0222-a.png"), "full-client-v0222-a.png");
+            string aPath = Path.Combine(dir, "full-client-v0222-a.png");
+            if (File.Exists(aPath))
+                Check(XpFloat.Present(PngImage.Load(aPath).Scale(2)), "the popup at about 21 percent of the client is detected at 200%");
+            PopupSome(Path.Combine(dir, "full-client-v0222-pots.png"), "full-client-v0222-pots.png");
+            PopupSome(Path.Combine(dir, "full-client-v0222-potsexpired.png"), "full-client-v0222-potsexpired.png");
+            string metrics = Path.Combine(dir, "runemetrics-xph-vs-xp-v0222.png");
+            if (!File.Exists(metrics)) Check(false, "missing runemetrics-xph-vs-xp-v0222.png");
+            else
+            {
+                MetricsReader.Result total = MetricsReader.Read(PngImage.Load(metrics));
+                notes.Add("runemetrics-xph-vs-xp-v0222.png XP column: " + (total.Found ? total.Xp.ToString() : ("MISS " + (total.Note ?? ""))));
+                Check(total.Found && total.Xp == 4867895L, "the XP column is 4867895, not the XP/h beside it, got " + total.Xp.ToString() + " " + (total.Note ?? ""));
+            }
+        }
+
+        private static void PopupSome(string path, string label)
+        {
+            if (!File.Exists(path))
+            {
+                Check(false, "missing " + label);
+                notes.Add(label + " XP popup: MISSING FILE");
+                return;
+            }
+            ImageBuffer image = PngImage.Load(path);
+            int[] scales = new int[] { 100, 150, 200 };
+            int hits = 0;
+            for (int i = 0; i < scales.Length; i++)
+            {
+                ImageBuffer frame = scales[i] == 100 ? image : image.Scale(scales[i] / 100.0);
+                bool hit = XpFloat.Present(frame);
+                if (hit) hits++;
+                notes.Add(label + " (" + frame.Width.ToString() + "x" + frame.Height.ToString() + ") at " + scales[i].ToString() + "% XP popup: " + (hit ? "PASS" : "MISS"));
+            }
+            notes.Add(label + " detected on " + hits.ToString() + " of 3 scales");
         }
 
         private static void PopupAt(string path, string label, bool expect)
@@ -1848,7 +1976,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.22" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.23" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -1859,10 +1987,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.22\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.23\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.22.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.23.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }
