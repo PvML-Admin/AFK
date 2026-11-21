@@ -213,9 +213,31 @@ namespace KavrosAfkWarden
         }
 
         // Gold card heading such as CAPTURE or SOLUTION.
+        // The tracked capitals need the measured glyph box. Font.Height is shorter
+        // than that at 150% and 200%, which cuts the top of the heading off.
+        public static int CardHeadingHeight()
+        {
+            Font font = Display(7.5F);
+            Size size = TextRenderer.MeasureText("Ag", font, new Size(400, 400), TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+            int height = Math.Max(size.Height, font.Height);
+            return height + 8;
+        }
+
         public static void DrawCardLabel(Graphics g, string text, int x, int y, Color surface)
         {
-            DrawTracked(g, text, Display(7.5F), x, y, Gold, surface, 1.8F, 0);
+            Font font = Display(7.5F);
+            const TextFormatFlags flags = TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix | TextFormatFlags.VerticalCenter;
+            int boxH = CardHeadingHeight();
+            int space = Math.Max(2, boxH / 4);
+            float tracking = 1.8F;
+            float left = x;
+            for (int i = 0; i < text.Length; i++)
+            {
+                string glyph = text[i].ToString();
+                int width = text[i] == ' ' ? space : TextRenderer.MeasureText(g, glyph, font, new Size(500, boxH), flags).Width;
+                if (text[i] != ' ') TextRenderer.DrawText(g, glyph, font, new Rectangle((int)left, y, width + 8, boxH), Gold, surface, flags);
+                left += width + tracking;
+            }
         }
 
         // TextRenderer has no letter spacing, so small capitals are drawn one
@@ -461,7 +483,8 @@ namespace KavrosAfkWarden
                 if (!String.IsNullOrEmpty(card.Label))
                 {
                     g.ResetTransform();
-                    KavrosTheme.DrawCardLabel(g, card.Label, card.Bounds.Left + 12 + AutoScrollPosition.X, card.Bounds.Top + 9 + AutoScrollPosition.Y, KavrosTheme.Panel);
+                    int pad = Math.Max(8, KavrosTheme.CardHeadingHeight() / 5);
+                    KavrosTheme.DrawCardLabel(g, card.Label, card.Bounds.Left + pad + AutoScrollPosition.X, card.Bounds.Top + pad + AutoScrollPosition.Y, KavrosTheme.Panel);
                     g.TranslateTransform(AutoScrollPosition.X, AutoScrollPosition.Y);
                 }
             }

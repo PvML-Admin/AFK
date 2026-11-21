@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.29
+
+- Settings headings have enough room to draw in full, and long labels fit or wrap instead of being cut off at the edge.
+
 ## 0.2.28
 
 - The alert tones are easy to tell apart: Chime climbs, Bell is a ding-dong, Alarm is fast beeps, Soft is one low note, and Drop is a longer low buzz. By alert still picks one of those for each alert. Test sound plays the one you chose.
