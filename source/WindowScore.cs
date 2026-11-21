@@ -18,6 +18,8 @@ namespace KavrosAfkWarden
         public static int Score(string title, string process, string className, int width, int height)
         {
             if (Has(title, "AFK Warden") || Has(process, "KavrosAfkWarden")) return -1000;
+            if (Has(title, "Companion") || Has(process, "Companion")) return -1000;
+            if (Has(title, "Clue Helper") || Has(title, "ClueHelper") || Has(process, "ClueHelper") || Has(process, "Clue Helper")) return -1000;
             if (Has(className, "CabinetWClass") || Has(className, "WinRarWindow") || Has(className, "Chrome_WidgetWin") || Has(className, "ApplicationFrameWindow")) return -1000;
             if (IsLauncher(title, process, className)) return -1000;
             if (!Has(title, "kavros")) return -1000;

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.17
+
+- Coloured chat lines match. Red, orange and green game messages, including the six potion warnings on a red chat, map to the right pot and state. The strip along the top of the window is not treated as chat. The debug log includes the text read from each line.
+- An empty capture frame keeps the last hitpoints, prayer and other readings. Minimized is shown only when the client really is minimized.
+- The RuneMetrics total stays put. A jump or a drop is ignored until the same new total is read again several times.
+- AFK Warden binds to the Kavros client under the Companion overlay that toggled it, including a client hwnd or pid passed in by Companion. It leaves the Companion overlay and Clue Helper windows alone, stays on that client, and says the client is closed instead of moving to another one.
+- The client picker shows the character name Companion writes for that client's process. With no name, the clients are labelled Client 1, Client 2 and Client 3. The name is a label only.
+- Each potion shows Active, with a countdown only where the duration is known, Low in orange, or Expired in red. The short names stay.
+
 ## 0.2.16
 
 - Chat potion lines have to match the whole phrase. Ordinary chat, news and trivia no longer raise a potion alert. Lines already on screen when you attach are ignored, and each new line pings at most once. An expired potion stays quiet until a drink or a warning re-arms it.

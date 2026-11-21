@@ -22,6 +22,8 @@
     <Compile Include="..\source\PngImage.cs" />
     <Compile Include="..\source\Motion.cs" />
     <Compile Include="..\source\WindowScore.cs" />
+    <Compile Include="..\source\ClientBind.cs" />
+    <Compile Include="..\source\ClientNames.cs" />
     <Compile Include="..\source\SettingsText.cs" />
     <Compile Include="..\source\WardenTests.cs" />
     <Compile Include="TestMain.cs" />

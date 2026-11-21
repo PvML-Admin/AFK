@@ -23,17 +23,25 @@ namespace KavrosAfkWarden
         public static List<ChatHit> Read(ImageBuffer image)
         {
             List<ChatHit> best = new List<ChatHit>();
+            string bestTrace = "";
             if (image == null) return best;
             int[] scales = new int[] { 100, 150, 200 };
+            bool tried = false;
             for (int s = 0; s < scales.Length; s++)
             {
                 int width;
                 int height;
                 bool[] ink = Ink(image, scales[s], out width, out height);
                 List<ChatHit> hits = Match(ink, width, height);
-                if (hits.Count > best.Count) best = hits;
+                if (!tried || hits.Count > best.Count)
+                {
+                    best = hits;
+                    bestTrace = Trace;
+                    tried = true;
+                }
                 if (best.Count >= 4) break;
             }
+            Trace = bestTrace;
             best.Sort(delegate(ChatHit a, ChatHit b) { return a.Y.CompareTo(b.Y); });
             return best;
         }
@@ -86,6 +94,8 @@ namespace KavrosAfkWarden
         {
             int r = ImageBuffer.R(color), g = ImageBuffer.G(color), b = ImageBuffer.B(color);
             if (r >= 110 && r >= g + 25 && r >= b + 25) return true;
+            if (r >= 160 && g >= 70 && g <= r - 20 && b <= 90) return true;
+            if (g >= 140 && g >= r + 25 && g >= b + 25) return true;
             int mx = r;
             if (g > mx) mx = g;
             if (b > mx) mx = b;
@@ -111,7 +121,16 @@ namespace KavrosAfkWarden
                 int left;
                 int right;
                 if (!Span(ink, width, height, y, out left, out right)) continue;
+                if (trace.Length > 0) trace.Append(" | ");
+                // The title strip of a full client sits at the top of the window.
+                // A chat crop is short, so a line near its top is still chat.
+                if (height >= 600 && y < 16)
+                {
+                    trace.Append("y=").Append(y).Append(" skip-top");
+                    continue;
+                }
                 ChatHit best = null;
+                ChatHit near = null;
                 for (int s = 0; s < stamps.Count; s++)
                 {
                     ChatStamp stamp = stamps[s];
@@ -129,9 +148,20 @@ namespace KavrosAfkWarden
                     }
                     int extraLeft = topX - left;
                     int extraRight = right - (topX + stamp.Width - 1);
+                    bool gates = topScore >= 0.92 && extraRight <= 18 && extraLeft <= 120;
+                    if (near == null || topScore > near.Score)
+                    {
+                        near = new ChatHit();
+                        near.Phrase = stamp.Phrase;
+                        near.Kind = stamp.Kind;
+                        near.State = stamp.State;
+                        near.Y = y;
+                        near.Score = topScore;
+                        near.Decision = gates ? "match" : "no-match";
+                    }
                     // The phrase has to fill the line. A timestamp may sit in front.
                     // A busy chat line that only overlaps part of a phrase is rejected.
-                    if (topScore < 0.92 || extraRight > 18 || extraLeft > 120) continue;
+                    if (!gates) continue;
                     if (best == null || topScore > best.Score)
                     {
                         best = new ChatHit();
@@ -143,10 +173,13 @@ namespace KavrosAfkWarden
                         best.Decision = "match";
                     }
                 }
-                if (trace.Length > 0) trace.Append(" | ");
                 if (best == null)
                 {
+                    string read = near == null ? "" : near.Phrase;
+                    if (read.Length > 42) read = read.Substring(0, 42);
                     trace.Append("y=").Append(y).Append(" no-match");
+                    if (near != null)
+                        trace.Append(" score=").Append(near.Score.ToString("0.00")).Append(" \"").Append(read).Append("\"");
                     continue;
                 }
                 trace.Append("y=").Append(y).Append(" ").Append(best.Kind).Append(" ").Append(best.State)

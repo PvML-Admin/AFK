@@ -20,6 +20,8 @@ namespace KavrosAfkWarden
         {
             if (args.Length > 0 && args[0] == "--self-test")
                 return WardenTests.Run(args.Length > 1 ? args[1] : "test-results.txt", FindRoot());
+            ClientLaunch.ReadArgs(args);
+            ClientLaunch.ReadEnvironment();
             NativeMethods.MakePerMonitorAware();
             CrashLog.Install();
             NetSecurity.EnableModernTls();
@@ -64,6 +66,7 @@ namespace KavrosAfkWarden
                                 NativeMethods.AllowSetForegroundWindow(pid);
                 }
                 catch(Exception) { }
+                try { ClientLaunch.WriteRequest(); } catch (Exception) { }
                 activateEvent.Set();
                 ackEvent.WaitOne(2500);
                 return false;
@@ -120,6 +123,7 @@ namespace KavrosAfkWarden
         internal string Pill = "";
         internal string Value = "";
         internal PillTone Tone = PillTone.Example;
+        internal bool ColorParts;
 
         internal StatusRow()
         {
@@ -146,7 +150,29 @@ namespace KavrosAfkWarden
             paintedTone = Tone;
             using (Brush brush = new SolidBrush(KavrosTheme.Bg)) g.FillRectangle(brush, ClientRectangle);
             int width = KavrosTheme.DrawPill(g, 0, Height / 2, Pill, Tone, KavrosTheme.Bg);
-            TextRenderer.DrawText(g, Value, KavrosTheme.Ui(9F, false), new Rectangle(width + 10, 0, Math.Max(1, Width - width - 12), Height), KavrosTheme.Text, KavrosTheme.Bg, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+            if (!ColorParts)
+            {
+                TextRenderer.DrawText(g, Value, KavrosTheme.Ui(9F, false), new Rectangle(width + 10, 0, Math.Max(1, Width - width - 12), Height), KavrosTheme.Text, KavrosTheme.Bg, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+                return;
+            }
+            string[] parts = (Value ?? "").Split(new string[] { " · " }, StringSplitOptions.None);
+            int x = width + 10;
+            Font font = KavrosTheme.Ui(9F, false);
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (i > 0)
+                {
+                    Size gap = TextRenderer.MeasureText(g, " · ", font, new Size(80, Height), TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+                    TextRenderer.DrawText(g, " · ", font, new Rectangle(x, 0, gap.Width + 2, Height), KavrosTheme.TextFaint, KavrosTheme.Bg, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+                    x += gap.Width;
+                }
+                int argb = ChatPotionBook.ValueArgb(parts[i]);
+                Color color = argb == 0 ? KavrosTheme.Text : Color.FromArgb(argb);
+                Size size = TextRenderer.MeasureText(g, parts[i], font, new Size(400, Height), TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+                int room = Math.Max(1, Width - x);
+                TextRenderer.DrawText(g, parts[i], font, new Rectangle(x, 0, Math.Min(room, size.Width + 2), Height), color, KavrosTheme.Bg, TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
+                x += size.Width;
+            }
         }
     }
 
@@ -216,6 +242,7 @@ namespace KavrosAfkWarden
             Place(Hp, 98);
             Place(Prayer, 130);
             Place(Potion, 162);
+            Potion.ColorParts = true;
             Place(Afk, 194);
             metricsHint.SetBounds(12, 224, 376, 16);
             metricsHint.Text = "Keep RuneMetrics XP open";
@@ -403,6 +430,7 @@ namespace KavrosAfkWarden
         private bool closing;
         private bool picking;
         private string clientTitle = "";
+        private bool clientClosed;
         private DateTime nextUpdateCheck = DateTime.UtcNow.AddHours(3);
         private HudReading lastHud = new HudReading();
 
@@ -1169,6 +1197,7 @@ namespace KavrosAfkWarden
             // lifts the panel over everything for a few seconds without taking
             // keyboard focus from the game. After that it stays topmost while
             // the game is in front.
+            try { ClientLaunch.ReadRequest(); } catch (Exception) { }
             raiseUntil = DateTime.UtcNow.AddSeconds(8);
             panelTopKnown = false;
             ShowPanel();
@@ -1198,18 +1227,47 @@ namespace KavrosAfkWarden
             found = list == null ? new List<GameWindow>() : list;
             loading = true;
             windows.Items.Clear();
-            for (int i = 0; i < found.Count; i++) if (WindowLocator.Score(found[i]) >= 100) windows.Items.Add(found[i]);
-            GameWindow choice = WindowLocator.Choose(found, selected, clientTitle);
+            int shown = 0;
+            for (int i = 0; i < found.Count; i++)
+            {
+                if (WindowLocator.Score(found[i]) < 100) continue;
+                found[i].Label = WindowLocator.ClientLabel(found[i], shown);
+                shown++;
+                windows.Items.Add(found[i]);
+            }
+            long pick = WindowLocator.ChooseHandle(found, selected, ClientLaunch.Hwnd, ClientLaunch.Pid);
+            GameWindow choice = null;
+            if (pick > 0)
+            {
+                for (int i = 0; i < found.Count; i++)
+                    if (found[i].Handle.ToInt64() == pick) choice = found[i];
+            }
             if (choice != null)
             {
                 selected = choice.Handle;
                 windows.SelectedItem = choice;
+                clientClosed = false;
+                clientTitle = choice.Title;
+                bool requested = ClientLaunch.Hwnd > 0 && Listed(ClientLaunch.Hwnd);
+                if (ClientLaunch.Hwnd == 0 || requested || pick == ClientLaunch.Hwnd) ClientLaunch.Clear();
             }
             loading = false;
-            if (choice == null) connection.Text = "Waiting for Kavros";
-            else connection.Text = "GAME DETECTED: " + choice.Title;
+            if (choice != null) connection.Text = "GAME DETECTED: " + (choice.Label != null && choice.Label.Length > 0 ? choice.Label : choice.Title);
+            else if (pick < 0)
+            {
+                clientClosed = true;
+                connection.Text = "Client closed";
+            }
+            else connection.Text = "Waiting for Kavros";
             connection.Invalidate();
             if(choice!=null && !everAttached){everAttached=true;BringUp();}
+        }
+
+        private bool Listed(long handle)
+        {
+            for (int i = 0; i < found.Count; i++)
+                if (found[i].Handle.ToInt64() == handle) return true;
+            return false;
         }
 
         private void AttachSelected()
@@ -1317,13 +1375,32 @@ namespace KavrosAfkWarden
 
         private void UpdatePanel(bool pixels)
         {
-            panel.SetGame(selected != IntPtr.Zero && NativeMethods.IsWindow(selected), ClientCaption());
-            panel.SetNote(grab.Note);
+            bool alive = selected != IntPtr.Zero && NativeMethods.IsWindow(selected);
+            bool closed = clientClosed || (selected != IntPtr.Zero && !NativeMethods.IsWindow(selected));
+            bool minimized = alive && NativeMethods.IsIconic(selected);
+            panel.SetGame(alive, closed ? "Client closed" : ClientCaption());
+            panel.SetNote(closed ? "Client closed" : grab.Note);
+            chatPots.Refresh();
+            string roster = chatPots.Detail ?? "";
+            bool potionExpired = roster.IndexOf("expired") >= 0;
+            bool potionLow = roster.IndexOf("low") >= 0;
             if (settings.Paused)
             {
                 panel.Idle.Pill = "Paused";
                 panel.Idle.Tone = PillTone.Warn;
                 panel.Idle.Value = "Watching off";
+            }
+            else if (closed)
+            {
+                panel.Idle.Pill = "Idle";
+                panel.Idle.Tone = PillTone.Example;
+                panel.Idle.Value = "Client closed";
+            }
+            else if (minimized)
+            {
+                panel.Idle.Pill = "Idle";
+                panel.Idle.Tone = PillTone.Example;
+                panel.Idle.Value = "Minimized";
             }
             else
             {
@@ -1331,21 +1408,19 @@ namespace KavrosAfkWarden
                 int still = (int)engine.StillFor.TotalSeconds;
                 panel.Idle.Pill = engine.IdleLatched ? "Idle" : skillPill ? "Skilling" : (still > 0 ? "Still" : "Moving");
                 panel.Idle.Tone = engine.IdleLatched ? PillTone.Bad : PillTone.Ok;
-                panel.Idle.Value = !pixels ? "No view" : still.ToString() + (skillPill ? "s since XP" : "s still");
+                panel.Idle.Value = !pixels && still == 0 ? "No view" : still.ToString() + (skillPill ? "s since XP" : "s still");
             }
             panel.Hp.Pill = engine.HpLatched ? "Low HP" : "Hitpoints";
-            panel.Hp.Tone = engine.HpLatched ? PillTone.Bad : !pixels || lastHud.Hp == null ? PillTone.Example : PillTone.Ok;
-            panel.Hp.Value = !pixels ? "No view" : hpGate.Stale ? Stale(shownHp) : shownHp == null ? "Unread" : Format(shownHp, shownHpMax, lastHud.HpFromOrb);
+            panel.Hp.Tone = engine.HpLatched ? PillTone.Bad : shownHp == null ? PillTone.Example : PillTone.Ok;
+            panel.Hp.Value = closed ? "Client closed" : minimized ? "Minimized" : HpText(pixels);
             panel.Prayer.Pill = engine.PrayerLatched ? "Low prayer" : "Prayer";
-            panel.Prayer.Tone = engine.PrayerLatched ? PillTone.Warn : !pixels || lastHud.Prayer == null ? PillTone.Example : PillTone.Ok;
-            panel.Prayer.Value = !pixels ? "No view" : prayerGate.Stale ? Stale(shownPrayer) : shownPrayer == null ? "Unread" : Format(shownPrayer, shownPrayerMax, lastHud.PrayerFromOrb);
-            string roster = chatPots.Detail ?? "";
-            bool potionLow = roster.IndexOf("running low") >= 0 || roster.IndexOf("expired") >= 0;
-            panel.Potion.Pill = potionLow ? "Potion" : "Potions";
-            panel.Potion.Tone = potionLow ? PillTone.Warn : roster.Length == 0 ? PillTone.Example : PillTone.Ok;
-            panel.Potion.Value = roster.Length > 0 && !settings.Paused
+            panel.Prayer.Tone = engine.PrayerLatched ? PillTone.Warn : shownPrayer == null ? PillTone.Example : PillTone.Ok;
+            panel.Prayer.Value = closed ? "Client closed" : minimized ? "Minimized" : PrayerText(pixels);
+            panel.Potion.Pill = potionExpired || potionLow ? "Potion" : "Potions";
+            panel.Potion.Tone = potionExpired ? PillTone.Bad : potionLow ? PillTone.Warn : roster.Length == 0 ? PillTone.Example : PillTone.Ok;
+            panel.Potion.Value = closed ? "Client closed" : roster.Length > 0 && !settings.Paused
                 ? roster
-                : (!pixels ? "No view" : "No potion timer");
+                : (minimized ? "Minimized" : !pixels ? "No view" : "No potion timer");
             if (lastHud.MetricsFound) metricsAbsentSince = DateTime.MinValue;
             else if (metricsAbsentSince == DateTime.MinValue) metricsAbsentSince = DateTime.UtcNow;
             bool metricsHint = !lastHud.MetricsFound && metricsAbsentSince != DateTime.MinValue
@@ -1354,12 +1429,25 @@ namespace KavrosAfkWarden
             int left = Math.Max(0, (int)engine.AfkRemaining.TotalSeconds);
             panel.Afk.Pill = engine.AfkLatched ? "AFK soon" : "AFK timer";
             panel.Afk.Tone = engine.AfkLatched ? PillTone.Bad : PillTone.Ok;
-            panel.Afk.Value = settings.Paused ? "Paused" : selected==IntPtr.Zero ? "Waiting for client" : (left / 60).ToString() + ":" + (left % 60).ToString("00") + " left";
+            bool clientGone = clientClosed || (selected != IntPtr.Zero && !NativeMethods.IsWindow(selected));
+            panel.Afk.Value = settings.Paused ? "Paused" : clientGone ? "Client closed" : selected==IntPtr.Zero ? "Waiting for client" : (left / 60).ToString() + ":" + (left % 60).ToString("00") + " left";
             panel.Idle.Commit();
             panel.Hp.Commit();
             panel.Prayer.Commit();
             panel.Potion.Commit();
             panel.Afk.Commit();
+        }
+
+        private string HpText(bool pixels)
+        {
+            if (shownHp != null) return hpGate.Stale ? Stale(shownHp) : Format(shownHp, shownHpMax, lastHud.HpFromOrb);
+            return pixels ? "Unread" : "No view";
+        }
+
+        private string PrayerText(bool pixels)
+        {
+            if (shownPrayer != null) return prayerGate.Stale ? Stale(shownPrayer) : Format(shownPrayer, shownPrayerMax, lastHud.PrayerFromOrb);
+            return pixels ? "Unread" : "No view";
         }
 
         private static string Stale(int? value)

@@ -851,6 +851,10 @@ namespace KavrosAfkWarden
             Check(WindowScore.Score("Kavros Launcher", "launcher", "Launcher", 800, 600) < 0, "the launcher is not the client");
             Check(WindowScore.Score("AFK Warden", "KavrosAfkWarden", "WindowsForms", 300, 200) < 0, "the module does not select itself");
             Check(WindowScore.Score("RuneScape", "rs2client", "SunAwtFrame", 1024, 768) < 0, "another game with no Kavros title is ignored");
+            Check(WindowScore.Score("Companion", "Companion", "Window", 400, 700) < 0, "the Companion overlay is not the game");
+            Check(WindowScore.Score("Kavros Companion", "Kavros", "Window", 420, 760) < 0, "a Companion window titled with Kavros is still not the game");
+            Check(WindowScore.Score("Clue Helper", "ClueHelper", "Window", 360, 640) < 0, "Clue Helper is not the game");
+            Check(WindowScore.Score("Kavros", "ClueHelper", "JagWindow", 1024, 768) < 0, "a Clue Helper process is not taken as the client");
             int px, py;
             PanelDock.Place(100, 80, 900, 600, 400, 262, 12, 72, 0, 0, 1920, 1080, out px, out py);
             Check(px == 112 && py == 152, "the panel keeps its offset inside the chosen client");
@@ -1481,6 +1485,130 @@ namespace KavrosAfkWarden
             }
             string readme = File.ReadAllText(Path.Combine(root, "README.md"));
             Check(readme.IndexOf("RuneMetrics") >= 0 && readme.IndexOf("chatbox") >= 0, "the readme tells players to keep RuneMetrics and the chatbox open");
+            string pots = Path.Combine(chatDir, "chat-all-pots-expiring.png");
+            if (!File.Exists(pots)) Check(false, "missing chat-all-pots-expiring.png");
+            else
+            {
+                for (int s = 0; s < scales.Length; s++)
+                {
+                    List<ChatHit> red = ChatReader.Read(PngImage.Load(pots).Scale(scales[s]));
+                    Check(Has(red, "elder", "low") && Has(red, "elder", "expired") && Has(red, "prayer", "low") && Has(red, "prayer", "expired") && Has(red, "antifire", "low") && Has(red, "antifire", "expired") && Has(red, "poison", "low") && Has(red, "poison", "expired"),
+                        "red potion chat at " + names[s] + " matches every line, got " + Describe(red));
+                }
+                Check(ChatReader.Trace.IndexOf("Your elder") >= 0 && ChatReader.Trace.IndexOf("skip-top") < 0, "the debug line quotes the text that was read");
+            }
+            ImageBuffer chrome = ImageBuffer.Blank(200, 800, ImageBuffer.Pack(8, 12, 16));
+            chrome.Fill(10, 4, 80, 8, ImageBuffer.Pack(230, 230, 230));
+            List<ChatHit> top = ChatReader.Read(chrome);
+            Check(top.Count == 0 && ChatReader.Trace.IndexOf("skip-top") >= 0, "the line at the top of the window is not locked as chat, got " + ChatReader.Trace);
+            Check(ChatReader.Text(ImageBuffer.Pack(216, 3, 4)) && ChatReader.Text(ImageBuffer.Pack(220, 120, 20)) && ChatReader.Text(ImageBuffer.Pack(20, 200, 40)), "red, orange and green chat ink is read");
+            ChatPotionBook doses = new ChatPotionBook();
+            List<ChatHit> drinks = new List<ChatHit>();
+            drinks.Add(Hit("You drink the Elder overload salve", "elder", "active", 40));
+            drinks.Add(Hit("You drink some of your wyrmfire potion", "antifire", "active", 54));
+            doses.Observe(drinks);
+            Check(doses.Detail.IndexOf("Elder") >= 0 && doses.Detail.IndexOf(":") >= 0, "elder shows a countdown from the drink, got " + doses.Detail);
+            Check(doses.Detail.IndexOf("Anti Active") >= 0, "a pot with no known duration just says Active, got " + doses.Detail);
+            Check(ChatPotionBook.ValueArgb("Elder low") != 0 && ChatPotionBook.ValueArgb("Elder expired") != 0 && ChatPotionBook.ValueArgb("Elder low") != ChatPotionBook.ValueArgb("Elder expired") && ChatPotionBook.ValueArgb("Anti Active") == 0, "low is orange, expired is red, and Active keeps the text colour");
+            MetricsLock totals = new MetricsLock();
+            DateTime at = new DateTime(2026, 11, 21, 12, 0, 0, DateTimeKind.Utc);
+            totals.Observe(true, 450, "xp=450", at);
+            totals.Observe(true, 7, "xp=7", at.AddSeconds(1));
+            Check(totals.Found && totals.Xp == 450 && totals.Note.IndexOf("reject 7") >= 0, "a drop to 7 does not replace the total, got " + totals.Note);
+            totals.Observe(true, 3095, "xp=3095", at.AddSeconds(2));
+            totals.Observe(true, 5947600, "xp=5947600", at.AddSeconds(3));
+            Check(totals.Xp == 450, "a jump to another total is held, got " + totals.Xp.ToString());
+            totals.Observe(true, 471, "xp=471", at.AddSeconds(4));
+            Check(totals.Xp == 471 && totals.Gain, "a small climb is kept");
+            totals.Observe(false, 0, "no XP row", at.AddSeconds(5));
+            Check(totals.Found && totals.Xp == 471, "a missed frame keeps the last total");
+            for (int n = 0; n < 5; n++) totals.Observe(true, 7, "xp=7", at.AddSeconds(6 + n));
+            Check(totals.Xp == 7, "the same new total is accepted once it repeats");
+            totals.Observe(false, 0, "no XP row", at.AddSeconds(20));
+            totals.Observe(false, 0, "no XP row", at.AddSeconds(26));
+            Check(!totals.Found && totals.Note == "lost", "the tracker is lost after it stays missing");
+            List<ClientCandidate> clients = new List<ClientCandidate>();
+            clients.Add(Client("Kavros", 11, 100, false));
+            clients.Add(Client("Kavros", 22, 200, true));
+            clients.Add(Client("Kavros", 33, 300, false));
+            clients.Add(Overlay("Companion", 90, 900));
+            clients.Add(Overlay("Clue Helper", 91, 901));
+            long bound = ClientBind.Choose(clients, 0, 0, 0);
+            Check(bound == 200, "with three clients the foreground one is bound, got " + bound.ToString());
+            Check(ClientBind.Choose(clients, 200, 100, 0) == 200, "a later toggle does not jump to another client");
+            Check(ClientBind.Choose(clients, 0, 900, 0) == 200, "a Companion hwnd falls through to the foreground client");
+            Check(ClientBind.Choose(clients, 0, 0, 33) == 300, "a passed client pid binds that client");
+            List<ClientCandidate> closed = new List<ClientCandidate>();
+            closed.Add(Client("Kavros", 22, 200, true));
+            closed.Add(Client("Kavros", 33, 300, false));
+            Check(ClientBind.Choose(closed, 100, 0, 0) == -1, "a closed client stays closed instead of switching");
+            Check(ClientBind.Choose(closed, 100, 300, 0) == 300, "a new toggle after the close binds the named client");
+            ClientLaunch.Clear();
+            ClientLaunch.ReadArgs(new string[] { "--hwnd", "4567", "--pid", "89" });
+            Check(ClientLaunch.Hwnd == 4567 && ClientLaunch.Pid == 89, "a companion launch can pass the client hwnd and pid");
+            ClientLaunch.Clear();
+            Check(ClientBind.Choose(clients, 200, 0, 0) == 200, "a character label does not move the bound client");
+            Dictionary<int, string> named = ClientRoster.Parse("[{\"pid\": 22, \"name\": \"Zezima\"}, {\"pid\": 33, \"name\": \"Tim \\\"Two\\\"\"}]");
+            string zezima;
+            string quoted;
+            Check(named.TryGetValue(22, out zezima) && zezima == "Zezima", "a client name is read from the json");
+            Check(named.TryGetValue(33, out quoted) && quoted == "Tim \"Two\"", "an escaped quote in a name is kept, got " + (quoted ?? ""));
+            Check(ClientRoster.Parse("{\"pid\": 1, \"name\": \"still writing").Count == 0, "a file that is still being written yields no name");
+            Check(ClientRoster.Parse("this is not json").Count == 0, "a bad names file yields no name");
+            Check(ClientRoster.Sanitize("  Elder   overload\nname  ") == "Elder overload name", "a name is trimmed and kept on one line");
+            Check(ClientRoster.Sanitize("ABCDEFGHIJKLMNOPQRSTUVWXYZ").Length == 24, "a long name is capped");
+            string dir = Path.Combine(Path.GetTempPath(), "afk-names-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            string file = Path.Combine(dir, "client-names.json");
+            ClientRoster roster = new ClientRoster(file);
+            Check(roster.Label(22, 0) == "Client 1" && roster.Label(33, 1) == "Client 2", "with no names file the picker says Client 1, Client 2");
+            File.WriteAllText(file, "[{\"pid\":22,\"name\":\"Zezima\"},{\"pid\":33,\"name\":\"Danni\"}]");
+            DateTime stamp = new DateTime(2026, 11, 21, 12, 0, 0, DateTimeKind.Utc);
+            File.SetLastWriteTimeUtc(file, stamp);
+            Check(roster.Label(22, 0) == "Zezima" && roster.Label(33, 1) == "Danni", "names follow the client process id");
+            File.WriteAllText(file, "[{\"pid\":22,\"name\":\"Someone Else\"}]");
+            File.SetLastWriteTimeUtc(file, stamp);
+            Check(roster.Label(22, 0) == "Zezima", "the names file is not re-read while its write time is unchanged");
+            File.SetLastWriteTimeUtc(file, stamp.AddMinutes(1));
+            Check(roster.Label(22, 0) == "Someone Else" && roster.Label(33, 1) == "Client 2", "a newer names file updates the label and leaves an unnamed client as Client 2");
+            try { Directory.Delete(dir, true); } catch (Exception) { }
+        }
+
+        private static ChatHit Hit(string phrase, string kind, string state, int y)
+        {
+            ChatHit hit = new ChatHit();
+            hit.Phrase = phrase;
+            hit.Kind = kind;
+            hit.State = state;
+            hit.Y = y;
+            return hit;
+        }
+
+        private static ClientCandidate Client(string title, int pid, long handle, bool foreground)
+        {
+            ClientCandidate window = new ClientCandidate();
+            window.Title = title;
+            window.Process = "Kavros";
+            window.ClassName = "JagWindow";
+            window.Width = 1024;
+            window.Height = 768;
+            window.Pid = pid;
+            window.Handle = handle;
+            window.Foreground = foreground;
+            return window;
+        }
+
+        private static ClientCandidate Overlay(string title, int pid, long handle)
+        {
+            ClientCandidate window = new ClientCandidate();
+            window.Title = title;
+            window.Process = title;
+            window.ClassName = "Window";
+            window.Width = 400;
+            window.Height = 700;
+            window.Pid = pid;
+            window.Handle = handle;
+            return window;
         }
 
         private static bool Has(List<ChatHit> lines, string kind, string state)
@@ -1505,7 +1633,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.16" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.17" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -1516,10 +1644,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.16\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.17\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.16.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.17.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

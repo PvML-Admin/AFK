@@ -15,7 +15,14 @@ namespace KavrosAfkWarden
         internal string ProcessName = "";
         internal string ClassName = "";
         internal Rectangle Client;
-        public override string ToString() { return Title; }
+        internal int Pid;
+        internal bool Foreground;
+        internal string Label = "";
+        public override string ToString()
+        {
+            if (Label != null && Label.Length > 0) return Label;
+            return Title;
+        }
     }
 
     internal static class WindowLocator
@@ -48,6 +55,7 @@ namespace KavrosAfkWarden
                 game.ProcessName = process;
                 game.ClassName = className.ToString();
                 game.Client = NativeMethods.ClientBounds(window);
+                game.Pid = (int)pid;
                 list.Add(game);
                 return true;
             }, IntPtr.Zero);
@@ -61,31 +69,61 @@ namespace KavrosAfkWarden
             return WindowScore.Score(window.Title, window.ProcessName, window.ClassName, window.Client.Width, window.Client.Height);
         }
 
-        internal static GameWindow Choose(List<GameWindow> windows, IntPtr current, string rememberedTitle)
+        internal static long ChooseHandle(List<GameWindow> windows, IntPtr current, long passedHwnd, int passedPid)
         {
-            GameWindow currentWindow = null;
-            GameWindow titled = null;
-            GameWindow only = null;
-            int count = 0;
+            if (windows == null) windows = new List<GameWindow>();
+            MarkForeground(windows);
+            List<ClientCandidate> candidates = new List<ClientCandidate>();
             for (int i = 0; i < windows.Count; i++)
             {
-                if (Score(windows[i]) < 100) continue;
-                count++;
-                if (only == null) only = windows[i];
-                if (windows[i].Handle == current) currentWindow = windows[i];
-                if (rememberedTitle != null && rememberedTitle.Length > 0 && string.Equals(windows[i].Title, rememberedTitle, StringComparison.Ordinal)) titled = windows[i];
+                ClientCandidate candidate = new ClientCandidate();
+                candidate.Handle = windows[i].Handle.ToInt64();
+                candidate.Pid = windows[i].Pid;
+                candidate.Title = windows[i].Title;
+                candidate.Process = windows[i].ProcessName;
+                candidate.ClassName = windows[i].ClassName;
+                candidate.Width = windows[i].Client.Width;
+                candidate.Height = windows[i].Client.Height;
+                candidate.Foreground = windows[i].Foreground;
+                candidates.Add(candidate);
             }
-            if (currentWindow != null) return currentWindow;
-            if (titled != null) return titled;
-            if (count == 1) return only;
-            return null;
+            long currentHandle = current == IntPtr.Zero ? 0 : current.ToInt64();
+            return ClientBind.Choose(candidates, currentHandle, passedHwnd, passedPid);
+        }
+
+        private static void MarkForeground(List<GameWindow> windows)
+        {
+            for (int i = 0; i < windows.Count; i++) windows[i].Foreground = false;
+            IntPtr foreground = NativeMethods.GetForegroundWindow();
+            if (foreground == IntPtr.Zero) return;
+            IntPtr root = NativeMethods.GetAncestor(foreground, 2);
+            if (root == IntPtr.Zero) root = foreground;
+            if (Mark(windows, foreground) || Mark(windows, root)) return;
+            IntPtr next = foreground;
+            for (int n = 0; n < 16; n++)
+            {
+                next = NativeMethods.GetWindow(next, 2);
+                if (next == IntPtr.Zero) return;
+                if (Mark(windows, next)) return;
+            }
+        }
+
+        private static bool Mark(List<GameWindow> windows, IntPtr handle)
+        {
+            for (int i = 0; i < windows.Count; i++)
+            {
+                if (windows[i].Handle != handle) continue;
+                if (Score(windows[i]) < 100) return false;
+                windows[i].Foreground = true;
+                return true;
+            }
+            return false;
         }
 
         internal static string ClientLabel(GameWindow window, int index)
         {
-            string title = window == null ? "" : window.Title ?? "";
-            if (title.Length > 36) title = title.Substring(0, 36);
-            return "Client " + (index + 1).ToString() + ": " + title;
+            int pid = window == null ? 0 : window.Pid;
+            return ClientNames.Label(pid, index);
         }
 
         internal static bool IsForeground(IntPtr game)
@@ -147,8 +185,8 @@ namespace KavrosAfkWarden
         private IntRect metricsBox;
         private readonly WindowSurfaceCapture windowSurface = new WindowSurfaceCapture();
         private bool useSurface;
-        private long lastMetricsXp;
-        private bool haveMetricsXp;
+        private readonly MetricsLock xpLock = new MetricsLock();
+        private HudReading lastGood;
         private IntRect heldLife;
         private IntRect heldPrayer;
         private bool haveBoxes;
@@ -301,6 +339,7 @@ namespace KavrosAfkWarden
             {
                 lastClient = IntPtr.Zero;
                 haveBoxes = false;
+                lastGood = null;
                 Publish(new HudReading(), CaptureRoute.Missing, false, "Waiting for the Kavros window.");
                 return;
             }
@@ -308,13 +347,13 @@ namespace KavrosAfkWarden
             bool focused = WindowLocator.IsForeground(hwnd);
             if (!capture || iconic)
             {
-                Publish(new HudReading(), iconic ? CaptureRoute.Minimized : CaptureRoute.Covered, focused, iconic ? "Minimized" : "Paused while the panel is dragged.");
+                Publish(HeldReading(), iconic ? CaptureRoute.Minimized : CaptureRoute.Covered, focused, iconic ? "Minimized" : "Paused while the panel is dragged.");
                 return;
             }
             Rectangle client = NativeMethods.ClientBounds(hwnd);
             if (client.Width < 80 || client.Height < 80)
             {
-                Publish(new HudReading(), CaptureRoute.Covered, focused, "Waiting for the Kavros window.");
+                Publish(HeldReading(), CaptureRoute.Covered, focused, "Waiting for the Kavros window.");
                 return;
             }
             // A visible client, focused or not, is a screen copy. A covered client
@@ -331,26 +370,108 @@ namespace KavrosAfkWarden
             useSurface = windowSurface.Available;
             CaptureRoute route = CapturePolicy.Choose(true, false, visible, !visible, useSurface);
             HudReading reading = new HudReading();
+            xpLock.Fresh = false;
             if (CapturePolicy.PixelsAvailable(route))
             {
                 bool full = CapturePlan.WantFull(haveBoxes, DateTime.UtcNow, nextFullSearch);
                 if (full) reading = FullSearch(hwnd, client, settings, panel);
                 else if (haveBoxes) reading = LockedSearch(hwnd, client, settings);
             }
-            bool saw = reading.Hp != null || reading.Prayer != null || reading.StripFound || reading.BuffBarFound
-                || reading.MetricsFound || (reading.ChatHits != null && reading.ChatHits.Count > 0);
-            if (!saw)
-            {
-                string missed = route == CaptureRoute.WindowSurface || visible
-                    ? "Waiting for the hitpoint and prayer numbers."
-                    : "Kavros is covered. Hitpoints, prayer and potions stay on the last good reading.";
-                Publish(new HudReading(), route == CaptureRoute.WindowSurface ? route : (visible ? CaptureRoute.Screen : CaptureRoute.Covered), focused, missed);
-                return;
-            }
+            bool empty = reading.Hp == null && reading.Prayer == null && !reading.StripFound && !reading.BuffBarFound
+                && (reading.ChatHits == null || reading.ChatHits.Count == 0) && !xpLock.Fresh;
             string note = route == CaptureRoute.WindowSurface
                 ? "Watching the Kavros window."
                 : (focused ? "Watching the visible Kavros window." : "Watching the visible Kavros window in the background.");
+            if (empty)
+            {
+                if (lastGood != null)
+                {
+                    Publish(HeldReading(), route == CaptureRoute.WindowSurface ? route : (visible ? CaptureRoute.Screen : CaptureRoute.Covered), focused, note);
+                    return;
+                }
+                string missed = route == CaptureRoute.WindowSurface || visible
+                    ? "Waiting for the hitpoint and prayer numbers."
+                    : "Kavros is covered. Hitpoints, prayer and potions stay on the last good reading.";
+                Publish(reading, route == CaptureRoute.WindowSurface ? route : (visible ? CaptureRoute.Screen : CaptureRoute.Covered), focused, missed);
+                return;
+            }
+            FillBars(reading);
+            if (reading.Hp != null || reading.Prayer != null) lastGood = CopyReading(reading);
             Publish(reading, route, focused, note);
+        }
+
+        private HudReading HeldReading()
+        {
+            HudReading kept = CopyReading(lastGood);
+            kept.MetricsGain = false;
+            return kept;
+        }
+
+        private static HudReading CopyReading(HudReading source)
+        {
+            HudReading copy = new HudReading();
+            if (source == null) return copy;
+            copy.Hp = source.Hp;
+            copy.HpMax = source.HpMax;
+            copy.HpFromOrb = source.HpFromOrb;
+            copy.HpHow = source.HpHow;
+            copy.Prayer = source.Prayer;
+            copy.PrayerMax = source.PrayerMax;
+            copy.PrayerFromOrb = source.PrayerFromOrb;
+            copy.PrayerHow = source.PrayerHow;
+            copy.Adrenaline = source.Adrenaline;
+            copy.StripY = source.StripY;
+            copy.PotionSeconds = source.PotionSeconds;
+            copy.PotionCount = source.PotionCount;
+            copy.PotionHow = source.PotionHow;
+            copy.BuffBarFound = source.BuffBarFound;
+            copy.BuffScanned = source.BuffScanned;
+            copy.StripFound = source.StripFound;
+            copy.LifeText = source.LifeText;
+            copy.PrayerText = source.PrayerText;
+            copy.LifeBar = source.LifeBar;
+            copy.PrayerBar = source.PrayerBar;
+            copy.LifeTrace = source.LifeTrace;
+            copy.PrayerTrace = source.PrayerTrace;
+            copy.BuffTrace = source.BuffTrace;
+            copy.Buffs = source.Buffs;
+            copy.BuffRects = source.BuffRects;
+            copy.ChatHits = source.ChatHits;
+            copy.MetricsFound = source.MetricsFound;
+            copy.MetricsXp = source.MetricsXp;
+            copy.MetricsNote = source.MetricsNote;
+            return copy;
+        }
+
+        private void FillBars(HudReading reading)
+        {
+            if (lastGood == null || reading == null) return;
+            if (reading.Hp == null && lastGood.Hp != null)
+            {
+                reading.Hp = lastGood.Hp;
+                reading.HpMax = lastGood.HpMax;
+                reading.HpFromOrb = lastGood.HpFromOrb;
+                reading.HpHow = lastGood.HpHow;
+                reading.LifeText = lastGood.LifeText;
+                reading.LifeTrace = lastGood.LifeTrace;
+                if (reading.LifeBar.Width < 8) reading.LifeBar = lastGood.LifeBar;
+            }
+            if (reading.Prayer == null && lastGood.Prayer != null)
+            {
+                reading.Prayer = lastGood.Prayer;
+                reading.PrayerMax = lastGood.PrayerMax;
+                reading.PrayerFromOrb = lastGood.PrayerFromOrb;
+                reading.PrayerHow = lastGood.PrayerHow;
+                reading.PrayerText = lastGood.PrayerText;
+                reading.PrayerTrace = lastGood.PrayerTrace;
+                if (reading.PrayerBar.Width < 8) reading.PrayerBar = lastGood.PrayerBar;
+            }
+            if (!reading.MetricsFound && lastGood.MetricsFound && (reading.MetricsNote == null || reading.MetricsNote.Length == 0))
+            {
+                reading.MetricsFound = true;
+                reading.MetricsXp = lastGood.MetricsXp;
+                reading.MetricsNote = lastGood.MetricsNote;
+            }
         }
 
         private ImageBuffer Grab(IntPtr hwnd, Rectangle client, IntRect local, int slot)
@@ -386,7 +507,6 @@ namespace KavrosAfkWarden
             ImageBuffer image = Grab(hwnd, client, new IntRect(0, 0, client.Width, client.Height), 0);
             if (!CapturePlan.AcceptFrame(image))
             {
-                haveBoxes = false;
                 failedFull++;
                 return new HudReading();
             }
@@ -507,16 +627,7 @@ namespace KavrosAfkWarden
                 if (metrics != null)
                 {
                     MetricsReader.Result read = MetricsReader.Read(metrics);
-                    if (read.Found)
-                    {
-                        reading.MetricsFound = true;
-                        reading.MetricsXp = read.Xp;
-                        reading.MetricsNote = read.Note;
-                        if (haveMetricsXp && read.Xp > lastMetricsXp) reading.MetricsGain = true;
-                        lastMetricsXp = read.Xp;
-                        haveMetricsXp = true;
-                        if (reading.MetricsGain) publishedXp = true;
-                    }
+                    ApplyMetrics(reading, read, null);
                 }
             }
             ImageBuffer pack = packBox.Width > 8 ? Grab(hwnd, client, packBox, 3) : null;
@@ -596,20 +707,25 @@ namespace KavrosAfkWarden
                 chatBox = new IntRect(0, y, image.Width, Math.Max(40, h));
             }
             MetricsReader.Result metrics = MetricsReader.Read(image);
-            reading.MetricsNote = metrics.Note;
-            if (metrics.Found)
-            {
-                reading.MetricsFound = true;
-                reading.MetricsXp = metrics.Xp;
-                reading.MetricsNote = metrics.Note;
-                if (haveMetricsXp && metrics.Xp > lastMetricsXp) reading.MetricsGain = true;
-                lastMetricsXp = metrics.Xp;
-                haveMetricsXp = true;
-                if (reading.MetricsGain) publishedXp = true;
-                int mx = Math.Max(0, metrics.X);
-                int my = Math.Max(0, metrics.Y);
-                metricsBox = new IntRect(mx, my, Math.Min(image.Width - mx, Math.Max(40, metrics.W)), Math.Min(image.Height - my, Math.Max(24, metrics.H)));
-            }
+            ApplyMetrics(reading, metrics, image);
+        }
+
+        private void ApplyMetrics(HudReading reading, MetricsReader.Result metrics, ImageBuffer image)
+        {
+            if (reading == null) return;
+            xpLock.Observe(metrics.Found, metrics.Xp, metrics.Note, DateTime.UtcNow);
+            reading.MetricsFound = xpLock.Found;
+            reading.MetricsXp = xpLock.Xp;
+            reading.MetricsNote = xpLock.Note;
+            reading.MetricsGain = xpLock.Gain;
+            if (reading.MetricsGain) publishedXp = true;
+            if (!metrics.Found || !xpLock.Fresh || image == null) return;
+            int mx = Math.Max(0, metrics.X);
+            int my = Math.Max(0, metrics.Y);
+            int width = Math.Min(image.Width - mx, Math.Max(40, metrics.W));
+            int height = Math.Min(image.Height - my, Math.Max(24, metrics.H));
+            if (width < 4 || height < 4) return;
+            metricsBox = new IntRect(mx, my, width, height);
         }
 
         private void PublishSkills()

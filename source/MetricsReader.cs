@@ -273,4 +273,76 @@ namespace KavrosAfkWarden
             return glyph;
         }
     }
+
+    // Keeps the last total that agreed with itself. A one-off jump or drop,
+    // such as a fragment of the number, is ignored until the same value repeats.
+    public sealed class MetricsLock
+    {
+        public bool Found;
+        public long Xp;
+        public bool Gain;
+        public bool Fresh;
+        public string Note = "not found";
+        private bool have;
+        private long locked;
+        private long pending;
+        private int pendingCount;
+        private DateTime missedSince = DateTime.MinValue;
+
+        public void Observe(bool found, long xp, string rawNote, DateTime now)
+        {
+            Gain = false;
+            Fresh = false;
+            if (found && Accept(xp))
+            {
+                if (have && xp > locked) Gain = true;
+                locked = xp;
+                have = true;
+                pendingCount = 0;
+                missedSince = DateTime.MinValue;
+                Found = true;
+                Fresh = true;
+                Xp = locked;
+                Note = "xp=" + locked.ToString();
+                return;
+            }
+            if (!have)
+            {
+                Found = false;
+                Xp = 0;
+                Note = found ? "reject " + xp.ToString() : (rawNote ?? "not found");
+                return;
+            }
+            if (found)
+            {
+                Found = true;
+                Xp = locked;
+                Note = "held xp=" + locked.ToString() + " reject " + xp.ToString();
+                missedSince = DateTime.MinValue;
+                return;
+            }
+            if (missedSince == DateTime.MinValue) missedSince = now;
+            if ((now - missedSince).TotalSeconds >= 5)
+            {
+                Found = false;
+                Note = "lost";
+                return;
+            }
+            Found = true;
+            Xp = locked;
+            Note = "held xp=" + locked.ToString();
+        }
+
+        private bool Accept(long xp)
+        {
+            if (!have) return xp >= 0;
+            long delta = xp - locked;
+            long room = locked / 4;
+            if (room < 200) room = 200;
+            if (delta >= -5 && delta <= room) return true;
+            if (xp == pending) pendingCount++;
+            else { pending = xp; pendingCount = 1; }
+            return pendingCount >= 5;
+        }
+    }
 }

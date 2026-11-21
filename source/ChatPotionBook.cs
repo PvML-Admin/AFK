@@ -24,6 +24,7 @@ namespace KavrosAfkWarden
         {
             public string Kind;
             public string State;
+            public DateTime Since;
         }
 
         private readonly List<Seen> seen = new List<Seen>();
@@ -89,6 +90,11 @@ namespace KavrosAfkWarden
             Log = log.ToString();
             Detail = Roster();
             return notices;
+        }
+
+        public void Refresh()
+        {
+            Detail = Roster();
         }
 
         private static void Append(System.Text.StringBuilder log, ChatHit hit, string decision)
@@ -159,12 +165,14 @@ namespace KavrosAfkWarden
                 if (pots[i].Kind == kind)
                 {
                     pots[i].State = state;
+                    if (state == "active") pots[i].Since = DateTime.UtcNow;
                     return;
                 }
             }
             Pot pot = new Pot();
             pot.Kind = kind;
             pot.State = state;
+            if (state == "active") pot.Since = DateTime.UtcNow;
             pots.Add(pot);
         }
 
@@ -177,7 +185,7 @@ namespace KavrosAfkWarden
                 string state = StateOf(order[i]);
                 if (state.Length == 0) continue;
                 if (line.Length > 0) line.Append(" · ");
-                line.Append(Short(order[i])).Append(" ").Append(ShortState(state));
+                line.Append(Short(order[i])).Append(" ").Append(LabelFor(order[i], state));
             }
             return line.ToString();
         }
@@ -215,8 +223,37 @@ namespace KavrosAfkWarden
         {
             if (state == "low") return "low";
             if (state == "expired") return "expired";
-            if (state == "active") return "ok";
+            if (state == "active") return "Active";
             return "";
+        }
+
+        // Overload potions last six minutes. Other chat pots stay "Active" with no guessed clock.
+        public static int ActiveSeconds(string kind)
+        {
+            if (kind == "elder" || kind == "overload") return 360;
+            return 0;
+        }
+
+        // Low is orange and expired is red. Active keeps the panel text colour.
+        public static int ValueArgb(string part)
+        {
+            if (part != null && part.IndexOf("expired") >= 0) return unchecked((int)0xFFE64640);
+            if (part != null && part.IndexOf("low") >= 0) return unchecked((int)0xFFFF9628);
+            return 0;
+        }
+
+        private string LabelFor(string kind, string state)
+        {
+            if (state != "active") return ShortState(state);
+            int seconds = ActiveSeconds(kind);
+            if (seconds <= 0) return "Active";
+            DateTime since = DateTime.MinValue;
+            for (int i = 0; i < pots.Count; i++)
+                if (pots[i].Kind == kind) since = pots[i].Since;
+            if (since == DateTime.MinValue) return "Active";
+            int left = seconds - (int)(DateTime.UtcNow - since).TotalSeconds;
+            if (left < 0) left = 0;
+            return (left / 60).ToString() + ":" + (left % 60).ToString("00");
         }
 
         public static string Words(string state)
