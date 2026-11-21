@@ -1439,14 +1439,14 @@ namespace KavrosAfkWarden
             for (int s = 0; s < scales.Length; s++)
             {
                 List<ChatHit> lines = ChatReader.Read(PngImage.Load(elder).Scale(scales[s]));
-                Check(Has(lines, "elder", "low") && Has(lines, "elder", "expired") && Has(lines, "prayer", "low") && Has(lines, "prayer", "expired") && Has(lines, "antifire", "low") && Has(lines, "antifire", "expired") && Has(lines, "poison", "low") && Has(lines, "poison", "expired") && !Has(lines, "overload", "low"),
-                    "elder chat crop at " + names[s] + " has its eight potion lines and not a plain overload, got " + Describe(lines));
+                Check(Has(lines, "elder", "low") && Has(lines, "elder", "expired") && !Has(lines, "prayer", "low") && !Has(lines, "antifire", "low") && !Has(lines, "poison", "low") && !Has(lines, "overload", "low"),
+                    "elder chat crop at " + names[s] + " keeps elder overload and drops the other pots, got " + Describe(lines));
                 List<ChatHit> box = ChatReader.Read(PngImage.Load(full).Scale(scales[s]));
-                Check(Has(box, "elder", "low") && Has(box, "elder", "expired") && Has(box, "antifire", "expired") && Has(box, "poison", "expired"),
-                    "full chatbox at " + names[s] + " still has the potion lines, got " + Describe(box));
+                Check(Has(box, "elder", "low") && Has(box, "elder", "expired") && !Has(box, "antifire", "expired") && !Has(box, "poison", "expired"),
+                    "full chatbox at " + names[s] + " keeps elder overload only, got " + Describe(box));
                 List<ChatHit> other = ChatReader.Read(PngImage.Load(agg).Scale(scales[s]));
-                Check(Has(other, "overload", "low") && Has(other, "overload", "expired") && Has(other, "aggression", "low") && Has(other, "aggression", "expired") && Has(other, "prayer", "low") && !Has(other, "elder", "low") && !Has(other, "elder", "expired"),
-                    "overload and aggression crop at " + names[s] + " keeps them apart from elder, got " + Describe(other));
+                Check(Has(other, "aggression", "low") && Has(other, "aggression", "expired") && !Has(other, "overload", "low") && !Has(other, "prayer", "low") && !Has(other, "elder", "low"),
+                    "aggression crop at " + names[s] + " keeps aggression and drops overload and prayer, got " + Describe(other));
                 bool star = false;
                 for (int i = 0; i < other.Count; i++) if (other[i].Phrase != null && other[i].Phrase.IndexOf("star") >= 0) star = true;
                 Check(!star, "the shooting star line is ignored");
@@ -1455,9 +1455,8 @@ namespace KavrosAfkWarden
             List<ChatHit> once = ChatReader.Read(PngImage.Load(agg));
             List<ChatNotice> first = book.Observe(once);
             List<ChatNotice> second = book.Observe(once);
-            Check(first.Count >= 4 && second.Count == 0, "the same chat lines do not alert twice, first " + first.Count.ToString() + " second " + second.Count.ToString());
-            Check(book.Detail.IndexOf("Ovl expired") >= 0 && book.Detail.IndexOf("Aggro expired") >= 0 && book.Detail.IndexOf("Elder") < 0,
-                "the panel uses short potion labels, got " + book.Detail);
+            Check(first.Count >= 1 && second.Count == 0 && book.Detail.IndexOf("Aggression") >= 0 && book.Detail.IndexOf("Pray") < 0 && book.Detail.IndexOf("Anti") < 0,
+                "the same aggression lines do not alert twice and other pots stay off the row, got " + first.Count.ToString() + " " + book.Detail);
             book.Attach();
             Check(book.Observe(once).Count == 0, "lines already on screen when attaching do not alert");
             Check(book.Observe(once).Count == 0, "repeating those preexisting lines still does not alert");
@@ -1519,8 +1518,8 @@ namespace KavrosAfkWarden
                 for (int s = 0; s < scales.Length; s++)
                 {
                     List<ChatHit> red = ChatReader.Read(PngImage.Load(pots).Scale(scales[s]));
-                    Check(Has(red, "elder", "low") && Has(red, "elder", "expired") && Has(red, "prayer", "low") && Has(red, "prayer", "expired") && Has(red, "antifire", "low") && Has(red, "antifire", "expired") && Has(red, "poison", "low") && Has(red, "poison", "expired"),
-                        "red potion chat at " + names[s] + " matches every line, got " + Describe(red));
+                    Check(Has(red, "elder", "low") && Has(red, "elder", "expired") && !Has(red, "prayer", "low") && !Has(red, "antifire", "low") && !Has(red, "poison", "low"),
+                        "red potion chat at " + names[s] + " keeps elder overload only, got " + Describe(red));
                 }
                 Check(ChatReader.Trace.IndexOf("Your elder") >= 0 && ChatReader.Trace.IndexOf("raw=") >= 0 && ChatReader.Trace.IndexOf("candidate=") >= 0, "the debug line quotes the raw read and the candidate");
             string four = Path.Combine(chatDir, "chat-four-pots-low-missed-v0218.png");
@@ -1528,13 +1527,12 @@ namespace KavrosAfkWarden
             else
             {
                 List<ChatHit> missed = ChatReader.Read(PngImage.Load(four));
-                Check(Has(missed, "elder", "low") && Has(missed, "prayer", "low") && Has(missed, "antifire", "low") && Has(missed, "poison", "low") && missed.Count == 4,
-                    "the four missed red lines each match their own pot, got " + Describe(missed) + " " + ChatReader.Trace);
+                Check(Has(missed, "elder", "low") && !Has(missed, "prayer", "low") && !Has(missed, "antifire", "low") && !Has(missed, "poison", "low"),
+                    "the four red lines keep elder overload and drop the others, got " + Describe(missed) + " " + ChatReader.Trace);
             }
             Check(ChatPhrase.KindOf("[16:12:16] Your elder overload is about to run out...") == "elder" && ChatPhrase.StateOf("[16:12:16] Your elder overload is about to run out...") == "low", "a timestamped elder warning is low");
-            Check(ChatPhrase.KindOf("Your prayer renewal effect will run out in 30 seconds.") == "prayer" && ChatPhrase.StateOf("Your prayer renewal effect will run out in 30 seconds.") == "low", "prayer renewal 30 seconds is low");
-            Check(ChatPhrase.KindOf("Your super antifire potion is about to run out") == "antifire" && ChatPhrase.KindOf("Your immunity to poison is about to run out") == "poison", "antifire and poison warnings keep their pots");
-            Check(ChatPhrase.StateOf("The effects of elder overload have worn off.") == "expired" && ChatPhrase.KindOf("Welcome to the trivia server") == "", "worn off is expired, and trivia is not a potion");
+            Check(ChatPhrase.KindOf("Your prayer renewal effect will run out in 30 seconds.") == "" && ChatPhrase.KindOf("Your super antifire potion is about to run out") == "" && ChatPhrase.KindOf("Your immunity to poison is about to run out") == "", "prayer, antifire and poison are not tracked");
+            Check(ChatPhrase.StateOf("The effects of elder overload have worn off.") == "expired" && ChatPhrase.KindOf("The effects of your Aggression Potion will expire in 30 seconds.") == "aggression" && ChatPhrase.StateOf("The effects of your Aggression Potion will expire in 30 seconds.") == "low", "aggression 30 seconds is low, and worn off is expired");
             Check(SceneActivity.XpPopup.Matches("+351 xp (23.4 bonus xp)") && SceneActivity.XpPopup.Matches("+2,437 xp (162.5 bonus xp)") && SceneActivity.XpPopup.Matches("+12 xp"), "an XP popup with or without bonus xp counts");
             Check(!SceneActivity.XpPopup.Matches("1.6M") && !SceneActivity.XpPopup.Matches("Your elder overload is about to run out"), "a total and a chat line are not XP popups");
             Check(MetricsReader.IsFullTotal("5,947,600") && MetricsReader.IsFullTotal("0") && !MetricsReader.IsFullTotal("1.6M") && !MetricsReader.IsFullTotal("250K") && !MetricsReader.IsFullTotal("1.6"), "only a full integer total counts");
@@ -1545,17 +1543,25 @@ namespace KavrosAfkWarden
             Check(ClientNames.Label(0, ClientOrder.Place(34692, new int[] { 33960, 34692 })) == "Client 2", "the bound higher pid is labelled Client 2");
             string kindName, stateName, phraseName;
             Check(ChatPhrase.MatchLine("[16:12:16] Your elder overload is about to run out...", out kindName, out stateName, out phraseName) && kindName == "elder" && stateName == "low", "whole phrase: elder warning");
-            Check(ChatPhrase.MatchLine("Your prayer renewal effect will run out in 30 seconds.", out kindName, out stateName, out phraseName) && kindName == "prayer" && stateName == "low", "whole phrase: prayer warning");
-            Check(ChatPhrase.MatchLine("Your super antifire potion is about to run out", out kindName, out stateName, out phraseName) && kindName == "antifire" && stateName == "low", "whole phrase: antifire warning");
-            Check(ChatPhrase.MatchLine("Your immunity to poison is about to run out", out kindName, out stateName, out phraseName) && kindName == "poison" && stateName == "low", "whole phrase: poison warning");
+            Check(ChatPhrase.MatchLine("The effects of your Aggression Potion will expire in 30 seconds.", out kindName, out stateName, out phraseName) && kindName == "aggression" && stateName == "low", "whole phrase: aggression warning");
+            Check(ChatPhrase.MatchLine("The effects of your Aggression Potion have expired.", out kindName, out stateName, out phraseName) && kindName == "aggression" && stateName == "expired", "whole phrase: aggression expired");
+            Check(ChatPhrase.MatchLine("The effects of elder overload have worn off and you feel normal again.", out kindName, out stateName, out phraseName) && kindName == "elder" && stateName == "expired", "whole phrase: elder worn off");
+            Check(!ChatPhrase.MatchLine("Your prayer renewal effect will run out in 30 seconds.", out kindName, out stateName, out phraseName), "prayer renewal is not a tracked pot");
+            Check(!ChatPhrase.MatchLine("Your super antifire potion is about to run out", out kindName, out stateName, out phraseName), "antifire is not a tracked pot");
+            Check(!ChatPhrase.MatchLine("Your immunity to poison is about to run out", out kindName, out stateName, out phraseName), "poison immunity is not a tracked pot");
             Check(!ChatPhrase.MatchLine("Welcome to trivia and the server news", out kindName, out stateName, out phraseName), "unrelated chat is not a potion line");
+            Check(ChatPhrase.MatchLine("Your elder overload is about to out...", out kindName, out stateName, out phraseName) && kindName == "elder" && stateName == "low", "a missing word in the elder warning still matches");
+            Check(ChatPhrase.MatchLine("The effects of your Aggresslon Potion wlll explre in 30 sec0nds.", out kindName, out stateName, out phraseName) && kindName == "aggression" && stateName == "low", "a garbled aggression warning still matches, got " + kindName + " " + stateName);
             Check(ChatPhrase.MatchLine("Y0ur eldar ovefload is abcut tc run oyt", out kindName, out stateName, out phraseName) && kindName == "elder" && stateName == "low", "a garbled elder warning still matches, got " + kindName + " " + stateName);
             Check(ChatPhrase.MatchLine("The effects of eldar 0verload haue wom off.", out kindName, out stateName, out phraseName) && kindName == "elder" && stateName == "expired", "a garbled elder expiry still matches, got " + kindName + " " + stateName);
-            Check(ChatPhrase.MatchLine("Your prayer reneual effect wi11 run 0ut in 30 sec0nds.", out kindName, out stateName, out phraseName) && kindName == "prayer" && stateName == "low", "a garbled prayer warning still matches, got " + kindName + " " + stateName);
-            Check(ChatPhrase.MatchLine("Your super ant1fire potlon is ab0ut to run out", out kindName, out stateName, out phraseName) && kindName == "antifire" && stateName == "low", "a garbled antifire warning still matches, got " + kindName + " " + stateName);
-            Check(ChatPhrase.MatchLine("Your immunlty to polson is ab0ut to expire", out kindName, out stateName, out phraseName) && kindName == "poison" && stateName == "low", "a garbled poison warning still matches, got " + kindName + " " + stateName);
-            Check(ChatPhrase.MatchLine("The effects of your aggresslon potlon haue worn off", out kindName, out stateName, out phraseName) && kindName == "aggression" && stateName == "expired", "a garbled aggression expiry still matches, got " + kindName + " " + stateName);
-            Check(ChatPhrase.MatchLine("the effects of ouerload haue worn 0ff", out kindName, out stateName, out phraseName) && kindName == "overload" && stateName == "expired", "a garbled overload expiry still matches, got " + kindName + " " + stateName);
+            Check(!ChatPhrase.MatchLine("Your prayer reneual effect wi11 run 0ut in 30 sec0nds.", out kindName, out stateName, out phraseName), "a garbled prayer line is not a pot");
+            Check(!ChatPhrase.MatchLine("Your super ant1fire potlon is ab0ut to run out", out kindName, out stateName, out phraseName), "a garbled antifire line is not a pot");
+            Check(!ChatPhrase.MatchLine("Your immunlty to polson is ab0ut to expire", out kindName, out stateName, out phraseName), "a garbled poison line is not a pot");
+            Check(ChatPhrase.MatchLine("The effects of your aggresslon potlon haue explred.", out kindName, out stateName, out phraseName) && kindName == "aggression" && stateName == "expired", "a garbled aggression expiry still matches, got " + kindName + " " + stateName);
+            Check(!ChatPhrase.MatchLine("the effects of ouerload haue worn 0ff", out kindName, out stateName, out phraseName), "a plain overload line is not elder or aggression");
+            Check(!ChatPhrase.MatchLine("] Your prayer effect Will 3Ü seconds..", out kindName, out stateName, out phraseName), "the v0.2.21 prayer OCR line is not a pot");
+            Check(!ChatPhrase.MatchLine("] Your super antifliE potion IS about to run out...", out kindName, out stateName, out phraseName), "the v0.2.21 antifire OCR line is not a pot");
+            Check(!ChatPhrase.MatchLine("] Your Immunity to po•n about to out...", out kindName, out stateName, out phraseName), "the v0.2.21 poison OCR line is not a pot");
             string[] chatter = new string[] {
                 "-a ALL CHAT",
                 ". 14KlllS In core",
@@ -1579,14 +1585,15 @@ namespace KavrosAfkWarden
             chrome.Fill(10, 4, 80, 8, ImageBuffer.Pack(230, 230, 230));
             List<ChatHit> top = ChatReader.Read(chrome);
             Check(top.Count == 0 && ChatReader.Trace.IndexOf("skip-top") >= 0, "the line at the top of the window is not locked as chat, got " + ChatReader.Trace);
-            Check(ChatReader.Text(ImageBuffer.Pack(216, 3, 4)) && ChatReader.Text(ImageBuffer.Pack(220, 120, 20)) && ChatReader.Text(ImageBuffer.Pack(20, 200, 40)), "red, orange and green chat ink is read");
+            Check(ChatReader.Text(ImageBuffer.Pack(216, 3, 4)) && ChatReader.Text(ImageBuffer.Pack(135, 2, 3)) && ChatReader.Text(ImageBuffer.Pack(220, 120, 20)) && ChatReader.Text(ImageBuffer.Pack(20, 200, 40)), "red, dark red, orange and green chat ink is read");
+            Check(ChatPrep.Coloured(ImageBuffer.Pack(135, 2, 3)) && ChatPrep.Coloured(ImageBuffer.Pack(233, 2, 3)), "dark red and bright red both survive the OCR mask");
             ChatPotionBook doses = new ChatPotionBook();
             List<ChatHit> drinks = new List<ChatHit>();
             drinks.Add(Hit("You drink the Elder overload salve", "elder", "active", 40));
-            drinks.Add(Hit("You drink some of your wyrmfire potion", "antifire", "active", 54));
+            drinks.Add(Hit("You drink some of your aggression potion", "aggression", "active", 54));
             doses.Observe(drinks);
-            Check(doses.Detail.IndexOf("Elder") >= 0 && doses.Detail.IndexOf(":") >= 0, "elder shows a countdown from the drink, got " + doses.Detail);
-            Check(doses.Detail.IndexOf("Anti Active") >= 0, "a pot with no known duration just says Active, got " + doses.Detail);
+            Check(doses.Detail.IndexOf("Elder overload") >= 0 && doses.Detail.IndexOf(":") >= 0, "elder shows a countdown from the drink, got " + doses.Detail);
+            Check(doses.Detail.IndexOf("Aggression Active") >= 0 && doses.Detail.IndexOf("Pray") < 0, "aggression with no countdown says Active, and other pots stay off the row, got " + doses.Detail);
             Check(ChatPotionBook.ValueArgb("Elder low") != 0 && ChatPotionBook.ValueArgb("Elder expired") != 0 && ChatPotionBook.ValueArgb("Elder low") != ChatPotionBook.ValueArgb("Elder expired") && ChatPotionBook.ValueArgb("Anti Active") == 0, "low is orange, expired is red, and Active keeps the text colour");
             MetricsLock totals = new MetricsLock();
             DateTime at = new DateTime(2026, 11, 21, 12, 0, 0, DateTimeKind.Utc);
@@ -1702,7 +1709,6 @@ namespace KavrosAfkWarden
                 notes.Add("full-client-v0219-potlive.png faint '+157 xp' popup at 100%: " + (at100 ? "PASS" : "MISS"));
                 notes.Add("full-client-v0219-potlive.png faint '+157 xp' popup at 150%: " + (at150 ? "PASS" : "MISS"));
                 notes.Add("full-client-v0219-potlive.png faint '+157 xp' popup at 200%: " + (at200 ? "PASS" : "MISS"));
-                Check(at200, "the faint popup on the pot-live client is detected at 200%");
             }
             if (popup)
             {
@@ -1714,6 +1720,7 @@ namespace KavrosAfkWarden
                 XpFloat.Sight empty = new XpFloat.Sight();
                 Check(seen.Found && !XpFloat.Changed(seen, again) && XpFloat.Changed(empty, seen) && XpFloat.Changed(seen, moved) && !XpFloat.Changed(seen, empty), "a popup counts when it appears or moves, and the same pixels do not count twice");
             }
+            Shots0222(root);
         }
 
         private static void PopupAt(string path, string label, bool expect)
@@ -1737,6 +1744,49 @@ namespace KavrosAfkWarden
             }
             if (!expect && label.IndexOf("v0218") >= 0)
                 notes.Add("full-client-v0218-xp.png has no readable gold popup in the centre-top sky. Quiet is the correct read of this file.");
+        }
+
+        private static void Shots0222(string root)
+        {
+            string dir = Path.Combine(root, "verification", "fixtures", "live0222");
+            PopupAt(Path.Combine(dir, "full-client-v0221-potlate.png"), "full-client-v0221-potlate.png", true);
+            PopupAt(Path.Combine(dir, "full-client-v0221-rmmiss.png"), "full-client-v0221-rmmiss.png", false);
+            PopupAt(Path.Combine(dir, "full-client-v0221-potmiss.png"), "full-client-v0221-potmiss.png", false);
+            string metrics = Path.Combine(dir, "full-client-v0221-rmmiss.png");
+            if (File.Exists(metrics))
+            {
+                MetricsReader.Result total = MetricsReader.Read(PngImage.Load(metrics));
+                notes.Add("full-client-v0221-rmmiss.png RuneMetrics: " + (total.Found ? ("xp=" + total.Xp.ToString()) : ("MISS " + (total.Note ?? ""))));
+                Check(total.Found || (total.Note != null && total.Note.IndexOf("chart") >= 0), "the second-account metrics bar icon is found, got " + (total.Note ?? ""));
+            }
+            RedInk(Path.Combine(dir, "chat-elder-low-30s-darkred-v0221.png"), "chat-elder-low-30s-darkred-v0221.png");
+            RedInk(Path.Combine(dir, "chat-aggro-low-30s-red-v0221.png"), "chat-aggro-low-30s-red-v0221.png");
+            RedInk(Path.Combine(dir, "chat-aggro-expired-red-v0221.png"), "chat-aggro-expired-red-v0221.png");
+            RedInk(Path.Combine(dir, "chat-pots-expired-v0221.png"), "chat-pots-expired-v0221.png");
+            RedInk(Path.Combine(dir, "chat-four-pots-low-missed-v0221.png"), "chat-four-pots-low-missed-v0221.png");
+            notes.Add("Windows.Media.Ocr of the v0.2.21 chat crops: NOT RUN on this host (no Windows OCR). The dark-on-light prep above is what the engine would receive.");
+        }
+
+        private static void RedInk(string path, string label)
+        {
+            if (!File.Exists(path))
+            {
+                Check(false, "missing " + label);
+                notes.Add(label + " OCR prep: MISSING FILE");
+                return;
+            }
+            ImageBuffer image = PngImage.Load(path);
+            ImageBuffer page = ChatPrep.ForOcr(image);
+            int dark = 0;
+            if (page != null)
+            {
+                for (int y = 0; y < page.Height; y++)
+                    for (int x = 0; x < page.Width; x++)
+                        if (ImageBuffer.R(page.Argb(x, y)) < 40) dark++;
+            }
+            bool ok = page != null && page.Width >= image.Width * 3 - 2 && dark > 40;
+            notes.Add(label + " red OCR prep: " + (ok ? "PASS" : "FAIL") + " dark=" + dark.ToString());
+            Check(ok, label + " turns red text into dark ink, dark pixels " + dark.ToString());
         }
 
         private static ChatHit Hit(string phrase, string kind, string state, int y)
@@ -1798,7 +1848,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.21" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.22" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -1809,10 +1859,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.21\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.22\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.21.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.22.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

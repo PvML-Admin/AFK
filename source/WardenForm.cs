@@ -246,7 +246,7 @@ namespace KavrosAfkWarden
             Potion.ColorParts = true;
             Place(Afk, 194);
             metricsHint.SetBounds(12, 224, 376, 16);
-            metricsHint.Text = "No XP popup or total";
+            metricsHint.Text = "Enable precise values in RuneMetrics";
             metricsHint.Font = KavrosTheme.Ui(7.5F, false);
             metricsHint.ForeColor = Color.FromArgb(120, 128, 136);
             metricsHint.BackColor = KavrosTheme.Bg;
@@ -632,11 +632,6 @@ namespace KavrosAfkWarden
             Controls.Add(volume);
             updates = Check("Check for updates at startup", 28, 800, 320, settings.CheckForUpdates);
             saveDebug = Check("Save debug capture", 360, 800, 240, settings.SaveDebug);
-            AddButton("Pin hitpoints", 28, 840, 120, ButtonTone.Secondary, delegate { Pin(0); });
-            AddButton("Pin prayer", 156, 840, 110, ButtonTone.Secondary, delegate { Pin(1); });
-            AddButton("Pin buff bar", 274, 840, 130, ButtonTone.Secondary, delegate { Pin(2); });
-            AddButton("Clear pins", 412, 840, 110, ButtonTone.Secondary, delegate { settings.HpPinW = 0; settings.PrayerPinW = 0; settings.BuffPinW = 0; Save(); SetStatus("Pins cleared. Automatic search is on."); });
-
             AddButton("Test notification", 28, 888, 160, ButtonTone.Primary, delegate { popup.Present(SampleAlert(), (int)banner.Value); });
             AddButton("Test sound", 198, 888, 120, ButtonTone.Secondary, delegate { sound.Play("hp"); });
             AddButton("Check for updates", 328, 888, 150, ButtonTone.Secondary, delegate { AppUpdates.Check(this, true, SetStatus); });

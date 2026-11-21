@@ -58,6 +58,16 @@ namespace KavrosAfkWarden
                 Result scaled = ReadScale(large);
                 if (scaled.Found) return scaled;
             }
+            // A small interface draws the bars and digits under the template size.
+            if (image.Width < 1700)
+            {
+                ImageBuffer up = image.Scale(2);
+                if (up != null)
+                {
+                    Result grown = ReadScale(up);
+                    if (grown.Found) return grown;
+                }
+            }
             return result;
         }
 
@@ -65,14 +75,16 @@ namespace KavrosAfkWarden
         {
             Result result = new Result();
             result.Note = "no XP row";
+            bool sawChart = false;
             int step = image.Width > 1600 ? 3 : 1;
-            for (int y = 0; y < image.Height - 16; y += step)
+            for (int y = 0; y < image.Height - 20; y += step)
             {
-                for (int x = 0; x < image.Width - 16; x += step)
+                for (int x = 0; x < image.Width - 30; x += step)
                 {
                     if (!Chart(image, x, y)) continue;
+                    sawChart = true;
                     long xp;
-                    if (TryRow(image, x + 16, y - 2, 220, 16, out xp))
+                    if (TryRow(image, x + 20, y - 4, 240, 24, out xp))
                     {
                         result.Found = true;
                         result.Xp = xp;
@@ -85,7 +97,7 @@ namespace KavrosAfkWarden
                     }
                 }
             }
-            result.Note = "no XP row";
+            result.Note = sawChart ? "chart, digits unread" : "no XP row";
             return result;
         }
 
@@ -113,21 +125,32 @@ namespace KavrosAfkWarden
             return new ImageBuffer(width, height, pixels);
         }
 
+        // The total row's icon is three bars: red, then green, then blue.
+        // A compass has the same colours in a ring, so the order matters.
+        // The probe is wider than 16px because at 1440p the icon is about 24px.
         private static bool Chart(ImageBuffer image, int x, int y)
         {
+            int width = 28;
+            int height = 18;
+            if (x + width >= image.Width || y + height >= image.Height) return false;
             int red = 0, green = 0, blue = 0;
-            for (int dy = 0; dy < 16; dy++)
+            int redX = 0, greenX = 0, blueX = 0;
+            for (int dy = 0; dy < height; dy++)
             {
-                for (int dx = 0; dx < 16; dx++)
+                for (int dx = 0; dx < width; dx++)
                 {
                     int c = image.Argb(x + dx, y + dy);
                     int r = ImageBuffer.R(c), g = ImageBuffer.G(c), b = ImageBuffer.B(c);
-                    if (g > 100 && g > r + 30 && g > b) green++;
-                    if (r > 100 && r > g + 30 && b < 140) red++;
-                    if (b > 100 && b > r + 15 && b > g) blue++;
+                    if (g > 90 && g > r + 25 && g > b) { green++; greenX += x + dx; }
+                    else if (r > 90 && r > g + 25 && b < 150) { red++; redX += x + dx; }
+                    else if (b > 90 && b > r + 12 && b > g) { blue++; blueX += x + dx; }
                 }
             }
-            return red > 3 && green > 3 && blue > 3;
+            if (red < 4 || green < 4 || blue < 4) return false;
+            int rx = redX / red;
+            int gx = greenX / green;
+            int bx = blueX / blue;
+            return rx + 1 < gx && gx + 1 < bx && bx - rx >= 4 && bx - rx <= 24;
         }
 
         private static bool TryRow(ImageBuffer image, int x, int y, int w, int h, out long xp)

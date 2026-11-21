@@ -882,7 +882,7 @@ namespace KavrosAfkWarden
             if (image == null || image.Width < 80 || image.Height < 80) return new Sight();
             int x0 = image.Width * 20 / 100;
             int x1 = image.Width * 80 / 100;
-            int y0 = Math.Max(2, image.Height * 4 / 100);
+            int y0 = 0;
             int y1 = image.Height * 20 / 100;
             return Scan(image, x0, x1, y0, y1);
         }
@@ -929,7 +929,8 @@ namespace KavrosAfkWarden
             int w = image.Width;
             int h = image.Height;
             int gap = Math.Max(3, w / 420);
-            int join = Math.Max(6, w / 160);
+            // A compass can sit in the middle of the line. Join across that gap.
+            int join = Math.Max(18, w / 50);
             int minW = Math.Max(64, w * 5 / 100);
             int maxW = Math.Max(180, w * 16 / 100);
             int maxH = Math.Max(16, h * 2 / 100);
@@ -1039,7 +1040,8 @@ namespace KavrosAfkWarden
                         stamp = unchecked(stamp * 31 + y);
                     }
                 }
-                if (n < 10 || pale * 3 < n || green > n * 48) continue;
+                // Real popup ink is pale gold. Leaves and the compass ring are greener.
+                if (n < 10 || pale * 5 < n * 2 || green > n * 34) continue;
                 if (best.Found && n <= best.Ink) continue;
                 best.Found = true;
                 best.X = band.Left;

@@ -157,7 +157,7 @@ namespace KavrosAfkWarden
                 trace.Append("y=").Append(best.Y).Append(" ").Append(best.Kind).Append(" ").Append(best.State)
                     .Append(" score=").Append(best.Score.ToString("0.00"))
                     .Append(" raw=\"").Append(raw).Append("\" candidate=\"").Append(candidate).Append("\"");
-                hits.Add(best);
+                if (best.Kind == "elder" || best.Kind == "aggression") hits.Add(best);
             }
             Trace = trace.ToString();
             return hits;
@@ -412,7 +412,7 @@ namespace KavrosAfkWarden
                 Score(got, parts[2], out hit, out need, out anchor, out cue);
                 if (!anchor || !cue || need <= 0) continue;
                 double ratio = (double)hit / (double)need;
-                if (ratio < 0.72) continue;
+                if (ratio < 0.5) continue;
                 if (hit > bestHit || (hit == bestHit && ratio > bestRatio))
                 {
                     bestHit = hit;
@@ -487,16 +487,14 @@ namespace KavrosAfkWarden
 
         private static bool Anchor(string word)
         {
-            return word == Fold("elder") || word == Fold("overload") || word == Fold("prayer")
-                || word == Fold("renewal") || word == Fold("antifire") || word == Fold("poison")
-                || word == Fold("immunity") || word == Fold("aggression");
+            return word == Fold("elder") || word == Fold("aggression");
         }
 
         private static bool Cue(string word)
         {
             return word == Fold("about") || word == Fold("will") || word == Fold("worn")
                 || word == Fold("expired") || word == Fold("expire") || word == Fold("wear")
-                || word == Fold("has");
+                || word == Fold("has") || word == Fold("off");
         }
 
         private static bool Stop(string word)
@@ -510,32 +508,17 @@ namespace KavrosAfkWarden
         {
             return new string[] {
                 "elder|low|your elder overload is about to run out",
-                "elder|expired|the effects of elder overload have worn off",
-                "prayer|low|your prayer renewal effect will run out",
-                "prayer|expired|your prayer renewal effect has run out",
-                "antifire|low|your super antifire potion is about to run out",
-                "antifire|expired|your super antifire potion has run out",
-                "poison|low|your immunity to poison is about to run out",
-                "poison|low|your immunity to poison is about to expire",
-                "poison|expired|your immunity to poison has run out",
-                "poison|expired|your immunity to poison has expired",
-                "overload|low|your overload is about to run out",
-                "overload|low|the effects of overload are about to wear off",
-                "overload|expired|the effects of overload have worn off",
-                "aggression|low|your aggression potion is about to run out",
-                "aggression|expired|the effects of your aggression potion have worn off"
+                "elder|expired|the effects of elder overload have worn off and you feel normal again",
+                "aggression|low|the effects of your aggression potion will expire in 30 seconds",
+                "aggression|expired|the effects of your aggression potion have expired"
             };
         }
 
         public static string KindOf(string text)
         {
             string n = Normalize(text);
-            if (n.IndexOf("elder overload") >= 0 || n.IndexOf("elder overload salve") >= 0) return "elder";
-            if (n.IndexOf("aggression") >= 0 || n.IndexOf("aggroverload") >= 0) return "aggression";
-            if (n.IndexOf("prayer renewal") >= 0) return "prayer";
-            if (n.IndexOf("antifire") >= 0 || n.IndexOf("wyrmfire") >= 0 || n.IndexOf("dragonfire") >= 0) return "antifire";
-            if (n.IndexOf("poison") >= 0 || n.IndexOf("antipoison") >= 0) return "poison";
-            if (n.IndexOf("overload") >= 0) return "overload";
+            if (n.IndexOf("elder") >= 0 && n.IndexOf("overload") >= 0) return "elder";
+            if (n.IndexOf("aggression") >= 0) return "aggression";
             return "";
         }
 
@@ -543,8 +526,8 @@ namespace KavrosAfkWarden
         {
             string n = Normalize(text);
             if (n.Length == 0 || KindOf(text).Length == 0) return "";
-            if (n.IndexOf("worn off") >= 0 || n.IndexOf("has run out") >= 0 || n.IndexOf("has expired") >= 0 || n.IndexOf("have worn") >= 0) return "expired";
-            if (n.IndexOf("about to") >= 0 || n.IndexOf("will run out") >= 0 || n.IndexOf("about to expire") >= 0 || n.IndexOf("about to wear") >= 0) return "low";
+            if (n.IndexOf("worn off") >= 0 || n.IndexOf("has run out") >= 0 || n.IndexOf("has expired") >= 0 || n.IndexOf("have worn") >= 0 || n.IndexOf("have expired") >= 0) return "expired";
+            if (n.IndexOf("about to") >= 0 || n.IndexOf("will run out") >= 0 || n.IndexOf("will expire") >= 0 || n.IndexOf("about to expire") >= 0 || n.IndexOf("about to wear") >= 0) return "low";
             if (n.IndexOf("you drink") >= 0 || n.IndexOf("salve") >= 0 || n.IndexOf("potion") >= 0) return "active";
             return "";
         }

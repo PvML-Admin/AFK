@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.22
+
+- The potion row tracks elder overload and aggression only, under those full names. Prayer renewal, antifire and poison are left alone. Low stays orange and expired stays red.
+- Red and dark-red chat is kept when the line is prepared for Windows OCR, so those warnings are not dropped. A fresh line is read about once a second, and a missing or misspelled word can still match.
+- The XP popup search includes the top edge of the client, where the drop sits beside the compass.
+- The RuneMetrics total looks for the red-green-blue bar icon, including the wider icon on a 1440p client. The hint says to enable precise values.
+- The pin buttons are gone. Hitpoints, prayer and the buff bar are found on their own.
+
 ## 0.2.21
 
 - Any XP popup in the centre of the sky counts as activity, including while it fades in, fades out or floats upward. The watcher looks at a wide centre-top band every 200 ms and compares the gold, orange and white text with the previous frame. The number is only read when it can be, and a popup that is already on screen is not wiped by a later search that misses the digits.

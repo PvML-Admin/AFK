@@ -178,7 +178,7 @@ namespace KavrosAfkWarden
 
         private string Roster()
         {
-            string[] order = new string[] { "elder", "overload", "aggression", "prayer", "antifire", "poison" };
+            string[] order = new string[] { "elder", "aggression" };
             System.Text.StringBuilder line = new System.Text.StringBuilder();
             for (int i = 0; i < order.Length; i++)
             {
@@ -199,24 +199,16 @@ namespace KavrosAfkWarden
 
         public static string Label(string kind)
         {
-            if (kind == "elder") return "Elder";
-            if (kind == "overload") return "Overload";
+            if (kind == "elder") return "Elder overload";
             if (kind == "aggression") return "Aggression";
-            if (kind == "prayer") return "Prayer renewal";
-            if (kind == "antifire") return "Antifire";
-            if (kind == "poison") return "Antipoison";
             return "Potion";
         }
 
         public static string Short(string kind)
         {
-            if (kind == "elder") return "Elder";
-            if (kind == "overload") return "Ovl";
-            if (kind == "aggression") return "Aggro";
-            if (kind == "prayer") return "Pray";
-            if (kind == "antifire") return "Anti";
-            if (kind == "poison") return "Poison";
-            return "Pot";
+            if (kind == "elder") return "Elder overload";
+            if (kind == "aggression") return "Aggression";
+            return "";
         }
 
         public static string ShortState(string state)

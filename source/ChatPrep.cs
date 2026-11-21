@@ -9,7 +9,8 @@ namespace KavrosAfkWarden
         public static bool Coloured(int color)
         {
             int r = ImageBuffer.R(color), g = ImageBuffer.G(color), b = ImageBuffer.B(color);
-            if (r > 145 && r > g + 28 && r > b + 28) return true;
+            // Dark red game text is about (135, 2, 3). A luminance cut drops it.
+            if (r > 70 && r > g + 30 && r > b + 30) return true;
             if (r > 170 && g > 80 && g < r - 10 && b < 110) return true;
             if (g > 135 && g > r + 18 && g > b + 12) return true;
             if (r > 200 && g > 200 && b > 180) return true;
