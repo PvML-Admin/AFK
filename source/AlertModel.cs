@@ -14,8 +14,8 @@ namespace KavrosAfkWarden
         public int PrayerThreshold = 20;
         public bool PrayerPercent = true;
         public bool AfkEnabled = true;
-        // Skilling mode: idle means no XP drop, no backpack change and no
-        // click or key for SkillingIdleSeconds. Combat stats do not count.
+        // Skilling mode: idle means no XP gain and no XP popup for SkillingIdleSeconds.
+        // A clear hitpoints drop still counts. Keys, the backpack and prayer do not.
         public bool SkillingMode;
         public int SkillingIdleSeconds = 45;
         public int ActiveIdleSeconds { get { return SkillingMode ? SkillingIdleSeconds : IdleSeconds; } }
@@ -38,6 +38,7 @@ namespace KavrosAfkWarden
         public bool PotionSound = true;
         public bool PotionNotify = true;
         public int Volume = 100;
+        public string SoundTone = "By alert";
         public int CooldownSeconds = 20;
         public int PanelOffsetX = 12;
         public int PanelOffsetY = 72;
@@ -983,8 +984,10 @@ namespace KavrosAfkWarden
         public bool GameAttached;
         public bool PixelsFresh;
         public bool CharacterMoving;
-        // Skilling mode: an XP drop or a backpack change this frame.
+        // An XP total increase or an XP popup this frame.
         public bool SkillProgress;
+        // A clear drop in hitpoints. A heal, and a 1 or 2 point wobble, do not count.
+        public bool HpDrop;
         public bool InputActivity;
         public int? Hp;
         public int? HpMax;
@@ -1039,12 +1042,9 @@ namespace KavrosAfkWarden
             if (sample.SkillProgress) { lastSkill = sample.Time; sawSkill = true; }
             bool skilling = settings.SkillingMode || (sawSkill && (sample.Time - lastSkill).TotalSeconds <= settings.SkillingIdleSeconds + 2);
             Skilling = skilling;
-            // Skilling is XP, the backpack, and clicks. Nearby hitsplats do not
-            // replace that. Outside of skilling, movement still counts, and an
-            // XP drop still counts so skilling is noticed without a switch.
-            bool active = skilling
-                ? sample.SkillProgress || sample.InputActivity
-                : sample.CharacterMoving || sample.SkillProgress;
+            // Activity is an XP gain, an XP popup, or a clear hitpoints drop.
+            // Keys, the backpack, prayer and scene motion do not reset idle.
+            bool active = sample.SkillProgress || sample.HpDrop;
             StillFor = stillness.StillFor(see && active, sample.Time, see);
             inactivity.Observe(sample.InputActivity, sample.Time, attached);
             AfkRemaining = inactivity.Remaining(sample.Time, TimeSpan.FromSeconds(settings.AfkSeconds));
@@ -1068,7 +1068,7 @@ namespace KavrosAfkWarden
             if (idleGate.ShouldFire(idle, sample.Time, cooldown))
             {
                 if (skilling)
-                    events.Add(Make(settings, "idle", "You stopped skilling", "No XP drop, backpack change or click for " + (int)StillFor.TotalSeconds + "s."));
+                    events.Add(Make(settings, "idle", "You stopped skilling", "No XP drop for " + (int)StillFor.TotalSeconds + "s."));
                 else
                     events.Add(Make(settings, "idle", "You have gone idle", "No animation or movement for " + (int)StillFor.TotalSeconds + "s."));
             }
@@ -1118,6 +1118,59 @@ namespace KavrosAfkWarden
                 return current.Value.ToString() + " / " + max.Value.ToString() + " (" + pct.ToString() + "%)";
             }
             return percent ? current.Value.ToString() + " (maximum unread)" : current.Value.ToString();
+        }
+    }
+
+    // What counts as the player doing something. Banking, keys and prayer do not.
+    public static class ActivitySignals
+    {
+        public static bool HpDrop(int? before, int? now)
+        {
+            if (before == null || now == null) return false;
+            return before.Value - now.Value > 2;
+        }
+
+        public static bool Xp(bool metricsGain, bool popup)
+        {
+            return metricsGain || popup;
+        }
+    }
+
+    public static class AlertTones
+    {
+        public static string[] Names()
+        {
+            return new string[] { "By alert", "Chime", "Bell", "Soft", "Drop", "Alarm" };
+        }
+
+        public static int Index(string name)
+        {
+            string[] names = Names();
+            for (int i = 0; i < names.Length; i++)
+                if (string.Equals(names[i], name, StringComparison.OrdinalIgnoreCase)) return i;
+            return 0;
+        }
+
+        public static string Canonical(string name)
+        {
+            string[] names = Names();
+            int index = Index(name);
+            return names[index];
+        }
+
+        public static double[] Pair(string tone, string kind)
+        {
+            string name = Canonical(tone);
+            if (name == "Chime") return new double[] { 520, 780 };
+            if (name == "Bell") return new double[] { 880, 660 };
+            if (name == "Soft") return new double[] { 660, 520 };
+            if (name == "Drop") return new double[] { 740, 520 };
+            if (name == "Alarm") return new double[] { 988, 740 };
+            if (kind == "hp") return new double[] { 880, 660 };
+            if (kind == "afk") return new double[] { 988, 740 };
+            if (kind == "prayer") return new double[] { 660, 520 };
+            if (kind == "potion") return new double[] { 740, 520 };
+            return new double[] { 520, 780 };
         }
     }
 

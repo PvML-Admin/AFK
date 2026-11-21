@@ -229,9 +229,10 @@ namespace KavrosAfkWarden
             xp.SkillProgress = true;
             engine.Tick(xp, settings);
             Check(!engine.IdleLatched && engine.StillFor == TimeSpan.Zero, "an XP drop resets skilling idle");
-            WatchSample clicked = Sample(t.AddSeconds(50), true, true, false, true);
+            engine.Tick(Sample(t.AddSeconds(40), true, true, false, false), settings);
+            WatchSample clicked = Sample(t.AddSeconds(50), true, true, true, true);
             engine.Tick(clicked, settings);
-            Check(engine.StillFor == TimeSpan.Zero, "a click or key resets skilling idle");
+            Check(engine.StillFor >= TimeSpan.FromSeconds(9), "a click or key does not reset skilling idle, still " + engine.StillFor.TotalSeconds.ToString());
             engine.Tick(Sample(t.AddSeconds(51), true, true, false, false), settings);
             engine.Tick(Sample(t.AddSeconds(80), true, true, false, false), settings);
             Check(engine.StillFor >= TimeSpan.FromSeconds(29), "idle counts up when the clicks, XP and backpack stop");
@@ -763,8 +764,10 @@ namespace KavrosAfkWarden
             AlertEvent idleEvent = Find(idle, "idle");
             Check(idleEvent != null && idleEvent.Sound && idleEvent.Notify, "stillness fires idle while input keeps the AFK timer reset");
             Check(Find(engine.Tick(Sample(t.AddSeconds(20), true, true, false, true), settings), "idle") == null, "idle does not repeat while you stay still");
-            engine.Tick(Sample(t.AddSeconds(13), true, true, true, true), settings);
-            Check(!engine.IdleLatched, "animation clears idle");
+            WatchSample struck = Sample(t.AddSeconds(13), true, true, true, true);
+            struck.HpDrop = true;
+            engine.Tick(struck, settings);
+            Check(!engine.IdleLatched, "a clear hitpoints drop clears idle");
             engine.Tick(Sample(t.AddSeconds(14), true, true, false, true), settings);
             List<AlertEvent> cooled = engine.Tick(Sample(t.AddSeconds(26), true, true, false, true), settings);
             Check(Find(cooled, "idle") == null, "idle cooldown blocks the return of stillness");
@@ -1207,7 +1210,7 @@ namespace KavrosAfkWarden
                     }
                 }
             }
-            Check(painted > 0 && scene.Tick(struck, reading), "a shrinking target bar resets idle, reason " + scene.Reason);
+            Check(painted > 0 && !scene.Tick(struck, reading), "a shrinking target bar is not activity, reason " + scene.Reason);
             SceneActivity calm = new SceneActivity();
             ImageBuffer trees = ImageBuffer.Blank(320, 240, ImageBuffer.Pack(20, 80, 30));
             ImageBuffer sway = ImageBuffer.Blank(320, 240, ImageBuffer.Pack(30, 110, 40));
@@ -1569,6 +1572,7 @@ namespace KavrosAfkWarden
             ReplayPotLogs(root);
             ReplayMetrics(root);
             ChatConfirm(root);
+            Live026(root);
             string[] chatter = new string[] {
                 "-a ALL CHAT",
                 ". 14KlllS In core",
@@ -1864,6 +1868,107 @@ namespace KavrosAfkWarden
             notes.Add("debug-log-v0224-pots-ok.txt replay: " + got);
         }
 
+        private static void Live026(string root)
+        {
+            Check(!ActivitySignals.HpDrop(1000, 1000) && !ActivitySignals.HpDrop(1000, 999) && !ActivitySignals.HpDrop(1000, 998), "one or two hitpoints of wobble is not a hit");
+            Check(!ActivitySignals.HpDrop(1000, 1100), "hitpoints rising is not activity");
+            Check(ActivitySignals.HpDrop(1000, 990), "a clear hitpoints drop is activity");
+            Check(ActivitySignals.Xp(true, false) && ActivitySignals.Xp(false, true) && !ActivitySignals.Xp(false, false), "activity XP is a rising total or a popup");
+            SceneActivity scene = new SceneActivity();
+            HudReading steady = new HudReading();
+            steady.Hp = 1471;
+            steady.Prayer = 1040;
+            Check(!scene.Tick(null, steady, true, false, true), "keys and a backpack do not count on the first look");
+            HudReading wobble = new HudReading();
+            wobble.Hp = 1469;
+            wobble.Prayer = 900;
+            Check(!scene.Tick(null, wobble, true, false, true), "prayer and a two point wobble are not activity, reason " + scene.Reason);
+            HudReading hit = new HudReading();
+            hit.Hp = 1400;
+            Check(scene.Tick(null, hit, false, false, false) && scene.Reason.IndexOf("hp") >= 0, "taking a hit is activity, reason " + scene.Reason);
+            WardenSettings tone = new WardenSettings();
+            tone.SoundTone = "Bell";
+            WardenSettings toneBack = SettingsText.Read(SettingsText.Write(tone));
+            Check(toneBack.SoundTone == "Bell", "the alert sound choice round-trips, got " + toneBack.SoundTone);
+            Check(AlertTones.Pair("Bell", "hp")[0] == 880, "Bell is its own pair");
+            Check(AlertTones.Pair("By alert", "potion")[0] == 740, "By alert keeps the potion tone");
+            ChatPotionBook warning = new ChatPotionBook();
+            List<ChatHit> low = new List<ChatHit>();
+            low.Add(Hit("Your elder overload is about to run out.", "elder", "low", 10));
+            List<ChatNotice> quiet = warning.Observe(low);
+            Check(quiet.Count == 1 && !quiet[0].Audible, "a 30 second potion warning does not play a sound");
+            List<ChatHit> ended = new List<ChatHit>();
+            ended.Add(Hit("The effects of elder overload have worn off and you feel normal again.", "elder", "expired", 10));
+            List<ChatNotice> loud = warning.Observe(ended);
+            Check(loud.Count == 1 && loud[0].Audible, "expiry is the potion warning that plays a sound");
+            string dir = Path.Combine(root, "verification", "fixtures", "live026");
+            string log = Path.Combine(dir, "debug-log-v0225-falsexp.txt");
+            if (!File.Exists(log))
+            {
+                Check(false, "missing debug-log-v0225-falsexp.txt");
+                return;
+            }
+            int packOrKey = 0;
+            long flat = -1;
+            bool flatHeld = true;
+            string[] rows = File.ReadAllLines(log);
+            for (int i = 0; i < rows.Length; i++)
+            {
+                if (rows[i].IndexOf("activity=") < 0) continue;
+                string act = rows[i].Substring(rows[i].IndexOf("activity=") + 9);
+                int sp = act.IndexOf(' ');
+                if (sp > 0) act = act.Substring(0, sp);
+                if ((act == "pack" || act == "key") && rows[i].IndexOf("idleReset=yes") >= 0) packOrKey++;
+                int mx = rows[i].IndexOf("metrics=xp=");
+                if (mx >= 0)
+                {
+                    string num = rows[i].Substring(mx + 11);
+                    int end = num.IndexOf(' ');
+                    if (end > 0) num = num.Substring(0, end);
+                    long xp;
+                    if (long.TryParse(num, out xp))
+                    {
+                        if (flat < 0) flat = xp;
+                        if (xp != flat) flatHeld = false;
+                    }
+                }
+            }
+            Check(packOrKey > 0 && flatHeld && flat == 7389384L, "the other-account log is flat XP with pack and key resets, xp " + flat.ToString() + " resets " + packOrKey.ToString());
+            Check(!ActivitySignals.Xp(false, false), "a flat RuneMetrics total is not activity by itself");
+            string panel = Path.Combine(dir, "runemetrics-panel-otheracc-v0225.png");
+            MetricsReader.Result total = MetricsReader.Read(PngImage.Load(panel));
+            Check(total.Found && total.Xp == 7389384L, "the other-account panel reads the XP column, got " + total.Xp.ToString() + " " + (total.Note ?? ""));
+            string[] quietNames = new string[] {
+                "full-client-v0225-falsexp-otheracc.png",
+                "layout-community-1.png", "layout-community-2.png", "layout-community-3.png",
+                "layout-community-4.png", "layout-community-5.png", "layout-community-6.png",
+                "layout-community-7.png", "layout-community-8.png"
+            };
+            for (int i = 0; i < quietNames.Length; i++)
+            {
+                ImageBuffer frame = PngImage.Load(Path.Combine(dir, quietNames[i]));
+                bool popup = frame != null && XpFloat.Present(frame);
+                notes.Add(quietNames[i] + " popup: " + (popup ? "HIT" : "quiet"));
+                if (quietNames[i].IndexOf("falsexp") >= 0)
+                    Check(!popup, "the other-account client is not an XP popup");
+            }
+            ImageBuffer nine = PngImage.Load(Path.Combine(dir, "layout-community-9.png"));
+            bool ninePopup = nine != null && XpFloat.Present(nine);
+            notes.Add("layout-community-9.png popup: " + (ninePopup ? "HIT" : "MISS"));
+            Check(ninePopup, "layout 9 keeps the +15,491 xp popup over the action bar");
+            ImageBuffer eight = PngImage.Load(Path.Combine(dir, "layout-community-8.png"));
+            bool eightPopup = eight != null && XpFloat.Present(eight);
+            notes.Add("layout-community-8.png popup: " + (eightPopup ? "HIT" : "MISS"));
+            Check(eightPopup, "layout 8 keeps the +5,700 and +2,121 xp popups");
+            ImageBuffer three = PngImage.Load(Path.Combine(dir, "layout-community-3.png"));
+            Check(three == null || !XpFloat.Present(three), "a boss name over a busy fight is not an XP popup");
+            ImageBuffer main = PngImage.Load(Path.Combine(dir, "full-client-v0225-mainacc-layout.png"));
+            MetricsReader.Result mainXp = MetricsReader.Read(main);
+            bool mainPopup = main != null && XpFloat.Present(main);
+            notes.Add("full-client-v0225-mainacc-layout.png metrics " + (mainXp.Found ? mainXp.Xp.ToString() : "MISS " + (mainXp.Note ?? "")) + " popup " + (mainPopup ? "HIT" : "quiet"));
+            Check(mainXp.Found && mainXp.Xp > 1000000L, "the main-account layout still reads a full XP total, got " + mainXp.Xp.ToString() + " " + (mainXp.Note ?? ""));
+        }
+
         private static void ReplayPotLogs(string root)
         {
             string dir = Path.Combine(root, "verification", "fixtures", "live0223");
@@ -1898,10 +2003,14 @@ namespace KavrosAfkWarden
             both.Add(Hit("The effects of your Aggression Potion will expire in 30 seconds.", "aggression", "low", 40));
             fading.Observe(both);
             Check(fading.Detail.IndexOf("Elder overload expired") >= 0 && fading.Detail.IndexOf("Aggression low") >= 0, "both pots show before the expiry fades, got " + fading.Detail);
+            fading.Refresh(DateTime.UtcNow.AddSeconds(29));
+            Check(fading.Detail.IndexOf("Aggression low") >= 0, "a 30 second warning is still on the panel just before 30 seconds, got " + fading.Detail);
+            fading.Refresh(DateTime.UtcNow.AddSeconds(31));
+            Check(fading.Detail.IndexOf("Aggression low") < 0 && fading.Detail.IndexOf("Elder overload expired") >= 0, "the 30 second warning clears and expired stays, got " + fading.Detail);
             fading.Refresh(DateTime.UtcNow.AddSeconds(44));
             Check(fading.Detail.IndexOf("Elder overload expired") >= 0, "expired is still shown just before 45 seconds, got " + fading.Detail);
             fading.Refresh(DateTime.UtcNow.AddSeconds(46));
-            Check(fading.Detail.IndexOf("expired") < 0 && fading.Detail.IndexOf("Aggression low") >= 0, "expired clears after 45 seconds and a low pot stays, got " + fading.Detail);
+            Check(fading.Detail.IndexOf("expired") < 0, "expired clears after 45 seconds, got " + fading.Detail);
             ChatPotionBook alone = new ChatPotionBook();
             List<ChatHit> only = new List<ChatHit>();
             only.Add(Hit("The effects of elder overload have worn off and you feel normal again.", "elder", "expired", 20));
@@ -2112,7 +2221,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.25" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.26" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -2123,10 +2232,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.25\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.26\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.25.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.26.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

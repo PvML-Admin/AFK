@@ -10,10 +10,11 @@ namespace KavrosAfkWarden
     internal sealed class AlertSound
     {
         internal int Volume = 100;
+        internal string Tone = "By alert";
 
         internal void Play(string kind)
         {
-            byte[] wav = Build(kind, Volume);
+            byte[] wav = Build(kind, Tone, Volume);
             System.Threading.ThreadPool.QueueUserWorkItem(delegate
             {
                 try
@@ -26,10 +27,10 @@ namespace KavrosAfkWarden
             });
         }
 
-        private static byte[] Build(string kind, int volume)
+        private static byte[] Build(string kind, string tone, int volume)
         {
             int rate = 22050;
-            double[] tones = kind == "hp" ? new double[] { 880, 660 } : kind == "afk" ? new double[] { 988, 740 } : kind == "prayer" ? new double[] { 660, 520 } : kind == "potion" ? new double[] { 740, 520 } : new double[] { 520, 780 };
+            double[] tones = AlertTones.Pair(tone, kind);
             int samples = (int)(rate * 0.42);
             byte[] data = new byte[samples * 2];
             int level = volume < 0 ? 0 : volume > 100 ? 100 : volume;

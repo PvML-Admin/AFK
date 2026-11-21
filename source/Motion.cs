@@ -127,8 +127,6 @@ namespace KavrosAfkWarden
         private bool haveCells;
         private int lastHp = -1;
         private int lastPrayer = -1;
-        private int lastAdrenaline = -1;
-        private bool haveHud;
 
         private int lastSplat = -1;
         private int lastXp = -1;
@@ -149,17 +147,15 @@ namespace KavrosAfkWarden
 
         public bool Tick(ImageBuffer image, HudReading reading, bool playerInput, bool xpChanged, bool packChanged)
         {
+            // Keys, the backpack, prayer, heals and the scene do not count.
+            // Activity is an XP gain or popup, or a clear drop in hitpoints.
             string reason = "";
-            if (playerInput) reason = Join(reason, "key");
-            string hud = HudChange(reading);
-            if (hud.Length > 0) reason = Join(reason, hud);
             if (xpChanged) reason = Join(reason, "xp");
-            if (packChanged) reason = Join(reason, "pack");
-            if (image != null)
-            {
-                if (TargetChanged(image, reading)) reason = Join(reason, "target-bar");
-                if (HitsplatChanged(image)) reason = Join(reason, "hitsplat");
-            }
+            int? before = lastHp < 0 ? (int?)null : lastHp;
+            int? now = reading == null || reading.Hp == null ? (int?)null : reading.Hp;
+            if (ActivitySignals.HpDrop(before, now)) reason = Join(reason, "hp");
+            if (now != null) lastHp = now.Value;
+            if (reading != null && reading.Prayer != null) lastPrayer = reading.Prayer.Value;
             Reason = reason.Length == 0 ? "none" : reason;
             return reason.Length > 0;
         }
@@ -168,26 +164,6 @@ namespace KavrosAfkWarden
         {
             if (left.Length == 0) return right;
             return left + "+" + right;
-        }
-
-        private string HudChange(HudReading reading)
-        {
-            if (reading == null) return "";
-            int hp = reading.Hp == null ? -1 : reading.Hp.Value;
-            int prayer = reading.Prayer == null ? -1 : reading.Prayer.Value;
-            int adrenaline = reading.Adrenaline == null ? -1 : reading.Adrenaline.Value;
-            string changed = "";
-            if (haveHud)
-            {
-                // Prayer drain and adrenaline decay happen while standing still.
-                if (hp >= 0 && lastHp >= 0 && hp != lastHp) changed = Join(changed, "hp");
-                if (adrenaline >= 0 && lastAdrenaline >= 0 && adrenaline >= lastAdrenaline + 8) changed = Join(changed, "adrenaline");
-            }
-            if (hp >= 0) lastHp = hp;
-            if (prayer >= 0) lastPrayer = prayer;
-            if (adrenaline >= 0) lastAdrenaline = adrenaline;
-            haveHud = true;
-            return changed;
         }
 
         // A short bright green bar that is not the summoning bar in the HUD row.
@@ -1040,8 +1016,12 @@ namespace KavrosAfkWarden
                         stamp = unchecked(stamp * 31 + y);
                     }
                 }
-                // Real popup ink is pale gold. Leaves and the compass ring are greener.
-                if (n < 10 || pale * 5 < n * 2 || green > n * 34) continue;
+                // Pale gold is the usual drop. A deeper gold line is the long bonus
+                // popup. A one-pixel glint and a green leaf are neither.
+                bool paleLine = n >= 10 && pale * 5 >= n * 2 && green <= n * 34 && height >= 6;
+                bool goldLine = n >= 200 && pale * 10 < n && green > n * 48 && green <= n * 82 && height >= 6 && height <= 12 && width >= 150;
+                if (!paleLine && !goldLine) continue;
+                if (!Isolated(image, band.Left, top, width, height, gap)) continue;
                 if (best.Found && n <= best.Ink) continue;
                 best.Found = true;
                 best.X = band.Left;
@@ -1052,6 +1032,34 @@ namespace KavrosAfkWarden
                 best.Stamp = stamp;
             }
             return best;
+        }
+
+        // A popup is a short mark on a quiet background. Icons in a toolbar
+        // keep the same warm pixels on the rows above and below.
+        private static bool Isolated(ImageBuffer image, int left, int top, int width, int height, int gap)
+        {
+            int pad = Math.Max(3, height);
+            int y0 = top - pad;
+            int y1 = top + height + pad;
+            if (y0 < 0) y0 = 0;
+            if (y1 > image.Height) y1 = image.Height;
+            int x0 = left - 4;
+            int x1 = left + width + 4;
+            if (x0 < gap) x0 = gap;
+            if (x1 > image.Width - gap) x1 = image.Width - gap;
+            int warm = 0;
+            int seen = 0;
+            for (int y = y0; y < y1; y++)
+            {
+                if (y >= top && y < top + height) continue;
+                for (int x = x0; x < x1; x += 2)
+                {
+                    seen++;
+                    if (Warm(image, x, y, gap)) warm++;
+                }
+            }
+            if (seen < 8) return true;
+            return warm * 5 < seen;
         }
 
         private static bool Warm(ImageBuffer image, int x, int y, int gap)

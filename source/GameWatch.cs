@@ -565,13 +565,6 @@ namespace KavrosAfkWarden
                 int bottom = Math.Min(image.Height, xp.Bottom + Math.Max(80, image.Height / 5));
                 xpBox = new IntRect(left, top, Math.Max(32, right - left), Math.Max(32, bottom - top));
             }
-            IntRect pack = SceneActivity.PackWatch.Find(image);
-            if (pack.Width > 8)
-            {
-                if (packBox.Width < 8 || SameGrid(pack, packBox) || (packHold.Width > 8 && SameGrid(pack, packHold)))
-                    packBox = pack;
-                packHold = pack;
-            }
             RememberBars(reading);
             haveBoxes = lifeBox.Width > 8 || prayerBox.Width > 8 || buffStrip.Width>8;
             bool complete = reading.HpMax.HasValue && reading.PrayerMax.HasValue;
@@ -646,8 +639,6 @@ namespace KavrosAfkWarden
                     ApplyMetrics(reading, read, null);
                 }
             }
-            ImageBuffer pack = packBox.Width > 8 ? Grab(hwnd, client, packBox, 3) : null;
-            skills.Observe(null, pack);
             PublishSkills();
             return reading;
         }
@@ -698,9 +689,9 @@ namespace KavrosAfkWarden
 
         private void NoteActivity(ImageBuffer image)
         {
-            // An on-screen XP popup is the activity signal. A full RuneMetrics
-            // total is only the backup, and an abbreviated total is ignored.
-            skills.Observe(image, image);
+            // The popup watcher is XpFloat. This pass only keeps the older digit
+            // reader from also treating the backpack as activity.
+            skills.Observe(image, null);
             PublishSkills();
         }
 

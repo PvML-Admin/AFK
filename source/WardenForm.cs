@@ -208,7 +208,7 @@ namespace KavrosAfkWarden
             BackColor = KavrosTheme.Bg;
             ForeColor = KavrosTheme.Text;
             Font = KavrosTheme.Ui(9F, false);
-            ClientSize = new Size(400, 278);
+            ClientSize = new Size(400, 294);
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
             DoubleBuffered = true;
             title.SetBounds(0, 0, 400, 32);
@@ -245,8 +245,8 @@ namespace KavrosAfkWarden
             Place(Potion, 162);
             Potion.ColorParts = true;
             Place(Afk, 194);
-            metricsHint.SetBounds(12, 224, 376, 16);
-            metricsHint.Text = "Enable precise values in RuneMetrics";
+            metricsHint.SetBounds(12, 216, 376, 32);
+            metricsHint.Text = "Enable precise values in RuneMetrics. The client can be unfocused, but not minimized.";
             metricsHint.Font = KavrosTheme.Ui(7.5F, false);
             metricsHint.ForeColor = Color.FromArgb(120, 128, 136);
             metricsHint.BackColor = KavrosTheme.Bg;
@@ -254,12 +254,12 @@ namespace KavrosAfkWarden
             Controls.Add(metricsHint);
             pause.Text = "Pause";
             pause.Tone = ButtonTone.Primary;
-            pause.SetBounds(12, 244, 184, 24);
+            pause.SetBounds(12, 252, 184, 24);
             pause.Click += delegate { if (PauseRequested != null) PauseRequested(); };
             Controls.Add(pause);
             exit.Text = "Exit";
             exit.Tone = ButtonTone.Secondary;
-            exit.SetBounds(204, 244, 184, 24);
+            exit.SetBounds(204, 252, 184, 24);
             exit.Click += delegate { if (ExitRequested != null) ExitRequested(); };
             Controls.Add(exit);
             FormClosing += delegate(object sender, FormClosingEventArgs e)
@@ -302,7 +302,7 @@ namespace KavrosAfkWarden
             metricsHint.Visible = !collapsed && hintWanted;
             Idle.Visible = Hp.Visible = Prayer.Visible = Potion.Visible = Afk.Visible = !collapsed;
             pause.Visible = exit.Visible = !collapsed;
-            ClientSize = new Size(400, collapsed ? 32 : 278);
+            ClientSize = new Size(400, collapsed ? 32 : 294);
         }
 
         private void LayoutHeader()
@@ -337,7 +337,7 @@ namespace KavrosAfkWarden
         private void DrawHint(Graphics g, PaintedLabel label)
         {
             using (Brush brush = new SolidBrush(KavrosTheme.Bg)) g.FillRectangle(brush, label.ClientRectangle);
-            TextRenderer.DrawText(g, label.Text, KavrosTheme.Ui(7.5F, false), label.ClientRectangle, Color.FromArgb(120, 128, 136), KavrosTheme.Bg, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+            TextRenderer.DrawText(g, label.Text, KavrosTheme.Ui(7.5F, false), label.ClientRectangle, Color.FromArgb(120, 128, 136), KavrosTheme.Bg, TextFormatFlags.WordBreak | TextFormatFlags.NoPadding);
         }
 
         protected override void WndProc(ref Message message)
@@ -399,6 +399,7 @@ namespace KavrosAfkWarden
         private readonly NumberField cooldown = new NumberField();
         private readonly NumberField banner = new NumberField();
         private readonly VolumeSlider volume = new VolumeSlider();
+        private readonly ComboBox soundChoice = new ComboBox();
         private readonly Label status = new Label();
         private readonly WatchPanel panel = new WatchPanel();
         private readonly AlertPopup popup = new AlertPopup();
@@ -419,6 +420,7 @@ namespace KavrosAfkWarden
         private DateTime lastFrame;
         private bool everAttached;
         private ReadGate hpGate = new ReadGate();
+        private int? activityHp;
         private ReadGate prayerGate = new ReadGate();
         private readonly BuffClock buffClock = new BuffClock();
         private readonly ChatPotionBook chatPots = new ChatPotionBook();
@@ -443,6 +445,7 @@ namespace KavrosAfkWarden
             settings = new WardenSettings();
             clientTitle = "";
             sound.Volume = settings.Volume;
+            sound.Tone = settings.SoundTone;
             Text = "AFK Warden";
             Font = KavrosTheme.Ui(9F, false);
             BackColor = KavrosTheme.Bg;
@@ -577,7 +580,7 @@ namespace KavrosAfkWarden
             AddButton("Pick client", 210, 196, 120, ButtonTone.Secondary, delegate { picking = true; SetStatus("Click the Kavros window to watch."); });
 
             idleOn = Check("Idle alert", 28, 292, 160, settings.IdleEnabled);
-            skillingOn = Check("Skilling mode (XP and backpack)", 210, 292, 280, settings.SkillingMode);
+            skillingOn = Check("Skilling mode (XP drops)", 210, 292, 280, settings.SkillingMode);
             skillingOn.CheckedChanged += delegate { if (!loading) SwitchIdleMode(); };
             Caption("After", 28, 320);
             Number(idleSeconds, 88, 316, 3, 600, settings.ActiveIdleSeconds);
@@ -601,6 +604,7 @@ namespace KavrosAfkWarden
 
             potionOn = Check("Potion alerts from chat", 28, 484, 220, settings.PotionEnabled);
             Caption("Keep the chatbox visible, with game messages on.", 250, 488);
+            Caption("RuneMetrics needs precise values. The client can be in the background, but not minimized.", 28, 260);
             Caption("Below", 28, 512);
             Number(potionSeconds, 88, 508, 1, 600, settings.PotionSeconds);
             Caption("seconds", 172, 512);
@@ -630,10 +634,24 @@ namespace KavrosAfkWarden
             volume.SetValue(settings.Volume);
             volume.ValueChanged += delegate { if (!loading) { sound.Volume = volume.Value; Save(); } };
             Controls.Add(volume);
+            Caption("Tone", 380, 768);
+            soundChoice.DropDownStyle = ComboBoxStyle.DropDownList;
+            soundChoice.SetBounds(430, 764, 150, 24);
+            string[] tones = AlertTones.Names();
+            for (int i = 0; i < tones.Length; i++) soundChoice.Items.Add(tones[i]);
+            soundChoice.SelectedIndex = AlertTones.Index(settings.SoundTone);
+            KavrosTheme.StyleCombo(soundChoice);
+            soundChoice.SelectedIndexChanged += delegate { if (!loading) Save(); };
+            Controls.Add(soundChoice);
             updates = Check("Check for updates at startup", 28, 800, 320, settings.CheckForUpdates);
             saveDebug = Check("Save debug capture", 360, 800, 240, settings.SaveDebug);
             AddButton("Test notification", 28, 888, 160, ButtonTone.Primary, delegate { popup.Present(SampleAlert(), (int)banner.Value); });
-            AddButton("Test sound", 198, 888, 120, ButtonTone.Secondary, delegate { sound.Play("hp"); });
+            AddButton("Test sound", 198, 888, 120, ButtonTone.Secondary, delegate
+            {
+                sound.Volume = volume.Value;
+                sound.Tone = soundChoice.SelectedItem == null ? "By alert" : soundChoice.SelectedItem.ToString();
+                sound.Play(sound.Tone == "By alert" ? "hp" : "preview");
+            });
             AddButton("Check for updates", 328, 888, 150, ButtonTone.Secondary, delegate { AppUpdates.Check(this, true, SetStatus); });
             AddButton("Debug", 488, 888, 150, ButtonTone.Secondary, delegate { OpenDebugFolder(); });
             status.SetBounds(28, 928, 620, 40);
@@ -694,6 +712,7 @@ namespace KavrosAfkWarden
             cooldown.SetValue(Clamp(settings.CooldownSeconds, cooldown), false);
             banner.SetValue(Clamp(settings.BannerSeconds, banner), false);
             volume.SetValue(settings.Volume);
+            soundChoice.SelectedIndex = AlertTones.Index(settings.SoundTone);
         }
 
         private static int Clamp(int value, NumberField number)
@@ -824,7 +843,9 @@ namespace KavrosAfkWarden
             if (loading) return;
             settings.Paused = pause.Checked;
             settings.Volume = volume.Value;
+            settings.SoundTone = soundChoice.SelectedItem == null ? "By alert" : AlertTones.Canonical(soundChoice.SelectedItem.ToString());
             sound.Volume = settings.Volume;
+            sound.Tone = settings.SoundTone;
             settings.ClientTitle = clientTitle;
             settings.IdleEnabled = idleOn.Checked;
             if (settings.SkillingMode) settings.SkillingIdleSeconds = (int)idleSeconds.Value;
@@ -1233,6 +1254,7 @@ namespace KavrosAfkWarden
             settings = loaded ?? new WardenSettings();
             clientTitle = settings.ClientTitle ?? "";
             sound.Volume = settings.Volume;
+            sound.Tone = settings.SoundTone;
             loading=true;
             try { ApplySettingsToControls(); } finally { loading=false; }
             panel.SetPaused(settings.Paused);
@@ -1393,7 +1415,7 @@ namespace KavrosAfkWarden
             grab.PanelBounds = panel.Visible ? panel.Bounds : Rectangle.Empty;
             if(observedClient!=selected)
             {
-                observedClient=selected; hpGate=new ReadGate(); prayerGate=new ReadGate();
+                observedClient=selected; hpGate=new ReadGate(); prayerGate=new ReadGate(); activityHp=null;
                 activity=new SceneActivity(); engine=new WardenEngine(); lastHud=new HudReading();
                 potionDisplay=new PotionDisplay(); lastFrame=DateTime.MinValue;
             }
@@ -1401,8 +1423,6 @@ namespace KavrosAfkWarden
             if (!windowDragging) FollowPanel();
             bool pixels = !settings.Paused && (DateTime.UtcNow-grab.FrameTime).TotalSeconds<=3 && grab.Reading != null && (grab.Reading.StripFound || grab.Reading.BuffBarFound || grab.Reading.Hp != null || grab.Reading.Prayer != null);
             if (grab.Reading != null && pixels) lastHud = grab.Reading;
-            bool moving = activity.Tick(null, lastHud, grab.Input, grab.XpActivity, grab.PackActivity);
-            WriteDebug(pixels, moving);
             DateTime sampleTime = DateTime.UtcNow;
             bool newCapture=grab.FrameTime!=lastFrame;
             bool freshFrame=pixels && newCapture;
@@ -1423,12 +1443,21 @@ namespace KavrosAfkWarden
             int? prayerMax = prayerGate.Max;
             bool hpComparable = hp != null && WardenSettings.Comparable(settings.HpPercent, lastHud.HpFromOrb, hpMax != null);
             bool prayerComparable = prayer != null && WardenSettings.Comparable(settings.PrayerPercent, lastHud.PrayerFromOrb, prayerMax != null);
+            bool hpDrop = ActivitySignals.HpDrop(activityHp, hp);
+            if (hp != null) activityHp = hp;
+            int? rawHp = lastHud == null ? (int?)null : lastHud.Hp;
+            if (lastHud != null) lastHud.Hp = hp;
+            activity.Tick(null, lastHud, false, grab.XpActivity, false);
+            if (lastHud != null) lastHud.Hp = rawHp;
+            bool moving = hpDrop || grab.XpActivity;
+            WriteDebug(pixels, moving);
             WatchSample sample = new WatchSample();
             sample.Time = DateTime.UtcNow;
             sample.GameAttached = selected != IntPtr.Zero && NativeMethods.IsWindow(selected);
             sample.PixelsFresh = pixels;
             sample.CharacterMoving = moving;
-            sample.SkillProgress = grab.XpActivity || grab.PackActivity;
+            sample.SkillProgress = grab.XpActivity;
+            sample.HpDrop = hpDrop;
             sample.InputActivity = grab.Input;
             shownHp = hp;
             shownHpMax = hpMax;
@@ -1450,10 +1479,12 @@ namespace KavrosAfkWarden
                 extra.Kind = "potion";
                 extra.Title = potionNotices[n].Title;
                 extra.Detail = potionNotices[n].Detail;
-                extra.Sound = settings.AllowsSound("potion");
-                extra.Notify = settings.AllowsNotify("potion");
+                extra.Sound = potionNotices[n].Audible && settings.AllowsSound("potion");
+                extra.Notify = potionNotices[n].Audible && settings.AllowsNotify("potion");
+                sound.Tone = settings.SoundTone;
                 events.Add(extra);
             }
+            sound.Tone = settings.SoundTone;
             for (int i = 0; i < events.Count; i++)
             {
                 if (events[i].Notify)

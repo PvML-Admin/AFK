@@ -8,6 +8,8 @@ namespace KavrosAfkWarden
         public string Kind;
         public string Title;
         public string Detail;
+        // A 30 second warning is panel-only. Sound and the toast wait for expiry.
+        public bool Audible;
     }
 
     // Potion alerts come from chat lines. The same line, including after it
@@ -80,6 +82,7 @@ namespace KavrosAfkWarden
                 notice.Kind = "potion";
                 notice.Title = Title(hit.Kind, hit.State);
                 notice.Detail = notice.Title;
+                notice.Audible = hit.State == "expired";
                 notices.Add(notice);
                 Append(log, hit, "alert");
             }
@@ -99,8 +102,10 @@ namespace KavrosAfkWarden
         {
             for (int i = pots.Count - 1; i >= 0; i--)
             {
-                if (pots[i].State != "expired" || pots[i].Since == DateTime.MinValue) continue;
-                if ((now - pots[i].Since).TotalSeconds >= 45) pots.RemoveAt(i);
+                if (pots[i].Since == DateTime.MinValue) continue;
+                double age = (now - pots[i].Since).TotalSeconds;
+                if (pots[i].State == "low" && age >= 30) pots.RemoveAt(i);
+                else if (pots[i].State == "expired" && age >= 45) pots.RemoveAt(i);
             }
             Detail = Roster();
         }
@@ -171,16 +176,16 @@ namespace KavrosAfkWarden
             {
                 if (pots[i].Kind == kind)
                 {
-                    bool becameExpired = state == "expired" && pots[i].State != "expired";
+                    bool changed = state != pots[i].State;
                     pots[i].State = state;
-                    if (state == "active" || becameExpired) pots[i].Since = DateTime.UtcNow;
+                    if (state == "active" || changed) pots[i].Since = DateTime.UtcNow;
                     return;
                 }
             }
             Pot pot = new Pot();
             pot.Kind = kind;
             pot.State = state;
-            if (state == "active" || state == "expired") pot.Since = DateTime.UtcNow;
+            if (state == "active" || state == "expired" || state == "low") pot.Since = DateTime.UtcNow;
             pots.Add(pot);
         }
 

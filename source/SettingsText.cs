@@ -40,6 +40,7 @@ namespace KavrosAfkWarden
             Line(text, "potion-sound", settings.PotionSound);
             Line(text, "potion-notify", settings.PotionNotify);
             Line(text, "volume", settings.Volume);
+            text.Append("sound-tone\t").Append(AlertTones.Canonical(settings.SoundTone).Replace("\t", " ")).Append("\r\n");
             Line(text, "cooldown", settings.CooldownSeconds);
             Line(text, "panel-offset-x", settings.PanelOffsetX);
             Line(text, "panel-offset-y", settings.PanelOffsetY);
@@ -106,6 +107,7 @@ namespace KavrosAfkWarden
                 else if (parts[0] == "potion-sound" && bool.TryParse(parts[1], out flag)) settings.PotionSound = flag;
                 else if (parts[0] == "potion-notify" && bool.TryParse(parts[1], out flag)) settings.PotionNotify = flag;
                 else if (parts[0] == "volume" && int.TryParse(parts[1], out number)) settings.Volume = number;
+                else if (parts[0] == "sound-tone") settings.SoundTone = AlertTones.Canonical(parts[1]);
                 else if (parts[0] == "cooldown" && int.TryParse(parts[1], out number)) settings.CooldownSeconds = number;
                 else if (parts[0] == "panel-offset-x" && int.TryParse(parts[1], out number)) settings.PanelOffsetX = number;
                 else if (parts[0] == "panel-offset-y" && int.TryParse(parts[1], out number)) settings.PanelOffsetY = number;

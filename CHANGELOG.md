@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.26
+
+- Idle follows an XP total that is going up, an XP popup, or a clear drop in hitpoints. The backpack and key presses do not count, and neither does prayer or a heal. A flat RuneMetrics total leaves only popups and hitpoint drops.
+- A 30 second potion warning stays on the panel and is silent. It clears after 30 seconds. The sound plays when the potion expires, and that row still clears after 45 seconds.
+- Settings has a choice of alert sounds, with a button to hear the one you picked. The client can be in the background, but not minimized.
+
 ## 0.2.25
 
 - After the chat crop changes, it is read again on the next two looks even if the colour hash matches, so a line that appears while the chat is scrolling is not left until the picture moves. A torn potion line asks for that same short repeat, once. An unchanged crop is still not sent to OCR.
