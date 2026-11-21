@@ -101,6 +101,9 @@ function Find-WindowsMetadata($windowsDirectory, $kitRoots) {
         }
     }
     if ($bestUnion) { Write-Output $bestUnion; return }
+    # A partial System32 set often has Foundation and Graphics but not
+    # Graphics.Capture as its own file. Callers then fall through to the
+    # Windows SDK contracts package, which does contain it.
     if ($bestContracts) {
         foreach ($path in $bestContracts) { Write-Output $path }
     }

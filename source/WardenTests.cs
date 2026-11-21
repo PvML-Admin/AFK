@@ -45,6 +45,7 @@ namespace KavrosAfkWarden
                 MovedHud(root);
                 LiveClient(root);
                 Live0213(root);
+                ChatAndMetrics(root);
                 Manifest(root);
             }
             catch (Exception ex)
@@ -166,7 +167,7 @@ namespace KavrosAfkWarden
             Check(!CapturePlan.ShareGrab(life, new IntRect(1800, 200, 108, 36)), "slots far apart are copied separately");
             Check(CapturePlan.SlowSlotEvery >= 2, "buffs, XP and the backpack are read at most once a second");
             Check(CapturePlan.ShouldRead(false, false) && !CapturePlan.ShouldRead(true, false) && !CapturePlan.ShouldRead(false, true), "a minimized or paused client is not read");
-            Check(!CapturePlan.PreferWindowPixels(false) && !CapturePlan.PreferWindowPixels(true) && !CapturePlan.UsePrintWindow && !CapturePlan.OfferWindowSurface, "covered pixels are not taken with PrintWindow or a capture border");
+            Check(!CapturePlan.PreferWindowPixels(false) && !CapturePlan.PreferWindowPixels(true) && !CapturePlan.UsePrintWindow && CapturePlan.OfferWindowSurface, "covered windows use Graphics Capture, not PrintWindow");
             Check(!CapturePlan.ContinueReading(false, false, true) && CapturePlan.ContinueReading(false, true, false) && !CapturePlan.ContinueReading(true, true, false), "a visible unfocused client is copied; a covered or minimized one is not");
             Check(!CapturePlan.AcceptFrame(null) && !CapturePlan.AcceptFrame(ImageBuffer.Blank(32, 32, ImageBuffer.Pack(0, 0, 0))) && CapturePlan.AcceptFrame(ImageBuffer.Blank(32, 32, ImageBuffer.Pack(180, 40, 40))), "a black or failed frame is not a reading");
             Check(!PanelDock.ZOrderChanged(true, true, true) && !PanelDock.ZOrderChanged(true, false, false) && PanelDock.ZOrderChanged(false, false, true) && PanelDock.ZOrderChanged(true, false, true), "the panel z-order changes only when topmost changes");
@@ -813,7 +814,8 @@ namespace KavrosAfkWarden
             Check(CapturePolicy.Choose(true, false, true, false, true) == CaptureRoute.WindowSurface, "a visible unfocused client uses the window surface when it is offered");
             Check(CapturePolicy.Choose(true, false, true, true, true) == CaptureRoute.WindowSurface, "a covered client is still read from the window surface");
             Check(CapturePolicy.Choose(true, false, true, false, false) == CaptureRoute.Screen, "without window capture, a visible client is read from the screen");
-            Check(CapturePolicy.Choose(true, false, true, true, CapturePlan.OfferWindowSurface) == CaptureRoute.Covered, "a covered client is left unread instead of forcing a window repaint");
+            Check(CapturePolicy.Choose(true, false, true, true, false) == CaptureRoute.Covered, "without Graphics Capture a covered client is left unread");
+            Check(CapturePolicy.Choose(true, false, true, true, CapturePlan.OfferWindowSurface) == CaptureRoute.WindowSurface, "Graphics Capture reads a covered client");
             Check(!CapturePolicy.PixelsAvailable(CaptureRoute.Minimized) && CapturePolicy.PixelsAvailable(CaptureRoute.Screen), "only real frames count as pixels");
             bool[] clear = new bool[] { true, true, true, true, true, true, true, true, true };
             bool[] partial = new bool[] { true, false, false, false, false, false, false, false, false };
@@ -1389,9 +1391,93 @@ namespace KavrosAfkWarden
             return digits;
         }
 
+        private static void ChatAndMetrics(string root)
+        {
+            if (root == null || root.Length == 0) return;
+            string chatDir = Path.Combine(root, "verification", "fixtures", "chat");
+            string elder = Path.Combine(chatDir, "chat-elder-overload-messages.png");
+            string full = Path.Combine(chatDir, "chatbox-full-timestamps.png");
+            string agg = Path.Combine(chatDir, "chat-overload-aggression-messages.png");
+            if (!File.Exists(elder) || !File.Exists(full) || !File.Exists(agg))
+            {
+                Check(false, "missing chat fixtures");
+                return;
+            }
+            double[] scales = new double[] { 1.0, 1.5, 2.0 };
+            string[] names = new string[] { "100%", "150%", "200%" };
+            for (int s = 0; s < scales.Length; s++)
+            {
+                List<ChatHit> lines = ChatReader.Read(PngImage.Load(elder).Scale(scales[s]));
+                Check(Has(lines, "elder", "low") && Has(lines, "elder", "expired") && Has(lines, "prayer", "low") && Has(lines, "prayer", "expired") && Has(lines, "antifire", "low") && Has(lines, "antifire", "expired") && Has(lines, "poison", "low") && Has(lines, "poison", "expired") && !Has(lines, "overload", "low"),
+                    "elder chat crop at " + names[s] + " has its eight potion lines and not a plain overload, got " + Describe(lines));
+                List<ChatHit> box = ChatReader.Read(PngImage.Load(full).Scale(scales[s]));
+                Check(Has(box, "elder", "low") && Has(box, "elder", "expired") && Has(box, "antifire", "expired") && Has(box, "poison", "expired"),
+                    "full chatbox at " + names[s] + " still has the potion lines, got " + Describe(box));
+                List<ChatHit> other = ChatReader.Read(PngImage.Load(agg).Scale(scales[s]));
+                Check(Has(other, "overload", "low") && Has(other, "overload", "expired") && Has(other, "aggression", "low") && Has(other, "aggression", "expired") && Has(other, "prayer", "low") && !Has(other, "elder", "low") && !Has(other, "elder", "expired"),
+                    "overload and aggression crop at " + names[s] + " keeps them apart from elder, got " + Describe(other));
+                bool star = false;
+                for (int i = 0; i < other.Count; i++) if (other[i].Phrase != null && other[i].Phrase.IndexOf("star") >= 0) star = true;
+                Check(!star, "the shooting star line is ignored");
+            }
+            ChatPotionBook book = new ChatPotionBook();
+            List<ChatHit> once = ChatReader.Read(PngImage.Load(agg));
+            List<ChatNotice> first = book.Observe(once);
+            List<ChatNotice> second = book.Observe(once);
+            Check(first.Count >= 4 && second.Count == 0, "the same chat lines do not alert twice, first " + first.Count.ToString() + " second " + second.Count.ToString());
+            Check(book.Detail.IndexOf("Overload: expired") >= 0 && book.Detail.IndexOf("Aggression: expired") >= 0 && book.Detail.IndexOf("Elder:") < 0,
+                "the panel names overload and aggression from the latest line, got " + book.Detail);
+            List<ChatHit> scrolled = new List<ChatHit>();
+            for (int i = 0; i < once.Count; i++)
+            {
+                ChatHit moved = new ChatHit();
+                moved.Phrase = once[i].Phrase;
+                moved.Kind = once[i].Kind;
+                moved.State = once[i].State;
+                moved.Y = once[i].Y - 14;
+                scrolled.Add(moved);
+            }
+            Check(book.Observe(scrolled).Count == 0, "scrolling the same lines does not alert again");
+            Check(ChatPotionBook.Drink("You drink the Elder overload salve"), "a drink line re-arms");
+            string otherClient = Path.Combine(root, "verification", "fixtures", "live0213", "full-client-other-account-layout.png");
+            string panelClient = Path.Combine(root, "verification", "fixtures", "live0213", "full-client-panel-no-pot-timer.png");
+            if (File.Exists(otherClient))
+            {
+                MetricsReader.Result xp = MetricsReader.Read(PngImage.Load(otherClient));
+                Check(xp.Found && xp.Xp == 5403925L, "the other account total XP is 5403925, got " + xp.Xp.ToString() + " found " + xp.Found.ToString());
+            }
+            if (File.Exists(panelClient))
+            {
+                MetricsReader.Result xp = MetricsReader.Read(PngImage.Load(panelClient));
+                Check(xp.Found, "the panel client finds the RuneMetrics XP row");
+            }
+            string readme = File.ReadAllText(Path.Combine(root, "README.md"));
+            Check(readme.IndexOf("RuneMetrics") >= 0 && readme.IndexOf("chatbox") >= 0, "the readme tells players to keep RuneMetrics and the chatbox open");
+        }
+
+        private static bool Has(List<ChatHit> lines, string kind, string state)
+        {
+            if (lines == null) return false;
+            for (int i = 0; i < lines.Count; i++)
+                if (lines[i].Kind == kind && lines[i].State == state) return true;
+            return false;
+        }
+
+        private static string Describe(List<ChatHit> lines)
+        {
+            if (lines == null || lines.Count == 0) return "none";
+            System.Text.StringBuilder text = new System.Text.StringBuilder();
+            for (int i = 0; i < lines.Count; i++)
+            {
+                if (i > 0) text.Append(" ");
+                text.Append(lines[i].Kind).Append(":").Append(lines[i].State);
+            }
+            return text.ToString();
+        }
+
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.14" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.15" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -1402,10 +1488,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.14\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.15\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.14.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.15.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

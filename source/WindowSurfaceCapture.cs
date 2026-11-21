@@ -36,15 +36,8 @@ namespace KavrosAfkWarden
 
         internal void Ensure(IntPtr hwnd)
         {
-            // Borderless consent cannot be confirmed from this unpackaged build.
-            // Starting a session would show the yellow capture border, so never start one.
-            unsupported = true;
             if (unsupported || hwnd == IntPtr.Zero) return;
-            if (hwnd == target && session != null)
-            {
-                Pump();
-                return;
-            }
+            if (hwnd == target && session != null) return;
             Stop();
             try
             {
@@ -67,12 +60,10 @@ namespace KavrosAfkWarden
                 pool = Direct3D11CaptureFramePool.CreateFreeThreaded(device, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, itemSize);
                 session = pool.CreateCaptureSession(item);
                 try { session.IsCursorCaptureEnabled = false; } catch (Exception) { }
-                if (!TryDisableBorder(session))
-                {
-                    unsupported = true;
-                    Stop();
-                    return;
-                }
+                // Hide the yellow border when this Windows build allows it.
+                // Capture still starts when the property is missing, so a covered
+                // client can be read. PrintWindow is not used.
+                TryDisableBorder(session);
                 session.StartCapture();
                 target = hwnd;
                 failure = "";
@@ -92,8 +83,11 @@ namespace KavrosAfkWarden
                 if (latest == null) return null;
                 if ((DateTime.UtcNow - latestAt).TotalSeconds > 1.5) return null;
                 if (cropW < 8 || cropH < 8) return latest;
-                if (cropX == 0 && cropY == 0 && cropW == latest.Width && cropH == latest.Height) return latest;
-                return latest.Crop(cropX, cropY, Math.Min(cropW, latest.Width - cropX), Math.Min(cropH, latest.Height - cropY));
+                if (cropX == 0 && cropY == 0 && cropW >= latest.Width && cropH >= latest.Height) return latest;
+                int w = Math.Min(cropW, latest.Width - cropX);
+                int h = Math.Min(cropH, latest.Height - cropY);
+                if (w < 8 || h < 8) return null;
+                return latest.Crop(cropX, cropY, w, h);
             }
         }
 
@@ -104,6 +98,7 @@ namespace KavrosAfkWarden
         private void Pump()
         {
             if (pool == null || session == null) return;
+            if (latest != null && (DateTime.UtcNow - latestAt).TotalMilliseconds < 400) return;
             Direct3D11CaptureFrame frame = null;
             try
             {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.15
+
+- Potion alerts are read from the chat box. Elder overload, overload, aggression, prayer renewal, antifire and antipoison each keep their own state: active, running low, or expired. A line already on screen does not alert again when the chat scrolls. The buff bar no longer raises potion alerts.
+- Idle follows the RuneMetrics total XP. Keep that window open. An increase resets idle for skilling and for combat, along with hitpoints changes and clicks or keys.
+- A covered or unfocused client is read with Windows Graphics Capture. A minimized client shows Minimized and pauses the reads. PrintWindow is not used.
+
 ## 0.2.14
 
 - Live potion timers are read from the buff icons themselves. A full-size bar of four flasks at 4 minutes, a client with 6m, 5m, 6m and 6m, and another account's four flasks at 11 minutes all keep those times. Prayer and a stack count stay off the potion clock.

@@ -30,6 +30,10 @@ namespace KavrosAfkWarden
         public string BuffTrace = "";
         public List<BuffIcon> Buffs = new List<BuffIcon>();
         public List<IntRect> BuffRects = new List<IntRect>();
+        public List<ChatHit> ChatHits = new List<ChatHit>();
+        public bool MetricsFound;
+        public long MetricsXp;
+        public bool MetricsGain;
     }
 
     internal struct InkBlob
@@ -158,6 +162,13 @@ namespace KavrosAfkWarden
 
         public static HudReading Read(ImageBuffer image, WardenSettings settings)
         {
+            return Read(image, settings, true);
+        }
+
+        // includeBuffs is off on the live watch. The buff search is slow and
+        // potion alerts come from the chat box, so it must not block a frame.
+        public static HudReading Read(ImageBuffer image, WardenSettings settings, bool includeBuffs)
+        {
             HudReading reading = new HudReading();
             if (settings.HasHpPin)
             {
@@ -175,7 +186,7 @@ namespace KavrosAfkWarden
                 ReadStrip(image, reading, !settings.HasHpPin, !settings.HasPrayerPin);
             if (reading.Hp == null || reading.Prayer == null)
                 ReadThinPair(image, reading);
-            ReadBuffBar(image, settings, reading);
+            if (includeBuffs) ReadBuffBar(image, settings, reading);
             return reading;
         }
 

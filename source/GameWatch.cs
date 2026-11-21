@@ -143,6 +143,12 @@ namespace KavrosAfkWarden
         private IntRect xpBox;
         private IntRect packBox;
         private IntRect packHold;
+        private IntRect chatBox;
+        private IntRect metricsBox;
+        private readonly WindowSurfaceCapture windowSurface = new WindowSurfaceCapture();
+        private bool useSurface;
+        private long lastMetricsXp;
+        private bool haveMetricsXp;
         private IntRect heldLife;
         private IntRect heldPrayer;
         private bool haveBoxes;
@@ -302,7 +308,7 @@ namespace KavrosAfkWarden
             bool focused = WindowLocator.IsForeground(hwnd);
             if (!capture || iconic)
             {
-                Publish(new HudReading(), iconic ? CaptureRoute.Minimized : CaptureRoute.Covered, focused, iconic ? "Kavros is minimized. Hitpoints, prayer, potions and idle need the window restored. The AFK timer is still running." : "Paused while the panel is dragged.");
+                Publish(new HudReading(), iconic ? CaptureRoute.Minimized : CaptureRoute.Covered, focused, iconic ? "Minimized" : "Paused while the panel is dragged.");
                 return;
             }
             Rectangle client = NativeMethods.ClientBounds(hwnd);
@@ -316,34 +322,45 @@ namespace KavrosAfkWarden
             if (lastClient != hwnd || lastSize != client.Size || !settings.SamePins(lastSettings))
             {
                 lastClient=hwnd; lastSize=client.Size; lastSettings=settings;
-                lifeBox=prayerBox=buffStrip=xpBox=packBox=packHold=new IntRect();
+                lifeBox=prayerBox=buffStrip=xpBox=packBox=packHold=chatBox=metricsBox=new IntRect();
                 heldLife=heldPrayer=new IntRect();
                 haveBoxes=false; missedLocks=0; nextFullSearch=DateTime.MinValue;
             }
             bool visible = RectOnGame(hwnd, client, new IntRect(0, 0, client.Width, client.Height));
+            if (CapturePlan.OfferWindowSurface) windowSurface.Ensure(hwnd);
+            useSurface = windowSurface.Available;
+            CaptureRoute route = CapturePolicy.Choose(true, false, visible, !visible, useSurface);
             HudReading reading = new HudReading();
-            if (visible && CapturePlan.ContinueReading(false, focused, false))
+            if (CapturePolicy.PixelsAvailable(route))
             {
                 bool full = CapturePlan.WantFull(haveBoxes, DateTime.UtcNow, nextFullSearch);
                 if (full) reading = FullSearch(hwnd, client, settings, panel);
                 else if (haveBoxes) reading = LockedSearch(hwnd, client, settings);
             }
-            bool saw = reading.Hp != null || reading.Prayer != null || reading.StripFound || reading.BuffBarFound;
+            bool saw = reading.Hp != null || reading.Prayer != null || reading.StripFound || reading.BuffBarFound
+                || reading.MetricsFound || (reading.ChatHits != null && reading.ChatHits.Count > 0);
             if (!saw)
             {
-                string missed = visible
+                string missed = route == CaptureRoute.WindowSurface || visible
                     ? "Waiting for the hitpoint and prayer numbers."
                     : "Kavros is covered. Hitpoints, prayer and potions stay on the last good reading.";
-                Publish(new HudReading(), visible ? CaptureRoute.Screen : CaptureRoute.Covered, focused, missed);
+                Publish(new HudReading(), route == CaptureRoute.WindowSurface ? route : (visible ? CaptureRoute.Screen : CaptureRoute.Covered), focused, missed);
                 return;
             }
-            string note = focused ? "Watching the visible Kavros window." : "Watching the visible Kavros window in the background.";
-            Publish(reading, CaptureRoute.Screen, focused, note);
+            string note = route == CaptureRoute.WindowSurface
+                ? "Watching the Kavros window."
+                : (focused ? "Watching the visible Kavros window." : "Watching the visible Kavros window in the background.");
+            Publish(reading, route, focused, note);
         }
 
         private ImageBuffer Grab(IntPtr hwnd, Rectangle client, IntRect local, int slot)
         {
             if (local.Width < 4 || local.Height < 4) return null;
+            if (useSurface)
+            {
+                ImageBuffer fromWindow = windowSurface.Copy(local.X, local.Y, local.Width, local.Height);
+                if (CapturePlan.AcceptFrame(fromWindow)) return fromWindow;
+            }
             if (!RectOnGame(hwnd, client, local)) return null;
             ImageBuffer shot = CopyScreen(ScreenOf(client, local), slot);
             if (!CapturePlan.AcceptFrame(shot)) return null;
@@ -374,7 +391,9 @@ namespace KavrosAfkWarden
                 return new HudReading();
             }
             BlankPanel(image, client, panel);
-            HudReading reading = HudReader.Read(image, settings);
+            // Chat and the XP tracker first. The buff bar is not part of this pass.
+            HudReading reading = HudReader.Read(image, settings, false);
+            ReadSide(image, reading, 0);
             if (reading.LifeText.Width > 8) lifeBox = reading.LifeText;
             if (reading.PrayerText.Width > 8) prayerBox = reading.PrayerText;
             IntRect foundBuff = Union(reading.BuffRects);
@@ -472,9 +491,35 @@ namespace KavrosAfkWarden
             else missedLocks = 0;
             RememberBars(reading);
             if (!slow) return reading;
-            ImageBuffer xp = xpBox.Width > 8 ? Grab(hwnd, client, xpBox, 4) : null;
-            ImageBuffer pack = packBox.Width > 8 ? Grab(hwnd, client, packBox, 5) : null;
-            skills.Observe(xp, pack);
+            if (chatBox.Width > 8)
+            {
+                ImageBuffer chat = Grab(hwnd, client, chatBox, 4);
+                if (chat != null)
+                {
+                    List<ChatHit> hits = ChatReader.Read(chat);
+                    for (int i = 0; i < hits.Count; i++) hits[i].Y += chatBox.Y;
+                    reading.ChatHits = hits;
+                }
+            }
+            if (metricsBox.Width > 8)
+            {
+                ImageBuffer metrics = Grab(hwnd, client, metricsBox, 5);
+                if (metrics != null)
+                {
+                    MetricsReader.Result read = MetricsReader.Read(metrics);
+                    if (read.Found)
+                    {
+                        reading.MetricsFound = true;
+                        reading.MetricsXp = read.Xp;
+                        if (haveMetricsXp && read.Xp > lastMetricsXp) reading.MetricsGain = true;
+                        lastMetricsXp = read.Xp;
+                        haveMetricsXp = true;
+                        if (reading.MetricsGain) publishedXp = true;
+                    }
+                }
+            }
+            ImageBuffer pack = packBox.Width > 8 ? Grab(hwnd, client, packBox, 3) : null;
+            skills.Observe(null, pack);
             PublishSkills();
             return reading;
         }
@@ -525,8 +570,43 @@ namespace KavrosAfkWarden
 
         private void NoteActivity(ImageBuffer image)
         {
-            skills.Observe(image, image);
+            // Idle follows the RuneMetrics total, the backpack, hitpoints and input.
+            skills.Observe(null, image);
             PublishSkills();
+        }
+
+        private void ReadSide(ImageBuffer image, HudReading reading, int yOffset)
+        {
+            if (image == null || reading == null) return;
+            List<ChatHit> hits = ChatReader.Read(image);
+            for (int i = 0; i < hits.Count; i++) hits[i].Y += yOffset;
+            reading.ChatHits = hits;
+            if (hits.Count > 0)
+            {
+                int top = hits[0].Y;
+                int bottom = hits[0].Y;
+                for (int i = 1; i < hits.Count; i++)
+                {
+                    if (hits[i].Y < top) top = hits[i].Y;
+                    if (hits[i].Y > bottom) bottom = hits[i].Y;
+                }
+                int y = Math.Max(0, top - 30);
+                int h = Math.Min(image.Height - y, bottom - top + 80);
+                chatBox = new IntRect(0, y, image.Width, Math.Max(40, h));
+            }
+            MetricsReader.Result metrics = MetricsReader.Read(image);
+            if (metrics.Found)
+            {
+                reading.MetricsFound = true;
+                reading.MetricsXp = metrics.Xp;
+                if (haveMetricsXp && metrics.Xp > lastMetricsXp) reading.MetricsGain = true;
+                lastMetricsXp = metrics.Xp;
+                haveMetricsXp = true;
+                if (reading.MetricsGain) publishedXp = true;
+                int mx = Math.Max(0, metrics.X);
+                int my = Math.Max(0, metrics.Y);
+                metricsBox = new IntRect(mx, my, Math.Min(image.Width - mx, Math.Max(40, metrics.W)), Math.Min(image.Height - my, Math.Max(24, metrics.H)));
+            }
         }
 
         private void PublishSkills()

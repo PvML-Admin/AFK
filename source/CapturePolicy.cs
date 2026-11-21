@@ -192,7 +192,7 @@ namespace KavrosAfkWarden
         // Borderless Graphics Capture needs a Win11 consent call that this
         // unpackaged .NET 4.8 build cannot confirm without risking the yellow
         // border. Covered windows are left unread instead.
-        public static bool OfferWindowSurface { get { return false; } }
+        public static bool OfferWindowSurface { get { return true; } }
 
         public static bool AcceptFrame(ImageBuffer image)
         {

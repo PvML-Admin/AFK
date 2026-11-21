@@ -154,6 +154,7 @@ namespace KavrosAfkWarden
     {
         private readonly PaintedLabel title = new PaintedLabel();
         private readonly PaintedLabel note = new PaintedLabel();
+        private readonly PaintedLabel metricsHint = new PaintedLabel();
         internal readonly StatusRow Idle = new StatusRow();
         internal readonly StatusRow Hp = new StatusRow();
         internal readonly StatusRow Prayer = new StatusRow();
@@ -180,7 +181,7 @@ namespace KavrosAfkWarden
             BackColor = KavrosTheme.Bg;
             ForeColor = KavrosTheme.Text;
             Font = KavrosTheme.Ui(9F, false);
-            ClientSize = new Size(400, 262);
+            ClientSize = new Size(400, 278);
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
             DoubleBuffered = true;
             title.SetBounds(0, 0, 400, 32);
@@ -216,14 +217,21 @@ namespace KavrosAfkWarden
             Place(Prayer, 130);
             Place(Potion, 162);
             Place(Afk, 194);
+            metricsHint.SetBounds(12, 224, 376, 16);
+            metricsHint.Text = "Keep RuneMetrics XP open";
+            metricsHint.Font = KavrosTheme.Ui(7.5F, false);
+            metricsHint.ForeColor = Color.FromArgb(120, 128, 136);
+            metricsHint.BackColor = KavrosTheme.Bg;
+            metricsHint.Renderer = DrawHint;
+            Controls.Add(metricsHint);
             pause.Text = "Pause";
             pause.Tone = ButtonTone.Primary;
-            pause.SetBounds(12, 228, 184, 24);
+            pause.SetBounds(12, 244, 184, 24);
             pause.Click += delegate { if (PauseRequested != null) PauseRequested(); };
             Controls.Add(pause);
             exit.Text = "Exit";
             exit.Tone = ButtonTone.Secondary;
-            exit.SetBounds(204, 228, 184, 24);
+            exit.SetBounds(204, 244, 184, 24);
             exit.Click += delegate { if (ExitRequested != null) ExitRequested(); };
             Controls.Add(exit);
             FormClosing += delegate(object sender, FormClosingEventArgs e)
@@ -235,6 +243,12 @@ namespace KavrosAfkWarden
         internal bool IsDragging { get { return dragging; } }
         internal void SetPaused(bool paused) { pause.Text = paused ? "Resume" : "Pause"; }
         internal void SetNote(string text) { note.Text = text; }
+        private bool hintWanted = true;
+        internal void SetMetricsHint(bool show)
+        {
+            hintWanted = show;
+            metricsHint.Visible = show && !collapsed;
+        }
         private bool gameFound;
         private string gameName = "";
         internal void SetGame(bool found, string name)
@@ -256,9 +270,10 @@ namespace KavrosAfkWarden
             collapsed = value;
             collapse.Text = collapsed ? "+" : "-";
             note.Visible = !collapsed;
+            metricsHint.Visible = !collapsed && hintWanted;
             Idle.Visible = Hp.Visible = Prayer.Visible = Potion.Visible = Afk.Visible = !collapsed;
             pause.Visible = exit.Visible = !collapsed;
-            ClientSize = new Size(400, collapsed ? 32 : 262);
+            ClientSize = new Size(400, collapsed ? 32 : 278);
         }
 
         private void LayoutHeader()
@@ -285,6 +300,12 @@ namespace KavrosAfkWarden
             string pill = gameFound ? "GAME DETECTED" : "NO GAME";
             int width = KavrosTheme.DrawPill(g, 0, label.Height / 2, pill, gameFound ? PillTone.Ok : PillTone.Bad, KavrosTheme.Bg);
             TextRenderer.DrawText(g, gameName, KavrosTheme.Ui(8.5F, false), new Rectangle(width + 8, 0, Math.Max(1, label.Width - width - 8), label.Height), KavrosTheme.Text, KavrosTheme.Bg, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+        }
+
+        private void DrawHint(Graphics g, PaintedLabel label)
+        {
+            using (Brush brush = new SolidBrush(KavrosTheme.Bg)) g.FillRectangle(brush, label.ClientRectangle);
+            TextRenderer.DrawText(g, label.Text, KavrosTheme.Ui(7.5F, false), label.ClientRectangle, Color.FromArgb(120, 128, 136), KavrosTheme.Bg, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
         }
 
         protected override void WndProc(ref Message message)
@@ -361,7 +382,6 @@ namespace KavrosAfkWarden
         private int? shownHpMax;
         private int? shownPrayer;
         private int? shownPrayerMax;
-        private int? shownPotion;
         private PotionDisplay potionDisplay=new PotionDisplay();
         private IntPtr observedClient, panelOwner;
         private DateTime lastFrame;
@@ -369,6 +389,7 @@ namespace KavrosAfkWarden
         private ReadGate hpGate = new ReadGate();
         private ReadGate prayerGate = new ReadGate();
         private readonly BuffClock buffClock = new BuffClock();
+        private readonly ChatPotionBook chatPots = new ChatPotionBook();
         private WardenEngine engine = new WardenEngine();
         private readonly System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
         private readonly NotifyIcon tray;
@@ -545,7 +566,8 @@ namespace KavrosAfkWarden
             prayerSound = Check("Sound", 500, 444, 84, settings.PrayerSound);
             prayerNotify = Check("Notify", 590, 444, 78, settings.PrayerNotify);
 
-            potionOn = Check("Potion running out", 28, 484, 220, settings.PotionEnabled);
+            potionOn = Check("Potion alerts from chat", 28, 484, 220, settings.PotionEnabled);
+            Caption("Keep the chatbox visible, with game messages on.", 250, 488);
             Caption("Below", 28, 512);
             Number(potionSeconds, 88, 508, 1, 600, settings.PotionSeconds);
             Caption("seconds", 172, 512);
@@ -1250,18 +1272,26 @@ namespace KavrosAfkWarden
             shownHpMax = hpMax;
             shownPrayer = prayer;
             shownPrayerMax = prayerMax;
-            // Each potion keeps its own clock. A frame that did not scan the buff
-            // bar leaves those clocks running.
-            shownPotion = freshFrame && lastHud.BuffScanned
-                ? buffClock.Tick(lastHud.Buffs, true, sampleTime)
-                : buffClock.Current(sampleTime);
+            // Potion alerts come from the chat box. The buff bar does not raise them.
             sample.Hp = freshFrame && lastHud.HpMax.HasValue && !hpGate.Stale && hpComparable ? hp : (int?)null;
             sample.HpMax = hpMax;
             sample.Prayer = freshFrame && lastHud.PrayerMax.HasValue && !prayerGate.Stale && prayerComparable ? prayer : (int?)null;
             sample.PrayerMax = prayerMax;
-            sample.PotionSeconds = buffClock.Alertable ? shownPotion : null;
-            sample.PotionClear = freshFrame && lastHud.BuffScanned && !buffClock.Tracking;
+            sample.PotionSeconds = null;
+            sample.PotionClear = false;
+            List<ChatNotice> potionNotices = freshFrame ? chatPots.Observe(lastHud.ChatHits) : new List<ChatNotice>();
             List<AlertEvent> events = engine.Tick(sample, settings);
+            for (int n = 0; n < potionNotices.Count; n++)
+            {
+                if (!settings.PotionEnabled) break;
+                AlertEvent extra = new AlertEvent();
+                extra.Kind = "potion";
+                extra.Title = potionNotices[n].Title;
+                extra.Detail = potionNotices[n].Detail;
+                extra.Sound = settings.AllowsSound("potion");
+                extra.Notify = settings.AllowsNotify("potion");
+                events.Add(extra);
+            }
             for (int i = 0; i < events.Count; i++)
             {
                 if (events[i].Notify)
@@ -1299,14 +1329,14 @@ namespace KavrosAfkWarden
             panel.Prayer.Pill = engine.PrayerLatched ? "Low prayer" : "Prayer";
             panel.Prayer.Tone = engine.PrayerLatched ? PillTone.Warn : !pixels || lastHud.Prayer == null ? PillTone.Example : PillTone.Ok;
             panel.Prayer.Value = !pixels ? "No view" : prayerGate.Stale ? Stale(shownPrayer) : shownPrayer == null ? "Unread" : Format(shownPrayer, shownPrayerMax, lastHud.PrayerFromOrb);
-            string potionName = buffClock.Name == null || buffClock.Name.Length == 0 ? "Potions" : buffClock.Name;
-            string roster = buffClock.Detail ?? "";
-            bool several = roster.IndexOf('·') >= 0;
-            panel.Potion.Pill = engine.PotionLatched ? "Potion low" : (several ? "Potions" : potionName);
-            panel.Potion.Tone = engine.PotionLatched ? PillTone.Warn : !shownPotion.HasValue ? PillTone.Example : PillTone.Ok;
+            string roster = chatPots.Detail ?? "";
+            bool potionLow = roster.IndexOf("running low") >= 0 || roster.IndexOf("expired") >= 0;
+            panel.Potion.Pill = potionLow ? "Potion" : "Potions";
+            panel.Potion.Tone = potionLow ? PillTone.Warn : roster.Length == 0 ? PillTone.Example : PillTone.Ok;
             panel.Potion.Value = roster.Length > 0 && !settings.Paused
                 ? roster
                 : (!pixels ? "No view" : "No potion timer");
+            panel.SetMetricsHint(!lastHud.MetricsFound);
             int left = Math.Max(0, (int)engine.AfkRemaining.TotalSeconds);
             panel.Afk.Pill = engine.AfkLatched ? "AFK soon" : "AFK timer";
             panel.Afk.Tone = engine.AfkLatched ? PillTone.Bad : PillTone.Ok;
