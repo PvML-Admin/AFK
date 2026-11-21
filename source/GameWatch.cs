@@ -154,6 +154,7 @@ namespace KavrosAfkWarden
         internal bool PackActivity;
         internal bool SkillView;
         internal string SkillTrace = "xp=none pack=none";
+        internal string ChatNote = "";
         internal Rectangle PanelBounds;
 
         private readonly object gate = new object();
@@ -172,6 +173,7 @@ namespace KavrosAfkWarden
         private bool publishedPack;
         private bool publishedSkillView;
         private string publishedSkillTrace = "xp=none pack=none";
+        private string publishedChatNote = "";
         private readonly SkillSense skills = new SkillSense();
         private int publishedMs;
         private readonly bool[] keyDown = new bool[256];
@@ -186,6 +188,10 @@ namespace KavrosAfkWarden
         private readonly WindowSurfaceCapture windowSurface = new WindowSurfaceCapture();
         private bool useSurface;
         private readonly MetricsLock xpLock = new MetricsLock();
+        private List<ChatHit> ocrHits = new List<ChatHit>();
+        private string ocrTrace = "";
+        private string ocrNote = "";
+        private int chatBusy;
         private HudReading lastGood;
         private IntRect heldLife;
         private IntRect heldPrayer;
@@ -253,6 +259,7 @@ namespace KavrosAfkWarden
                 PackActivity = publishedPack;
                 SkillView = publishedSkillView;
                 SkillTrace = publishedSkillTrace;
+                ChatNote = publishedChatNote;
                 LastTickMs = publishedMs;
                 publishedXp = false;
                 publishedPack = false;
@@ -264,9 +271,23 @@ namespace KavrosAfkWarden
         {
             try { Thread.CurrentThread.Priority = ThreadPriority.BelowNormal; } catch (Exception) { }
             DateTime nextSample = DateTime.MinValue;
+            DateTime nextPopup = DateTime.MinValue;
+            DateTime nextChat = DateTime.MinValue;
             try { while (alive)
             {
                 PollKeys();
+                if (DateTime.UtcNow >= nextPopup)
+                {
+                    try { ScanPopup(); }
+                    catch (Exception) { }
+                    nextPopup = DateTime.UtcNow.AddMilliseconds(200);
+                }
+                if (DateTime.UtcNow >= nextChat)
+                {
+                    try { ScheduleChat(); }
+                    catch (Exception) { }
+                    nextChat = DateTime.UtcNow.AddSeconds(1);
+                }
                 if (DateTime.UtcNow >= nextSample)
                 {
                     var clock = Stopwatch.StartNew();
@@ -275,7 +296,7 @@ namespace KavrosAfkWarden
                     lock (gate) { publishedMs = (int)clock.ElapsedMilliseconds; }
                     nextSample = DateTime.UtcNow.AddMilliseconds(CapturePlan.SampleMilliseconds);
                 }
-                Thread.Sleep(35);
+                Thread.Sleep(20);
             } }
             finally { DisposeBuffers(); }
         }
@@ -610,17 +631,8 @@ namespace KavrosAfkWarden
             }
             else missedLocks = 0;
             RememberBars(reading);
+            ApplyStoredChat(reading);
             if (!slow) return reading;
-            if (chatBox.Width > 8)
-            {
-                ImageBuffer chat = Grab(hwnd, client, chatBox, 4);
-                if (chat != null)
-                {
-                    List<ChatHit> hits = ChatReader.Read(chat);
-                    for (int i = 0; i < hits.Count; i++) hits[i].Y += chatBox.Y;
-                    reading.ChatHits = hits;
-                }
-            }
             if (metricsBox.Width > 8)
             {
                 ImageBuffer metrics = Grab(hwnd, client, metricsBox, 5);
@@ -691,9 +703,7 @@ namespace KavrosAfkWarden
         private void ReadSide(ImageBuffer image, HudReading reading, int yOffset)
         {
             if (image == null || reading == null) return;
-            List<ChatHit> hits = ChatReader.Read(image);
-            for (int i = 0; i < hits.Count; i++) hits[i].Y += yOffset;
-            reading.ChatHits = hits;
+            ApplyStoredChat(reading);
             if (hits.Count > 0)
             {
                 int top = hits[0].Y;
@@ -709,6 +719,129 @@ namespace KavrosAfkWarden
             }
             MetricsReader.Result metrics = MetricsReader.Read(image);
             ApplyMetrics(reading, metrics, image);
+        }
+
+        private void ScanPopup()
+        {
+            IntPtr hwnd;
+            bool capture;
+            lock (gate)
+            {
+                hwnd = requestHwnd;
+                capture = requestCapture;
+            }
+            if (!capture || hwnd == IntPtr.Zero || !NativeMethods.IsWindow(hwnd) || NativeMethods.IsIconic(hwnd)) return;
+            Rectangle client = NativeMethods.ClientBounds(hwnd);
+            if (client.Width < 200 || client.Height < 200) return;
+            if (CapturePlan.OfferWindowSurface) windowSurface.Ensure(hwnd);
+            useSurface = windowSurface.Available;
+            int x = client.Width / 4;
+            int y = Math.Max(2, client.Height / 40);
+            int w = client.Width / 2;
+            int h = Math.Max(24, client.Height * 22 / 100);
+            ImageBuffer image = null;
+            if (useSurface) image = windowSurface.Copy(x, y, w, h);
+            if (image == null) return;
+            if (!XpFloat.InCrop(image)) return;
+            lock (gate)
+            {
+                publishedXp = true;
+                if (publishedSkillTrace == null || publishedSkillTrace.IndexOf("xp=popup") < 0)
+                    publishedSkillTrace = "xp=popup " + (publishedSkillTrace ?? "");
+            }
+        }
+
+        private void ScheduleChat()
+        {
+            if (System.Threading.Interlocked.CompareExchange(ref chatBusy, 1, 0) != 0) return;
+            IntPtr hwnd;
+            bool capture;
+            lock (gate)
+            {
+                hwnd = requestHwnd;
+                capture = requestCapture;
+            }
+            if (!capture || hwnd == IntPtr.Zero || !NativeMethods.IsWindow(hwnd) || NativeMethods.IsIconic(hwnd))
+            {
+                System.Threading.Interlocked.Exchange(ref chatBusy, 0);
+                return;
+            }
+            Rectangle client = NativeMethods.ClientBounds(hwnd);
+            if (client.Width < 200 || client.Height < 200)
+            {
+                System.Threading.Interlocked.Exchange(ref chatBusy, 0);
+                return;
+            }
+            if (CapturePlan.OfferWindowSurface) windowSurface.Ensure(hwnd);
+            ImageBuffer frame = windowSurface.Available ? windowSurface.Copy(0, 0, client.Width, client.Height) : null;
+            if (frame == null)
+            {
+                System.Threading.Interlocked.Exchange(ref chatBusy, 0);
+                return;
+            }
+            IntRect box = ChatPrep.FindBox(frame);
+            if (box.Width < 40 || box.Height < 20)
+            {
+                System.Threading.Interlocked.Exchange(ref chatBusy, 0);
+                return;
+            }
+            chatBox = box;
+            ImageBuffer crop = frame.Crop(box.X, box.Y, box.Width, box.Height);
+            System.Threading.ThreadPool.QueueUserWorkItem(delegate
+            {
+                try { ReadChat(crop); }
+                finally { System.Threading.Interlocked.Exchange(ref chatBusy, 0); }
+            });
+        }
+
+        private void ReadChat(ImageBuffer crop)
+        {
+            if (!WindowsChatOcr.Available)
+            {
+                string why = WindowsChatOcr.Reason;
+                if (why == null || why.Length == 0) why = "no English OCR language pack";
+                lock (gate)
+                {
+                    ocrHits = new List<ChatHit>();
+                    ocrNote = "Chat reader unavailable";
+                    ocrTrace = "unavailable: " + why;
+                    publishedChatNote = ocrNote;
+                }
+                return;
+            }
+            string text = WindowsChatOcr.Read(crop);
+            List<ChatHit> hits = ChatPhrase.FromOcr(text);
+            System.Text.StringBuilder trace = new System.Text.StringBuilder();
+            string[] lines = (text ?? "").Split('\n');
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = (lines[i] ?? "").Trim();
+                if (line.Length == 0) continue;
+                if (trace.Length > 0) trace.Append(" | ");
+                string shown = line;
+                if (shown.Length > 80) shown = shown.Substring(0, 80);
+                trace.Append("raw=\"").Append(shown).Append("\"");
+            }
+            if (trace.Length == 0 && (WindowsChatOcr.Reason ?? "").Length > 0)
+                trace.Append("unavailable: ").Append(WindowsChatOcr.Reason);
+            lock (gate)
+            {
+                ocrHits = hits;
+                ocrTrace = trace.ToString();
+                ocrNote = "";
+                publishedChatNote = "";
+                ChatReader.Trace = ocrTrace;
+            }
+        }
+
+        private void ApplyStoredChat(HudReading reading)
+        {
+            if (reading == null) return;
+            lock (gate)
+            {
+                reading.ChatHits = ocrHits ?? new List<ChatHit>();
+                ChatReader.Trace = ocrTrace ?? "";
+            }
         }
 
         private void ApplyMetrics(HudReading reading, MetricsReader.Result metrics, ImageBuffer image)

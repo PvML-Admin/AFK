@@ -29,7 +29,9 @@ function Find-WindowsMetadata($windowsDirectory, $kitRoots) {
         'Windows.Graphics.DirectX',
         'Windows.Graphics.DirectX.Direct3D11',
         'Windows.UI.Notifications',
-        'Windows.Data'
+        'Windows.Data',
+        'Windows.Media',
+        'Windows.Globalization'
     )
     if ($windowsDirectory) {
         $winmeta = Join-Path $windowsDirectory 'System32\WinMetadata'

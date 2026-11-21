@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.20
+
+- Chat lines are read with Windows OCR from the chat box, doubled and turned into dark text on a light page. The raw text of each line is logged. If the English language pack is missing, the potion row says Chat reader unavailable.
+- The '+N xp' popup is checked several times a second in the centre of the sky. Seeing the popup resets idle. The number does not have to be read correctly.
+
 ## 0.2.19
 
 - An on-screen XP popup, such as "+351 xp" or "+2,437 xp (162.5 bonus xp)", resets idle. A RuneMetrics total is only a backup, and only when it is a full number. 1.6M and 250K are ignored. The hint appears only when neither signal is there.

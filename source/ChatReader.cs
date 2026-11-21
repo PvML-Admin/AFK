@@ -366,6 +366,77 @@ namespace KavrosAfkWarden
             return Distance(a, b) <= 2;
         }
 
+        public static List<ChatHit> FromOcr(string text)
+        {
+            List<ChatHit> hits = new List<ChatHit>();
+            if (text == null || text.Length == 0) return hits;
+            string[] lines = text.Split('\n');
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string kind;
+                string state;
+                string phrase;
+                if (!MatchLine(lines[i], out kind, out state, out phrase)) continue;
+                ChatHit hit = new ChatHit();
+                hit.Phrase = phrase;
+                hit.Kind = kind;
+                hit.State = state;
+                hit.Y = i * 16;
+                hit.Score = 1;
+                hit.Decision = "match";
+                hits.Add(hit);
+            }
+            return hits;
+        }
+
+        public static bool MatchLine(string line, out string kind, out string state, out string phrase)
+        {
+            kind = "";
+            state = "";
+            phrase = "";
+            string n = Normalize(line);
+            if (n.Length < 12) return false;
+            string[] known = Known();
+            for (int i = 0; i < known.Length; i++)
+            {
+                string[] parts = known[i].Split('|');
+                if (parts.Length != 3) continue;
+                if (n.IndexOf(parts[2]) < 0 && !Near(n, parts[2])) continue;
+                kind = parts[0];
+                state = parts[1];
+                phrase = parts[2];
+                return true;
+            }
+            return false;
+        }
+
+        private static bool Near(string line, string phrase)
+        {
+            if (Math.Abs(line.Length - phrase.Length) > 6) return false;
+            return Distance(line, phrase) <= 3;
+        }
+
+        private static string[] Known()
+        {
+            return new string[] {
+                "elder|low|your elder overload is about to run out",
+                "elder|expired|the effects of elder overload have worn off",
+                "prayer|low|your prayer renewal effect will run out",
+                "prayer|expired|your prayer renewal effect has run out",
+                "antifire|low|your super antifire potion is about to run out",
+                "antifire|expired|your super antifire potion has run out",
+                "poison|low|your immunity to poison is about to run out",
+                "poison|low|your immunity to poison is about to expire",
+                "poison|expired|your immunity to poison has run out",
+                "poison|expired|your immunity to poison has expired",
+                "overload|low|your overload is about to run out",
+                "overload|low|the effects of overload are about to wear off",
+                "overload|expired|the effects of overload have worn off",
+                "aggression|low|your aggression potion is about to run out",
+                "aggression|expired|the effects of your aggression potion have worn off"
+            };
+        }
+
         public static string KindOf(string text)
         {
             string n = Normalize(text);

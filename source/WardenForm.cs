@@ -1517,9 +1517,10 @@ namespace KavrosAfkWarden
             panel.Prayer.Value = closed ? "Client closed" : minimized ? "Minimized" : PrayerText(pixels);
             panel.Potion.Pill = potionExpired || potionLow ? "Potion" : "Potions";
             panel.Potion.Tone = potionExpired ? PillTone.Bad : potionLow ? PillTone.Warn : roster.Length == 0 ? PillTone.Example : PillTone.Ok;
+            string waiting = (grab.ChatNote != null && grab.ChatNote.Length > 0) ? grab.ChatNote : "Watching chat";
             panel.Potion.Value = closed ? "Client closed" : roster.Length > 0 && !settings.Paused
                 ? roster
-                : (minimized ? "Minimized" : !pixels ? "No view" : "Watching chat");
+                : (minimized ? "Minimized" : !pixels ? "No view" : waiting);
             bool popup = grab.SkillTrace != null && grab.SkillTrace.IndexOf("xp=") >= 0 && grab.SkillTrace.IndexOf("xp=none") < 0;
             bool fullTotal = lastHud.MetricsFound;
             if (popup || fullTotal) metricsAbsentSince = DateTime.MinValue;

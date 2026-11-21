@@ -856,6 +856,75 @@ namespace KavrosAfkWarden
     // A confirmed XP drop resets idle immediately. The same number still
     // floating on that spot is not a second drop. A backpack grid, once
     // found, stays put when a later frame misses it.
+    // The '+N xp' line floats in the centre of the sky for a second or two.
+    // Any compact mark there counts. The digits do not have to be read.
+    public static class XpFloat
+    {
+        public static bool Present(ImageBuffer image)
+        {
+            if (image == null || image.Width < 80 || image.Height < 80) return false;
+            return Band(image, image.Width / 4, image.Width * 3 / 4, Math.Max(2, image.Height / 40), image.Height * 22 / 100);
+        }
+
+        // The capture loop already cropped the centre-top, so the whole image is the popup area.
+        public static bool InCrop(ImageBuffer image)
+        {
+            if (image == null || image.Width < 20 || image.Height < 12) return false;
+            return Band(image, 0, image.Width, 0, image.Height);
+        }
+
+        private static bool Band(ImageBuffer image, int x0, int x1, int y0, int y1)
+        {
+            if (y1 <= y0 + 4 || x1 <= x0 + 20) return false;
+            int rows = y1 - y0;
+            int[] count = new int[rows];
+            int[] left = new int[rows];
+            int[] right = new int[rows];
+            for (int i = 0; i < rows; i++) { left[i] = x1; right[i] = x0; }
+            for (int y = y0; y < y1; y++)
+            {
+                int i = y - y0;
+                for (int x = x0; x < x1; x++)
+                {
+                    int below = image.Argb(x, Math.Min(image.Height - 1, y + 12));
+                    if (!Mark(image.Argb(x, y), below)) continue;
+                    count[i]++;
+                    if (x < left[i]) left[i] = x;
+                    if (x > right[i]) right[i] = x;
+                }
+            }
+            int row = 0;
+            while (row < rows)
+            {
+                if (count[row] < 10) { row++; continue; }
+                int start = row;
+                int ink = 0;
+                int lo = x1;
+                int hi = x0;
+                while (row < rows && count[row] >= 6)
+                {
+                    ink += count[row];
+                    if (left[row] < lo) lo = left[row];
+                    if (right[row] > hi) hi = right[row];
+                    row++;
+                }
+                int height = row - start;
+                int width = hi - lo + 1;
+                if (height >= 3 && height <= 14 && width >= 28 && width <= 260 && ink >= 16 && ink <= 420) return true;
+            }
+            return false;
+        }
+
+        private static bool Mark(int color, int below)
+        {
+            int r = ImageBuffer.R(color), g = ImageBuffer.G(color), b = ImageBuffer.B(color);
+            int r2 = ImageBuffer.R(below), g2 = ImageBuffer.G(below);
+            bool gold = r > 150 && g > 110 && b < 130 && r > b + 40;
+            bool lift = r + g > r2 + g2 + 35 && r > 140 && g > 110;
+            return gold || lift;
+        }
+    }
+
     public sealed class SkillSense
     {
         public bool XpEvent;

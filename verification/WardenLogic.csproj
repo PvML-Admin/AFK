@@ -14,6 +14,7 @@
     <Compile Include="..\source\AlertModel.cs" />
     <Compile Include="..\source\HudReader.cs" />
     <Compile Include="..\source\ChatReader.cs" />
+    <Compile Include="..\source\ChatPrep.cs" />
     <Compile Include="..\source\ChatLineTemplates.cs" />
     <Compile Include="..\source\ChatPotionBook.cs" />
     <Compile Include="..\source\MetricsReader.cs" />
