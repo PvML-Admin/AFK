@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.16
+
+- Chat potion lines have to match the whole phrase. Ordinary chat, news and trivia no longer raise a potion alert. Lines already on screen when you attach are ignored, and each new line pings at most once. An expired potion stays quiet until a drink or a warning re-arms it.
+- The debug log lists each chat line, the phrase it matched, the score, and whether it alerted, was already seen, was already on screen, or did not match. It also records the RuneMetrics total and why a read was missed.
+- "Keep RuneMetrics XP open" stays hidden until the tracker has been missing for 5 seconds.
+- RuneMetrics is found from the XP / XP/h / ETA header row, including a panel that is all zeros and one that also shows Damage. The potion line uses short labels so it fits the panel.
+
 ## 0.2.15
 
 - Potion alerts are read from the chat box. Elder overload, overload, aggression, prayer renewal, antifire and antipoison each keep their own state: active, running low, or expired. A line already on screen does not alert again when the chat scrolls. The buff bar no longer raises potion alerts.

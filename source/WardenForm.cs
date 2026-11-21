@@ -377,6 +377,8 @@ namespace KavrosAfkWarden
         private bool haveDockedGame;
         private SceneActivity activity = new SceneActivity();
         private DateTime lastDebugSave = DateTime.MinValue;
+        private DateTime metricsAbsentSince = DateTime.MinValue;
+        private IntPtr potsClient = IntPtr.Zero;
         private DateTime lastClientSearch = DateTime.MinValue;
         private int? shownHp;
         private int? shownHpMax;
@@ -920,6 +922,9 @@ namespace KavrosAfkWarden
                     + " activity=" + activity.Reason
                     + " skill=" + (grab.SkillTrace ?? "")
                     + " icons=" + (buffClock.Log ?? "")
+                    + " chat=" + (ChatReader.Trace ?? "")
+                    + " pots=" + (chatPots.Log ?? "")
+                    + " metrics=" + (reading.MetricsFound ? ("xp=" + reading.MetricsXp.ToString()) : ("lost " + (reading.MetricsNote ?? "not found")))
                     + " idleReset=" + (moving ? "yes" : "no")
                     + "\r\n";
                 string logPath = Path.Combine(dir, "debug-log.txt");
@@ -1218,6 +1223,11 @@ namespace KavrosAfkWarden
 
         private void Tick()
         {
+            if (selected != potsClient)
+            {
+                potsClient = selected;
+                chatPots.Attach();
+            }
             if (picking) TryPickClient();
             if (!windowDragging && (selected == IntPtr.Zero || !NativeMethods.IsWindow(selected)) && (DateTime.UtcNow - lastClientSearch).TotalSeconds > 2)
                 DiscoverClients();
@@ -1336,7 +1346,11 @@ namespace KavrosAfkWarden
             panel.Potion.Value = roster.Length > 0 && !settings.Paused
                 ? roster
                 : (!pixels ? "No view" : "No potion timer");
-            panel.SetMetricsHint(!lastHud.MetricsFound);
+            if (lastHud.MetricsFound) metricsAbsentSince = DateTime.MinValue;
+            else if (metricsAbsentSince == DateTime.MinValue) metricsAbsentSince = DateTime.UtcNow;
+            bool metricsHint = !lastHud.MetricsFound && metricsAbsentSince != DateTime.MinValue
+                && (DateTime.UtcNow - metricsAbsentSince).TotalSeconds >= 5;
+            panel.SetMetricsHint(metricsHint);
             int left = Math.Max(0, (int)engine.AfkRemaining.TotalSeconds);
             panel.Afk.Pill = engine.AfkLatched ? "AFK soon" : "AFK timer";
             panel.Afk.Tone = engine.AfkLatched ? PillTone.Bad : PillTone.Ok;

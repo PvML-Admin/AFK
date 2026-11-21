@@ -511,6 +511,7 @@ namespace KavrosAfkWarden
                     {
                         reading.MetricsFound = true;
                         reading.MetricsXp = read.Xp;
+                        reading.MetricsNote = read.Note;
                         if (haveMetricsXp && read.Xp > lastMetricsXp) reading.MetricsGain = true;
                         lastMetricsXp = read.Xp;
                         haveMetricsXp = true;
@@ -595,10 +596,12 @@ namespace KavrosAfkWarden
                 chatBox = new IntRect(0, y, image.Width, Math.Max(40, h));
             }
             MetricsReader.Result metrics = MetricsReader.Read(image);
+            reading.MetricsNote = metrics.Note;
             if (metrics.Found)
             {
                 reading.MetricsFound = true;
                 reading.MetricsXp = metrics.Xp;
+                reading.MetricsNote = metrics.Note;
                 if (haveMetricsXp && metrics.Xp > lastMetricsXp) reading.MetricsGain = true;
                 lastMetricsXp = metrics.Xp;
                 haveMetricsXp = true;

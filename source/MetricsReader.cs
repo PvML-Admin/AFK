@@ -15,6 +15,7 @@ namespace KavrosAfkWarden
             public int Y;
             public int W;
             public int H;
+            public string Note;
         }
 
         private sealed class Glyph
@@ -41,7 +42,29 @@ namespace KavrosAfkWarden
         public static Result Read(ImageBuffer image)
         {
             Result result = new Result();
-            if (image == null) return result;
+            result.Note = "not found";
+            if (image == null) { result.Note = "no image"; return result; }
+            result = ReadScale(image);
+            if (result.Found) return result;
+            ImageBuffer mid = Downscale(image, 150);
+            if (mid != null)
+            {
+                Result scaled = ReadScale(mid);
+                if (scaled.Found) return scaled;
+            }
+            ImageBuffer large = Downscale(image, 200);
+            if (large != null)
+            {
+                Result scaled = ReadScale(large);
+                if (scaled.Found) return scaled;
+            }
+            return result;
+        }
+
+        private static Result ReadScale(ImageBuffer image)
+        {
+            Result result = new Result();
+            result.Note = "no XP row";
             int step = image.Width > 1600 ? 3 : 1;
             for (int y = 0; y < image.Height - 16; y += step)
             {
@@ -53,6 +76,7 @@ namespace KavrosAfkWarden
                     {
                         result.Found = true;
                         result.Xp = xp;
+                        result.Note = "xp=" + xp.ToString();
                         result.X = Math.Max(0, x - 8);
                         result.Y = Math.Max(0, y - 8);
                         result.W = 260;
@@ -61,7 +85,32 @@ namespace KavrosAfkWarden
                     }
                 }
             }
+            result.Note = "no XP row";
             return result;
+        }
+
+        // Inverse of ImageBuffer's nearest enlargement.
+        private static ImageBuffer Downscale(ImageBuffer image, int percent)
+        {
+            if (image == null || percent < 110) return null;
+            int width = Math.Max(1, (int)Math.Round(image.Width * 100.0 / percent));
+            int height = Math.Max(1, (int)Math.Round(image.Height * 100.0 / percent));
+            if (width >= image.Width || height >= image.Height) return null;
+            int[] pixels = new int[width * height];
+            for (int y = 0; y < height; y++)
+            {
+                int sy = (int)Math.Round((y + 0.5) * percent / 100.0 - 0.5);
+                if (sy < 0) sy = 0;
+                if (sy >= image.Height) sy = image.Height - 1;
+                for (int x = 0; x < width; x++)
+                {
+                    int sx = (int)Math.Round((x + 0.5) * percent / 100.0 - 0.5);
+                    if (sx < 0) sx = 0;
+                    if (sx >= image.Width) sx = image.Width - 1;
+                    pixels[y * width + x] = image.Argb(sx, sy);
+                }
+            }
+            return new ImageBuffer(width, height, pixels);
         }
 
         private static bool Chart(ImageBuffer image, int x, int y)

@@ -34,6 +34,7 @@ namespace KavrosAfkWarden
         public bool MetricsFound;
         public long MetricsXp;
         public bool MetricsGain;
+        public string MetricsNote = "";
     }
 
     internal struct InkBlob

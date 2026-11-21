@@ -9,6 +9,8 @@ namespace KavrosAfkWarden
         public string Kind;
         public string State;
         public int Y;
+        public double Score;
+        public string Decision;
     }
 
     // Reads potion lines from the chat box wherever it sits. The shapes are
@@ -16,6 +18,8 @@ namespace KavrosAfkWarden
     // phrases, including server chatter, is left alone.
     public static class ChatReader
     {
+        public static string Trace = "";
+
         public static List<ChatHit> Read(ImageBuffer image)
         {
             List<ChatHit> best = new List<ChatHit>();
@@ -100,43 +104,72 @@ namespace KavrosAfkWarden
             List<int> tops = new List<int>();
             List<int> bottoms = new List<int>();
             Bands(ink, width, height, tops, bottoms);
-            bool[] used = new bool[stamps.Count];
+            System.Text.StringBuilder trace = new System.Text.StringBuilder();
             for (int b = 0; b < tops.Count; b++)
             {
-                int from = tops[b];
-                int to = bottoms[b] - 4;
-                if (to < from) to = from;
-                for (int y = from; y <= to; y++)
+                int y = BestRow(ink, width, tops[b], bottoms[b]);
+                int left;
+                int right;
+                if (!Span(ink, width, height, y, out left, out right)) continue;
+                ChatHit best = null;
+                for (int s = 0; s < stamps.Count; s++)
                 {
-                    int left = 0;
-                    int right = width - 1;
-                    if (!Span(ink, width, height, y, out left, out right)) continue;
-                    for (int s = 0; s < stamps.Count; s++)
+                    ChatStamp stamp = stamps[s];
+                    int line = right - left + 1;
+                    if (line < stamp.Width) continue;
+                    int x = left;
+                    int limit = right - stamp.Width + 1;
+                    double topScore = 0;
+                    int topX = left;
+                    while (x <= limit)
                     {
-                        if (used[s]) continue;
-                        ChatStamp stamp = stamps[s];
-                        if (right - left + 1 < stamp.Width) continue;
-                        int x = left;
-                        int limit = right - stamp.Width + 1;
-                        while (x <= limit)
-                        {
-                            if (Score(ink, width, height, y, x, stamp) >= 0.93)
-                            {
-                                ChatHit hit = new ChatHit();
-                                hit.Phrase = stamp.Phrase;
-                                hit.Kind = stamp.Kind;
-                                hit.State = stamp.State;
-                                hit.Y = y;
-                                hits.Add(hit);
-                                used[s] = true;
-                                break;
-                            }
-                            x++;
-                        }
+                        double score = Score(ink, width, y, x, stamp);
+                        if (score > topScore) { topScore = score; topX = x; }
+                        x++;
+                    }
+                    int extraLeft = topX - left;
+                    int extraRight = right - (topX + stamp.Width - 1);
+                    // The phrase has to fill the line. A timestamp may sit in front.
+                    // A busy chat line that only overlaps part of a phrase is rejected.
+                    if (topScore < 0.92 || extraRight > 18 || extraLeft > 120) continue;
+                    if (best == null || topScore > best.Score)
+                    {
+                        best = new ChatHit();
+                        best.Phrase = stamp.Phrase;
+                        best.Kind = stamp.Kind;
+                        best.State = stamp.State;
+                        best.Y = y;
+                        best.Score = topScore;
+                        best.Decision = "match";
                     }
                 }
+                if (trace.Length > 0) trace.Append(" | ");
+                if (best == null)
+                {
+                    trace.Append("y=").Append(y).Append(" no-match");
+                    continue;
+                }
+                trace.Append("y=").Append(y).Append(" ").Append(best.Kind).Append(" ").Append(best.State)
+                    .Append(" score=").Append(best.Score.ToString("0.00")).Append(" \"").Append(best.Phrase).Append("\"");
+                hits.Add(best);
             }
+            Trace = trace.ToString();
             return hits;
+        }
+
+        private static int BestRow(bool[] ink, int width, int top, int bottom)
+        {
+            int best = top;
+            int bestCount = -1;
+            int last = bottom - 5;
+            if (last < top) last = top;
+            for (int y = top; y <= last; y++)
+            {
+                int n = 0;
+                for (int k = 0; k < 6 && y + k <= bottom; k++) n += CountRow(ink, width, y + k);
+                if (n > bestCount) { bestCount = n; best = y; }
+            }
+            return best;
         }
 
         private static void Bands(bool[] ink, int width, int height, List<int> tops, List<int> bottoms)
@@ -185,23 +218,24 @@ namespace KavrosAfkWarden
             return right >= left;
         }
 
-        private static double Score(bool[] ink, int width, int height, int y, int x, ChatStamp stamp)
+        // Agreement across every cell of the phrase, ink and gaps alike.
+        private static double Score(bool[] ink, int width, int y, int x, ChatStamp stamp)
         {
-            int hit = 0;
-            int miss = 0;
+            int agree = 0;
+            int total = stamp.Width * 6;
+            if (total < 30) return 0;
             for (int dy = 0; dy < 6; dy++)
             {
                 string row = stamp.Rows[dy];
                 int o = (y + dy) * width + x;
                 for (int dx = 0; dx < stamp.Width; dx++)
                 {
-                    if (row[dx] != '1') continue;
-                    if (ink[o + dx]) hit++;
-                    else miss++;
+                    bool on = ink[o + dx];
+                    bool want = row[dx] == '1';
+                    if (on == want) agree++;
                 }
             }
-            if (hit + miss < 30) return 0;
-            return hit / (double)(hit + miss);
+            return agree / (double)total;
         }
     }
 }

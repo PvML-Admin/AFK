@@ -1425,8 +1425,11 @@ namespace KavrosAfkWarden
             List<ChatNotice> first = book.Observe(once);
             List<ChatNotice> second = book.Observe(once);
             Check(first.Count >= 4 && second.Count == 0, "the same chat lines do not alert twice, first " + first.Count.ToString() + " second " + second.Count.ToString());
-            Check(book.Detail.IndexOf("Overload: expired") >= 0 && book.Detail.IndexOf("Aggression: expired") >= 0 && book.Detail.IndexOf("Elder:") < 0,
-                "the panel names overload and aggression from the latest line, got " + book.Detail);
+            Check(book.Detail.IndexOf("Ovl expired") >= 0 && book.Detail.IndexOf("Aggro expired") >= 0 && book.Detail.IndexOf("Elder") < 0,
+                "the panel uses short potion labels, got " + book.Detail);
+            book.Attach();
+            Check(book.Observe(once).Count == 0, "lines already on screen when attaching do not alert");
+            Check(book.Observe(once).Count == 0, "repeating those preexisting lines still does not alert");
             List<ChatHit> scrolled = new List<ChatHit>();
             for (int i = 0; i < once.Count; i++)
             {
@@ -1439,6 +1442,31 @@ namespace KavrosAfkWarden
             }
             Check(book.Observe(scrolled).Count == 0, "scrolling the same lines does not alert again");
             Check(ChatPotionBook.Drink("You drink the Elder overload salve"), "a drink line re-arms");
+            string quiet = Path.Combine(chatDir, "chatbox-no-pot-lines-false-ping.png");
+            if (File.Exists(quiet))
+            {
+                List<ChatHit> noise = ChatReader.Read(PngImage.Load(quiet));
+                ChatPotionBook silent = new ChatPotionBook();
+                List<ChatNotice> ping = silent.Observe(noise);
+                List<ChatNotice> again = silent.Observe(noise);
+                Check(noise.Count == 0 && ping.Count == 0 && again.Count == 0, "a chat with no potion lines matches nothing and makes no sound, got " + Describe(noise) + " notices " + ping.Count.ToString());
+            }
+            else Check(false, "missing chatbox-no-pot-lines-false-ping.png");
+            string xpZero = Path.Combine(chatDir, "runemetrics-xp-only-zero.png");
+            string xpDamage = Path.Combine(chatDir, "runemetrics-damage-and-xp.png");
+            for (int s = 0; s < scales.Length; s++)
+            {
+                if (File.Exists(xpZero))
+                {
+                    MetricsReader.Result zero = MetricsReader.Read(PngImage.Load(xpZero).Scale(scales[s]));
+                    Check(zero.Found && zero.Xp == 0, "XP-only metrics at " + names[s] + " reads 0, got " + zero.Xp.ToString() + " " + (zero.Note ?? ""));
+                }
+                if (File.Exists(xpDamage))
+                {
+                    MetricsReader.Result total = MetricsReader.Read(PngImage.Load(xpDamage).Scale(scales[s]));
+                    Check(total.Found && total.Xp == 5947600L, "damage metrics at " + names[s] + " reads 5947600, got " + total.Xp.ToString() + " " + (total.Note ?? ""));
+                }
+            }
             string otherClient = Path.Combine(root, "verification", "fixtures", "live0213", "full-client-other-account-layout.png");
             string panelClient = Path.Combine(root, "verification", "fixtures", "live0213", "full-client-panel-no-pot-timer.png");
             if (File.Exists(otherClient))
@@ -1477,7 +1505,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.15" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.16" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -1488,10 +1516,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.15\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.16\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.15.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.16.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

@@ -28,12 +28,34 @@ namespace KavrosAfkWarden
 
         private readonly List<Seen> seen = new List<Seen>();
         private readonly List<Pot> pots = new List<Pot>();
+        private bool primed = true;
         public string Detail = "";
+        public string Log = "";
+
+        // Lines already on screen when the client is attached are not alerts.
+        public void Attach()
+        {
+            primed = false;
+            seen.Clear();
+        }
 
         public List<ChatNotice> Observe(List<ChatHit> hits)
         {
             List<ChatNotice> notices = new List<ChatNotice>();
+            System.Text.StringBuilder log = new System.Text.StringBuilder();
             if (hits == null) hits = new List<ChatHit>();
+            if (!primed)
+            {
+                for (int i = 0; i < hits.Count; i++)
+                {
+                    Remember(hits[i]);
+                    Append(log, hits[i], "skip-preexisting");
+                }
+                if (hits.Count > 0) primed = true;
+                Log = log.ToString();
+                Detail = Roster();
+                return notices;
+            }
             for (int i = 0; i < hits.Count; i++)
             {
                 ChatHit hit = hits[i];
@@ -41,18 +63,54 @@ namespace KavrosAfkWarden
                 if (Drink(hit.Phrase))
                 {
                     Set(hit.Kind, "active");
+                    Remember(hit);
+                    Append(log, hit, "rearm");
                     continue;
                 }
-                if (!Fresh(hit)) continue;
+                if (!Fresh(hit))
+                {
+                    Append(log, hit, "skip-seen");
+                    continue;
+                }
+                // An expired pot stays quiet until a drink or a warning re-arms it.
+                if (hit.State == "expired" && StateOf(hit.Kind) == "expired")
+                {
+                    Append(log, hit, "skip-seen");
+                    continue;
+                }
                 Set(hit.Kind, hit.State);
                 ChatNotice notice = new ChatNotice();
                 notice.Kind = "potion";
                 notice.Title = Title(hit.Kind, hit.State);
                 notice.Detail = notice.Title;
                 notices.Add(notice);
+                Append(log, hit, "alert");
             }
+            Log = log.ToString();
             Detail = Roster();
             return notices;
+        }
+
+        private static void Append(System.Text.StringBuilder log, ChatHit hit, string decision)
+        {
+            if (hit == null) return;
+            if (log.Length > 0) log.Append(" | ");
+            hit.Decision = decision;
+            log.Append(decision).Append(" ").Append(hit.Kind).Append(" ").Append(hit.State)
+                .Append(" score=").Append(hit.Score.ToString("0.00")).Append(" \"").Append(hit.Phrase).Append("\"");
+        }
+
+        private void Remember(ChatHit hit)
+        {
+            if (hit == null || hit.Phrase == null) return;
+            for (int i = 0; i < seen.Count; i++)
+            {
+                if (seen[i].Phrase == hit.Phrase) { seen[i].Y = hit.Y; return; }
+            }
+            Seen add = new Seen();
+            add.Phrase = hit.Phrase;
+            add.Y = hit.Y;
+            seen.Add(add);
         }
 
         // A drink line re-arms that potion so the next warning can fire.
@@ -119,7 +177,7 @@ namespace KavrosAfkWarden
                 string state = StateOf(order[i]);
                 if (state.Length == 0) continue;
                 if (line.Length > 0) line.Append(" · ");
-                line.Append(Label(order[i])).Append(": ").Append(Words(state));
+                line.Append(Short(order[i])).Append(" ").Append(ShortState(state));
             }
             return line.ToString();
         }
@@ -140,6 +198,25 @@ namespace KavrosAfkWarden
             if (kind == "antifire") return "Antifire";
             if (kind == "poison") return "Antipoison";
             return "Potion";
+        }
+
+        public static string Short(string kind)
+        {
+            if (kind == "elder") return "Elder";
+            if (kind == "overload") return "Ovl";
+            if (kind == "aggression") return "Aggro";
+            if (kind == "prayer") return "Pray";
+            if (kind == "antifire") return "Anti";
+            if (kind == "poison") return "Poison";
+            return "Pot";
+        }
+
+        public static string ShortState(string state)
+        {
+            if (state == "low") return "low";
+            if (state == "expired") return "expired";
+            if (state == "active") return "ok";
+            return "";
         }
 
         public static string Words(string state)
