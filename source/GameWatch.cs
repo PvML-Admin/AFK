@@ -192,6 +192,8 @@ namespace KavrosAfkWarden
         private string ocrTrace = "";
         private string ocrNote = "";
         private int chatBusy;
+        private XpFloat.Sight lastPopup;
+        private DateTime popupHold = DateTime.MinValue;
         private HudReading lastGood;
         private IntRect heldLife;
         private IntRect heldPrayer;
@@ -724,19 +726,19 @@ namespace KavrosAfkWarden
             if (client.Width < 200 || client.Height < 200) return;
             if (CapturePlan.OfferWindowSurface) windowSurface.Ensure(hwnd);
             useSurface = windowSurface.Available;
-            int x = client.Width / 4;
-            int y = Math.Max(2, client.Height / 40);
-            int w = client.Width / 2;
-            int h = Math.Max(24, client.Height * 22 / 100);
             ImageBuffer image = null;
-            if (useSurface) image = windowSurface.Copy(x, y, w, h);
+            if (useSurface) image = windowSurface.Copy(0, 0, client.Width, client.Height);
             if (image == null) return;
-            if (!XpFloat.InCrop(image)) return;
+            XpFloat.Sight sight = XpFloat.Look(image);
+            bool moved = sight.Found && XpFloat.Changed(lastPopup, sight);
+            bool live = sight.Found && (moved || DateTime.UtcNow < popupHold);
+            if (moved) popupHold = DateTime.UtcNow.AddSeconds(2);
+            lastPopup = sight;
+            if (!live) return;
             lock (gate)
             {
                 publishedXp = true;
-                if (publishedSkillTrace == null || publishedSkillTrace.IndexOf("xp=popup") < 0)
-                    publishedSkillTrace = "xp=popup " + (publishedSkillTrace ?? "");
+                publishedSkillTrace = "xp=popup";
             }
         }
 
@@ -857,7 +859,15 @@ namespace KavrosAfkWarden
             {
                 if (skills.XpEvent) publishedXp = true;
                 if (skills.PackEvent) publishedPack = true;
-                publishedSkillTrace = skills.Trace;
+                if (DateTime.UtcNow < popupHold)
+                {
+                    publishedXp = true;
+                    string rest = skills.Trace ?? "";
+                    if (rest.StartsWith("xp=none")) rest = "xp=popup" + rest.Substring(7);
+                    else if (rest.IndexOf("xp=popup") < 0) rest = "xp=popup " + rest;
+                    publishedSkillTrace = rest;
+                }
+                else publishedSkillTrace = skills.Trace;
                 publishedSkillView = skills.View;
             }
         }

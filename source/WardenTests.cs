@@ -1549,6 +1549,31 @@ namespace KavrosAfkWarden
             Check(ChatPhrase.MatchLine("Your super antifire potion is about to run out", out kindName, out stateName, out phraseName) && kindName == "antifire" && stateName == "low", "whole phrase: antifire warning");
             Check(ChatPhrase.MatchLine("Your immunity to poison is about to run out", out kindName, out stateName, out phraseName) && kindName == "poison" && stateName == "low", "whole phrase: poison warning");
             Check(!ChatPhrase.MatchLine("Welcome to trivia and the server news", out kindName, out stateName, out phraseName), "unrelated chat is not a potion line");
+            Check(ChatPhrase.MatchLine("Y0ur eldar ovefload is abcut tc run oyt", out kindName, out stateName, out phraseName) && kindName == "elder" && stateName == "low", "a garbled elder warning still matches, got " + kindName + " " + stateName);
+            Check(ChatPhrase.MatchLine("The effects of eldar 0verload haue wom off.", out kindName, out stateName, out phraseName) && kindName == "elder" && stateName == "expired", "a garbled elder expiry still matches, got " + kindName + " " + stateName);
+            Check(ChatPhrase.MatchLine("Your prayer reneual effect wi11 run 0ut in 30 sec0nds.", out kindName, out stateName, out phraseName) && kindName == "prayer" && stateName == "low", "a garbled prayer warning still matches, got " + kindName + " " + stateName);
+            Check(ChatPhrase.MatchLine("Your super ant1fire potlon is ab0ut to run out", out kindName, out stateName, out phraseName) && kindName == "antifire" && stateName == "low", "a garbled antifire warning still matches, got " + kindName + " " + stateName);
+            Check(ChatPhrase.MatchLine("Your immunlty to polson is ab0ut to expire", out kindName, out stateName, out phraseName) && kindName == "poison" && stateName == "low", "a garbled poison warning still matches, got " + kindName + " " + stateName);
+            Check(ChatPhrase.MatchLine("The effects of your aggresslon potlon haue worn off", out kindName, out stateName, out phraseName) && kindName == "aggression" && stateName == "expired", "a garbled aggression expiry still matches, got " + kindName + " " + stateName);
+            Check(ChatPhrase.MatchLine("the effects of ouerload haue worn 0ff", out kindName, out stateName, out phraseName) && kindName == "overload" && stateName == "expired", "a garbled overload expiry still matches, got " + kindName + " " + stateName);
+            string[] chatter = new string[] {
+                "-a ALL CHAT",
+                ". 14KlllS In core",
+                "Not bad",
+                "] You haue earnad log entinel fragments. Thay ha»e bæn addad to pur currency pou",
+                "] You a total of lü,ü8ü entinel fragments.",
+                "] You're hit by a pule core blast and gain an XP bccst of for the next IO minute",
+                "] [ ] Spmm",
+                "1m fæling core s:on",
+                "You have earned 10 sentinel fragments.",
+                "Construction XP has increased"
+            };
+            for (int c = 0; c < chatter.Length; c++)
+            {
+                bool pot = ChatPhrase.MatchLine(chatter[c], out kindName, out stateName, out phraseName);
+                Check(!pot, "v0.2.20 chat is not a potion line: " + chatter[c]);
+                notes.Add("OCR line not a pot: " + (pot ? "FAIL matched " + kindName : "PASS") + " | " + chatter[c]);
+            }
             LiveShots(root);
             ImageBuffer chrome = ImageBuffer.Blank(200, 800, ImageBuffer.Pack(8, 12, 16));
             chrome.Fill(10, 4, 80, 8, ImageBuffer.Pack(230, 230, 230));
@@ -1644,6 +1669,7 @@ namespace KavrosAfkWarden
             bool popup = XpFloat.Present(xpShot);
             Check(popup, "full-client-v0219-xpmiss.png has the floating XP popup in the centre-top");
             notes.Add("full-client-v0219-xpmiss.png (" + xpShot.Width.ToString() + "x" + xpShot.Height.ToString() + ") XP popup: " + (popup ? "PASS" : "FAIL"));
+            PopupAt(Path.Combine(dir, "full-client-v0219-xpmiss.png"), "full-client-v0219-xpmiss.png", true);
             IntRect chat = ChatPrep.FindBox(potShot);
             bool chatOk = chat.Width >= 80 && chat.Height >= 40 && chat.Y > potShot.Height / 2 && chat.X < potShot.Width / 3 && chat.Width < potShot.Width / 2;
             Check(chatOk, "full-client-v0219-potlive.png chat box sits in the lower left, got " + chat.X.ToString() + "," + chat.Y.ToString() + " " + chat.Width.ToString() + "x" + chat.Height.ToString());
@@ -1656,11 +1682,61 @@ namespace KavrosAfkWarden
                     for (int x = 0; x < page.Width; x += 3)
                         if (ImageBuffer.R(page.Argb(x, y)) < 40) dark++;
             }
-            bool contrast = page != null && page.Width >= chat.Width * 2 - 2 && dark > 20;
-            Check(contrast, "the full-client chat crop is doubled and drawn as dark ink on white");
-            notes.Add("full-client-v0219-potlive.png OCR preparation: " + (contrast ? "PASS (dark-on-light, 2x)" : "FAIL"));
+            bool contrast = page != null && page.Width >= chat.Width * 3 - 2 && dark > 20;
+            Check(contrast, "the full-client chat crop is tripled and drawn as dark ink on white");
+            notes.Add("full-client-v0219-potlive.png OCR preparation: " + (contrast ? "PASS (dark-on-light, 3x)" : "FAIL"));
             notes.Add("full-client-v0219-potlive.png Windows.Media.Ocr pot lines: NOT RUN on this host (no Windows OCR). Crop template matches are not this result.");
             notes.Add("full-client-v0219-xpmiss.png Windows.Media.Ocr: NOT RUN. The XP result above is the centre-top popup detector, not a number read.");
+            PopupAt(Path.Combine(root, "verification", "fixtures", "live0221", "full-client-v0220-xpmiss.png"), "full-client-v0220-xpmiss.png", true);
+            PopupAt(Path.Combine(root, "verification", "fixtures", "live0221", "full-client-v0218-xp.png"), "full-client-v0218-xp.png", false);
+            PopupAt(Path.Combine(root, "verification", "fixtures", "live0212", "full-client-v0212.png"), "full-client-v0212.png", false);
+            PopupAt(Path.Combine(root, "verification", "fixtures", "live0213", "full-client-panel-no-pot-timer.png"), "full-client-panel-no-pot-timer.png", false);
+            PopupAt(Path.Combine(root, "verification", "fixtures", "live0213", "full-client-other-account-layout.png"), "full-client-other-account-layout.png", false);
+            string pot = Path.Combine(dir, "full-client-v0219-potlive.png");
+            if (File.Exists(pot))
+            {
+                ImageBuffer faint = PngImage.Load(pot);
+                bool at100 = XpFloat.Present(faint);
+                bool at150 = XpFloat.Present(faint.Scale(1.5));
+                bool at200 = XpFloat.Present(faint.Scale(2));
+                notes.Add("full-client-v0219-potlive.png faint '+157 xp' popup at 100%: " + (at100 ? "PASS" : "MISS"));
+                notes.Add("full-client-v0219-potlive.png faint '+157 xp' popup at 150%: " + (at150 ? "PASS" : "MISS"));
+                notes.Add("full-client-v0219-potlive.png faint '+157 xp' popup at 200%: " + (at200 ? "PASS" : "MISS"));
+                Check(at200, "the faint popup on the pot-live client is detected at 200%");
+            }
+            if (popup)
+            {
+                XpFloat.Sight seen = XpFloat.Look(xpShot);
+                XpFloat.Sight again = XpFloat.Look(xpShot);
+                XpFloat.Sight moved = seen;
+                moved.Y = seen.Y - 12;
+                moved.Stamp = seen.Stamp + 1;
+                XpFloat.Sight empty = new XpFloat.Sight();
+                Check(seen.Found && !XpFloat.Changed(seen, again) && XpFloat.Changed(empty, seen) && XpFloat.Changed(seen, moved) && !XpFloat.Changed(seen, empty), "a popup counts when it appears or moves, and the same pixels do not count twice");
+            }
+        }
+
+        private static void PopupAt(string path, string label, bool expect)
+        {
+            if (!File.Exists(path))
+            {
+                Check(false, "missing " + label);
+                notes.Add(label + " XP popup: MISSING FILE");
+                return;
+            }
+            ImageBuffer image = PngImage.Load(path);
+            int[] scales = new int[] { 100, 150, 200 };
+            for (int i = 0; i < scales.Length; i++)
+            {
+                ImageBuffer frame = scales[i] == 100 ? image : image.Scale(scales[i] / 100.0);
+                bool hit = XpFloat.Present(frame);
+                string verdict = hit == expect ? "PASS" : "FAIL";
+                string wanted = expect ? "popup" : "quiet";
+                notes.Add(label + " (" + frame.Width.ToString() + "x" + frame.Height.ToString() + ") at " + scales[i].ToString() + "% XP popup: " + verdict + " (" + wanted + ")");
+                Check(hit == expect, label + " at " + scales[i].ToString() + "% is " + wanted + ", got " + (hit ? "popup" : "quiet"));
+            }
+            if (!expect && label.IndexOf("v0218") >= 0)
+                notes.Add("full-client-v0218-xp.png has no readable gold popup in the centre-top sky. Quiet is the correct read of this file.");
         }
 
         private static ChatHit Hit(string phrase, string kind, string state, int y)
@@ -1722,7 +1798,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.20" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.21" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -1733,10 +1809,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.20\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.21\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.20.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.21.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

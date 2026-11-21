@@ -857,71 +857,211 @@ namespace KavrosAfkWarden
     // floating on that spot is not a second drop. A backpack grid, once
     // found, stays put when a later frame misses it.
     // The '+N xp' line floats in the centre of the sky for a second or two.
-    // Any compact mark there counts. The digits do not have to be read.
+    // Any compact gold, orange or white mark there counts, including while it
+    // fades or drifts upward. The digits do not have to be read.
     public static class XpFloat
     {
+        public struct Sight
+        {
+            public bool Found;
+            public int X;
+            public int Y;
+            public int W;
+            public int H;
+            public int Ink;
+            public int Stamp;
+        }
+
         public static bool Present(ImageBuffer image)
         {
-            if (image == null || image.Width < 80 || image.Height < 80) return false;
-            return Band(image, image.Width / 4, image.Width * 3 / 4, Math.Max(2, image.Height / 40), image.Height * 22 / 100);
+            return Look(image).Found;
         }
 
-        // The capture loop already cropped the centre-top, so the whole image is the popup area.
+        public static Sight Look(ImageBuffer image)
+        {
+            if (image == null || image.Width < 80 || image.Height < 80) return new Sight();
+            int x0 = image.Width * 20 / 100;
+            int x1 = image.Width * 80 / 100;
+            int y0 = Math.Max(2, image.Height * 4 / 100);
+            int y1 = image.Height * 20 / 100;
+            return Scan(image, x0, x1, y0, y1);
+        }
+
+        // A crop that is already the centre-top uses the same colour test.
         public static bool InCrop(ImageBuffer image)
         {
-            if (image == null || image.Width < 20 || image.Height < 12) return false;
-            return Band(image, 0, image.Width, 0, image.Height);
+            if (image == null || image.Width < 40 || image.Height < 16) return false;
+            if (image.Height * 2 > image.Width) return Present(image);
+            return Scan(image, 0, image.Width, 0, image.Height).Found;
         }
 
-        private static bool Band(ImageBuffer image, int x0, int x1, int y0, int y1)
+        // True when the mark appears, moves, or its pixels change. A mark that
+        // is still sitting in the same place with the same pixels is not a new drop.
+        public static bool Changed(Sight before, Sight now)
         {
-            if (y1 <= y0 + 4 || x1 <= x0 + 20) return false;
-            int rows = y1 - y0;
-            int[] count = new int[rows];
-            int[] left = new int[rows];
-            int[] right = new int[rows];
-            for (int i = 0; i < rows; i++) { left[i] = x1; right[i] = x0; }
-            for (int y = y0; y < y1; y++)
-            {
-                int i = y - y0;
-                for (int x = x0; x < x1; x++)
-                {
-                    int below = image.Argb(x, Math.Min(image.Height - 1, y + 12));
-                    if (!Mark(image.Argb(x, y), below)) continue;
-                    count[i]++;
-                    if (x < left[i]) left[i] = x;
-                    if (x > right[i]) right[i] = x;
-                }
-            }
-            int row = 0;
-            while (row < rows)
-            {
-                if (count[row] < 10) { row++; continue; }
-                int start = row;
-                int ink = 0;
-                int lo = x1;
-                int hi = x0;
-                while (row < rows && count[row] >= 6)
-                {
-                    ink += count[row];
-                    if (left[row] < lo) lo = left[row];
-                    if (right[row] > hi) hi = right[row];
-                    row++;
-                }
-                int height = row - start;
-                int width = hi - lo + 1;
-                if (height >= 3 && height <= 14 && width >= 28 && width <= 260 && ink >= 16 && ink <= 420) return true;
-            }
+            if (!now.Found) return false;
+            if (!before.Found) return true;
+            if (now.Stamp != before.Stamp) return true;
+            if (Math.Abs(now.X - before.X) > 6 || Math.Abs(now.Y - before.Y) > 3) return true;
             return false;
         }
 
-        private static bool Mark(int color, int below)
+        private struct Run
         {
-            int r = ImageBuffer.R(color), g = ImageBuffer.G(color), b = ImageBuffer.B(color);
-            int r2 = ImageBuffer.R(below), g2 = ImageBuffer.G(below);
-            bool gold = r > 150 && g > 110 && b < 130 && r > b + 40;
-            bool lift = r + g > r2 + g2 + 35 && r > 140 && g > 110;
-            return gold || lift;
+            public int Left;
+            public int Right;
+            public int Count;
+        }
+
+        private struct Band
+        {
+            public int Top;
+            public int Bottom;
+            public int Left;
+            public int Right;
+            public int Ink;
+        }
+
+        private static Sight Scan(ImageBuffer image, int x0, int x1, int y0, int y1)
+        {
+            Sight none = new Sight();
+            if (image == null || y1 <= y0 + 4 || x1 <= x0 + 24) return none;
+            int w = image.Width;
+            int h = image.Height;
+            int gap = Math.Max(3, w / 420);
+            int join = Math.Max(6, w / 160);
+            int minW = Math.Max(64, w * 5 / 100);
+            int maxW = Math.Max(180, w * 16 / 100);
+            int maxH = Math.Max(16, h * 2 / 100);
+            int minInk = Math.Max(40, w * 3 / 100);
+            if (x0 < gap) x0 = gap;
+            if (x1 > w - gap) x1 = w - gap;
+            if (y0 < 0) y0 = 0;
+            if (y1 > h) y1 = h;
+            if (x1 <= x0 + 8 || y1 <= y0 + 3) return none;
+            int rows = y1 - y0;
+            List<Run>[] lines = new List<Run>[rows];
+            for (int y = y0; y < y1; y++)
+            {
+                List<Run> runs = new List<Run>();
+                int runLeft = 0;
+                int runRight = 0;
+                int runCount = 0;
+                int prev = -999;
+                for (int x = x0; x < x1; x++)
+                {
+                    if (!Warm(image, x, y, gap)) continue;
+                    if (runCount > 0 && x - prev > join)
+                    {
+                        if (runCount >= 4)
+                        {
+                            Run closed = new Run();
+                            closed.Left = runLeft;
+                            closed.Right = runRight;
+                            closed.Count = runCount;
+                            runs.Add(closed);
+                        }
+                        runCount = 0;
+                    }
+                    if (runCount == 0) runLeft = x;
+                    runRight = x;
+                    runCount++;
+                    prev = x;
+                }
+                if (runCount >= 4)
+                {
+                    Run closed = new Run();
+                    closed.Left = runLeft;
+                    closed.Right = runRight;
+                    closed.Count = runCount;
+                    runs.Add(closed);
+                }
+                lines[y - y0] = runs;
+            }
+            List<Band> bands = new List<Band>();
+            for (int i = 0; i < rows; i++)
+            {
+                List<Run> runs = lines[i];
+                if (runs == null) continue;
+                for (int r = 0; r < runs.Count; r++)
+                {
+                    Run run = runs[r];
+                    bool placed = false;
+                    for (int b = 0; b < bands.Count; b++)
+                    {
+                        Band band = bands[b];
+                        if (i != band.Bottom && i != band.Bottom + 1) continue;
+                        if (run.Right < band.Left - join || run.Left > band.Right + join) continue;
+                        if (run.Left < band.Left) band.Left = run.Left;
+                        if (run.Right > band.Right) band.Right = run.Right;
+                        band.Bottom = i;
+                        band.Ink += run.Count;
+                        bands[b] = band;
+                        placed = true;
+                        break;
+                    }
+                    if (!placed)
+                    {
+                        Band band = new Band();
+                        band.Top = i;
+                        band.Bottom = i;
+                        band.Left = run.Left;
+                        band.Right = run.Right;
+                        band.Ink = run.Count;
+                        bands.Add(band);
+                    }
+                }
+            }
+            Sight best = none;
+            for (int b = 0; b < bands.Count; b++)
+            {
+                Band band = bands[b];
+                int height = band.Bottom - band.Top + 1;
+                int width = band.Right - band.Left + 1;
+                if (height < 3 || height > maxH || width < minW || width > maxW || band.Ink < minInk) continue;
+                int pale = 0;
+                int green = 0;
+                int n = 0;
+                int stamp = 17;
+                int top = y0 + band.Top;
+                for (int y = top; y < top + height; y++)
+                {
+                    for (int x = band.Left; x <= band.Right; x++)
+                    {
+                        if (!Warm(image, x, y, gap)) continue;
+                        int color = image.Argb(x, y);
+                        int g = ImageBuffer.G(color);
+                        int bl = ImageBuffer.B(color);
+                        n++;
+                        green += g - bl;
+                        if (bl + 28 >= g) pale++;
+                        stamp = unchecked(stamp * 31 + x);
+                        stamp = unchecked(stamp * 31 + y);
+                    }
+                }
+                if (n < 10 || pale * 3 < n || green > n * 48) continue;
+                if (best.Found && n <= best.Ink) continue;
+                best.Found = true;
+                best.X = band.Left;
+                best.Y = top;
+                best.W = width;
+                best.H = height;
+                best.Ink = n;
+                best.Stamp = stamp;
+            }
+            return best;
+        }
+
+        private static bool Warm(ImageBuffer image, int x, int y, int gap)
+        {
+            int color = image.Argb(x, y);
+            int left = image.Argb(x - gap, y);
+            int right = image.Argb(x + gap, y);
+            int r = ImageBuffer.R(color);
+            int g = ImageBuffer.G(color);
+            int b = ImageBuffer.B(color);
+            int baseWarm = ((ImageBuffer.R(left) - ImageBuffer.B(left)) + (ImageBuffer.R(right) - ImageBuffer.B(right))) / 2;
+            return r - b > baseWarm + 8 && r + 8 >= g && g + 4 >= b && r > 100 && b < 210 && r - b > 14;
         }
     }
 

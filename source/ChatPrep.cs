@@ -3,7 +3,7 @@ using System;
 namespace KavrosAfkWarden
 {
     // Turns a full client frame into the chat crop Windows OCR should read:
-    // the stacked coloured lines, doubled, as dark ink on a light page.
+    // the stacked coloured lines, tripled, as dark ink on a light page.
     public static class ChatPrep
     {
         public static bool Coloured(int color)
@@ -59,19 +59,19 @@ namespace KavrosAfkWarden
         public static ImageBuffer ForOcr(ImageBuffer image)
         {
             if (image == null) return null;
-            int w = image.Width * 2;
-            int h = image.Height * 2;
+            int w = image.Width * 3;
+            int h = image.Height * 3;
             if (w < 2 || h < 2) return null;
             int[] pixels = new int[w * h];
             int white = ImageBuffer.Pack(255, 255, 255);
             int black = ImageBuffer.Pack(0, 0, 0);
             for (int y = 0; y < h; y++)
             {
-                int sy = y / 2;
+                int sy = y / 3;
                 if (sy >= image.Height) sy = image.Height - 1;
                 for (int x = 0; x < w; x++)
                 {
-                    int sx = x / 2;
+                    int sx = x / 3;
                     if (sx >= image.Width) sx = image.Width - 1;
                     pixels[y * w + x] = Coloured(image.Argb(sx, sy)) ? black : white;
                 }

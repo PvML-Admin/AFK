@@ -394,26 +394,116 @@ namespace KavrosAfkWarden
             kind = "";
             state = "";
             phrase = "";
-            string n = Normalize(line);
-            if (n.Length < 12) return false;
+            string folded = Fold(line);
+            if (folded.Length < 12) return false;
+            string[] got = Tokens(folded);
+            if (got.Length == 0) return false;
             string[] known = Known();
+            int bestHit = -1;
+            double bestRatio = 0;
             for (int i = 0; i < known.Length; i++)
             {
                 string[] parts = known[i].Split('|');
                 if (parts.Length != 3) continue;
-                if (n.IndexOf(parts[2]) < 0 && !Near(n, parts[2])) continue;
-                kind = parts[0];
-                state = parts[1];
-                phrase = parts[2];
-                return true;
+                int hit;
+                int need;
+                bool anchor;
+                bool cue;
+                Score(got, parts[2], out hit, out need, out anchor, out cue);
+                if (!anchor || !cue || need <= 0) continue;
+                double ratio = (double)hit / (double)need;
+                if (ratio < 0.72) continue;
+                if (hit > bestHit || (hit == bestHit && ratio > bestRatio))
+                {
+                    bestHit = hit;
+                    bestRatio = ratio;
+                    kind = parts[0];
+                    state = parts[1];
+                    phrase = parts[2];
+                }
             }
-            return false;
+            return phrase.Length > 0;
         }
 
-        private static bool Near(string line, string phrase)
+        // Lower case, punctuation dropped, and the mixes Windows OCR makes on this
+        // font folded together: u/v, a/e, rn/m, 0/o, 1/l/i.
+        public static string Fold(string text)
         {
-            if (Math.Abs(line.Length - phrase.Length) > 6) return false;
-            return Distance(line, phrase) <= 3;
+            if (text == null || text.Length == 0) return "";
+            System.Text.StringBuilder sb = new System.Text.StringBuilder(text.Length);
+            bool space = false;
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (c >= 'A' && c <= 'Z') c = (char)(c + 32);
+                if (c == 'v') c = 'u';
+                else if (c == 'a') c = 'e';
+                else if (c == '0') c = 'o';
+                else if (c == '1' || c == 'i' || c == 'l') c = 'l';
+                if (c < 'a' || c > 'z')
+                {
+                    if (sb.Length == 0 || space) continue;
+                    space = true;
+                    sb.Append(' ');
+                    continue;
+                }
+                space = false;
+                sb.Append(c);
+            }
+            return sb.ToString().Trim().Replace("rn", "m");
+        }
+
+        private static string[] Tokens(string folded)
+        {
+            if (folded == null || folded.Length == 0) return new string[0];
+            return folded.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        }
+
+        private static void Score(string[] got, string phrase, out int hit, out int need, out bool anchor, out bool cue)
+        {
+            hit = 0;
+            need = 0;
+            anchor = false;
+            cue = false;
+            string[] words = Tokens(Fold(phrase));
+            for (int i = 0; i < words.Length; i++)
+            {
+                string word = words[i];
+                if (word.Length == 0 || Stop(word)) continue;
+                need++;
+                int best = 9;
+                for (int g = 0; g < got.Length; g++)
+                {
+                    int d = Distance(word, got[g]);
+                    if (d < best) best = d;
+                }
+                int allow = word.Length >= 8 ? 2 : 1;
+                if (best > allow) continue;
+                hit++;
+                if (Anchor(word)) anchor = true;
+                if (Cue(word) && best <= 1) cue = true;
+            }
+        }
+
+        private static bool Anchor(string word)
+        {
+            return word == Fold("elder") || word == Fold("overload") || word == Fold("prayer")
+                || word == Fold("renewal") || word == Fold("antifire") || word == Fold("poison")
+                || word == Fold("immunity") || word == Fold("aggression");
+        }
+
+        private static bool Cue(string word)
+        {
+            return word == Fold("about") || word == Fold("will") || word == Fold("worn")
+                || word == Fold("expired") || word == Fold("expire") || word == Fold("wear")
+                || word == Fold("has");
+        }
+
+        private static bool Stop(string word)
+        {
+            return word == Fold("your") || word == Fold("the") || word == Fold("of") || word == Fold("is")
+                || word == Fold("to") || word == Fold("in") || word == Fold("a") || word == Fold("an")
+                || word == Fold("and") || word == Fold("some") || word == Fold("are");
         }
 
         private static string[] Known()

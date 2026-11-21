@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.21
+
+- Any XP popup in the centre of the sky counts as activity, including while it fades in, fades out or floats upward. The watcher looks at a wide centre-top band every 200 ms and compares the gold, orange and white text with the previous frame. The number is only read when it can be, and a popup that is already on screen is not wiped by a later search that misses the digits.
+- Potion lines from Windows OCR match when the words are close to the known sentence after the usual mix-ups (u/v, a/e, rn/m, 0/o, 1/l/i). News, trivia and other chat still do not. The chat crop is tripled before it is read.
+
 ## 0.2.20
 
 - Chat lines are read with Windows OCR from the chat box, doubled and turned into dark text on a light page. The raw text of each line is logged. If the English language pack is missing, the potion row says Chat reader unavailable.
