@@ -704,19 +704,8 @@ namespace KavrosAfkWarden
         {
             if (image == null || reading == null) return;
             ApplyStoredChat(reading);
-            if (hits.Count > 0)
-            {
-                int top = hits[0].Y;
-                int bottom = hits[0].Y;
-                for (int i = 1; i < hits.Count; i++)
-                {
-                    if (hits[i].Y < top) top = hits[i].Y;
-                    if (hits[i].Y > bottom) bottom = hits[i].Y;
-                }
-                int y = Math.Max(0, top - 30);
-                int h = Math.Min(image.Height - y, bottom - top + 80);
-                chatBox = new IntRect(0, y, image.Width, Math.Max(40, h));
-            }
+            IntRect foundChat = ChatPrep.FindBox(image);
+            if (foundChat.Width >= 40 && foundChat.Height >= 20) chatBox = foundChat;
             MetricsReader.Result metrics = MetricsReader.Read(image);
             ApplyMetrics(reading, metrics, image);
         }
