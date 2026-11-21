@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.25
+
+- After the chat crop changes, it is read again on the next two looks even if the colour hash matches, so a line that appears while the chat is scrolling is not left until the picture moves. A torn potion line asks for that same short repeat, once. An unchanged crop is still not sent to OCR.
+
 ## 0.2.24
 
 - RuneMetrics reads the column headed XP and leaves XP/h alone. A total that starts falling is dropped within a few seconds so the panel is found again.

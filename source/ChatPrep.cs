@@ -103,6 +103,43 @@ namespace KavrosAfkWarden
             return hash;
         }
 
+        // A line torn by scrolling: a potion sentence that did not match, with a
+        // mark the settled game text does not use. Prayer, antifire and poison
+        // stay unmatched on purpose and are not torn.
+        public static bool TornPotion(string text)
+        {
+            if (text == null || text.Length == 0) return false;
+            string[] lines = text.Split('\n');
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i] ?? "";
+                if (line.Length < 12) continue;
+                string kind;
+                string state;
+                string phrase;
+                if (ChatPhrase.MatchLine(line, out kind, out state, out phrase)) continue;
+                string folded = ChatPhrase.Fold(line);
+                // Fold turns i into l, so the cue has to be folded the same way.
+                bool cue = folded.IndexOf(ChatPhrase.Fold("potion")) >= 0
+                    || folded.IndexOf(ChatPhrase.Fold("overload")) >= 0
+                    || folded.IndexOf(ChatPhrase.Fold("expire")) >= 0;
+                if (!cue) continue;
+                if (TornMark(line)) return true;
+            }
+            return false;
+        }
+
+        private static bool TornMark(string line)
+        {
+            for (int i = 0; i < line.Length; i++)
+            {
+                char c = line[i];
+                if (c < 32 || c > 126) return true;
+                if (c == '*' || c == '<' || c == '>' || c == '=' || c == '|') return true;
+            }
+            return false;
+        }
+
         public static ImageBuffer ForOcr(ImageBuffer image)
         {
             if (image == null) return null;
@@ -126,6 +163,40 @@ namespace KavrosAfkWarden
                 }
             }
             return new ImageBuffer(w, h, pixels);
+        }
+    }
+
+    // After the chat crop changes, read it again on the next ticks even if the
+    // colour hash matches, so a line that was mid-scroll is not left there.
+    // A torn potion line asks for that same short repeat, once per crop.
+    public sealed class ChatOcrGate
+    {
+        private bool have;
+        private int last;
+        private int left;
+        private bool rearmed;
+
+        public bool Due(int stamp, bool follow)
+        {
+            if (!have || stamp != last)
+            {
+                have = true;
+                last = stamp;
+                left = 2;
+                rearmed = false;
+                return true;
+            }
+            if (follow && !rearmed)
+            {
+                rearmed = true;
+                if (left < 2) left = 2;
+            }
+            if (left > 0)
+            {
+                left--;
+                return true;
+            }
+            return false;
         }
     }
 }

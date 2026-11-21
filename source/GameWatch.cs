@@ -192,7 +192,8 @@ namespace KavrosAfkWarden
         private string ocrTrace = "";
         private string ocrNote = "";
         private int chatBusy;
-        private int lastChatStamp;
+        private int ocrFollow;
+        private readonly ChatOcrGate chatGate = new ChatOcrGate();
         private XpFloat.Sight lastPopup;
         private DateTime popupHold = DateTime.MinValue;
         private HudReading lastGood;
@@ -780,12 +781,12 @@ namespace KavrosAfkWarden
             chatBox = box;
             ImageBuffer crop = frame.Crop(box.X, box.Y, box.Width, box.Height);
             int stamp = ChatPrep.Stamp(crop);
-            if (stamp == lastChatStamp)
+            bool follow = System.Threading.Interlocked.Exchange(ref ocrFollow, 0) == 1;
+            if (!chatGate.Due(stamp, follow))
             {
                 System.Threading.Interlocked.Exchange(ref chatBusy, 0);
                 return;
             }
-            lastChatStamp = stamp;
             System.Threading.ThreadPool.QueueUserWorkItem(delegate
             {
                 try { ReadChat(crop); }
@@ -823,6 +824,8 @@ namespace KavrosAfkWarden
             }
             if (trace.Length == 0 && (WindowsChatOcr.Reason ?? "").Length > 0)
                 trace.Append("unavailable: ").Append(WindowsChatOcr.Reason);
+            if (ChatPrep.TornPotion(text))
+                System.Threading.Interlocked.Exchange(ref ocrFollow, 1);
             lock (gate)
             {
                 ocrHits = hits;

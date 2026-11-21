@@ -1568,6 +1568,7 @@ namespace KavrosAfkWarden
             Check(ChatPhrase.MatchLine("The effa:ts of elder overload •exorn off and you fæl normal again.", out kindName, out stateName, out phraseName) && kindName == "elder" && stateName == "expired", "the worn-off OCR line is elder expired, got " + kindName + " " + stateName);
             ReplayPotLogs(root);
             ReplayMetrics(root);
+            ChatConfirm(root);
             string[] chatter = new string[] {
                 "-a ALL CHAT",
                 ". 14KlllS In core",
@@ -1780,6 +1781,87 @@ namespace KavrosAfkWarden
             Check(!reportedFall, "the falling XP/h values are not kept as the total");
             Check(gotTotal && watch.Xp >= 6072472, "the real XP total is kept once it is read, got " + watch.Xp.ToString() + " " + watch.Note);
             notes.Add("debug-log-v0223-a.txt metrics replay: " + (reportedFall ? "FAIL kept a falling total" : "PASS") + ", final " + watch.Xp.ToString());
+        }
+
+        private static void ChatConfirm(string root)
+        {
+            ChatOcrGate gate = new ChatOcrGate();
+            Check(gate.Due(10, false), "a changed chat crop is read");
+            Check(gate.Due(10, false), "the next tick is read again while the hash settles");
+            Check(gate.Due(10, false), "the tick after that is read as well");
+            Check(!gate.Due(10, false), "a settled chat crop is not read again");
+            Check(!gate.Due(10, false), "a settled chat crop stays unread");
+            Check(gate.Due(11, false), "a new crop is read");
+            Check(gate.Due(11, false) && gate.Due(11, false) && !gate.Due(11, false), "a new crop gets the same short settle window");
+            ChatOcrGate torn = new ChatOcrGate();
+            Check(torn.Due(4, false) && torn.Due(4, false) && torn.Due(4, false) && !torn.Due(4, false), "a scroll is read, then two settle reads, then it stops");
+            Check(torn.Due(4, true) && torn.Due(4, true) && !torn.Due(4, true), "a torn potion line is read twice more and then left alone");
+            string garbled = "1 The eff«ts of i.mur Bate:rssion Potion will exnire in *ronds.";
+            string kind;
+            string state;
+            string phrase;
+            Check(!ChatPhrase.MatchLine(garbled, out kind, out state, out phrase), "the scrolling aggression line is not a false pot");
+            Check(ChatPrep.TornPotion(garbled), "the scrolling aggression line asks for another read");
+            Check(!ChatPrep.TornPotion("] Your prayer renewal effazt will run out in 30 saonds.."), "a prayer line does not ask for another read");
+            Check(!ChatPrep.TornPotion("] Your super antifire potion is about to run out..."), "an antifire line does not ask for another read");
+            Check(!ChatPrep.TornPotion("] Your immunity to poison is about to run out..."), "a poison line does not ask for another read");
+            Check(!ChatPrep.TornPotion("The effazts of pur Potion will expire in 30 saonds."), "a clean aggression line does not ask for another read");
+            Check(!ChatPrep.TornPotion("The effa:ts of elder overload •exorn off and you fæl normal again."), "a matched worn-off line does not ask for another read");
+            ReplayPotOk(root);
+        }
+
+        private static void ReplayPotOk(string root)
+        {
+            string path = Path.Combine(root, "verification", "fixtures", "live025", "debug-log-v0224-pots-ok.txt");
+            if (!File.Exists(path))
+            {
+                Check(false, "missing debug-log-v0224-pots-ok.txt");
+                return;
+            }
+            ChatPotionBook book = new ChatPotionBook();
+            book.Attach();
+            string[] lines = File.ReadAllLines(path);
+            System.Collections.Generic.List<string> alerts = new System.Collections.Generic.List<string>();
+            bool sawTorn = false;
+            bool tornOnClean = false;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                int at = lines[i].IndexOf(" chat=");
+                int potsAt = lines[i].IndexOf(" pots=");
+                if (at < 0 || potsAt < at) continue;
+                string chat = lines[i].Substring(at + 6, potsAt - (at + 6));
+                System.Text.StringBuilder text = new System.Text.StringBuilder();
+                int from = 0;
+                while (from < chat.Length)
+                {
+                    int raw = chat.IndexOf("raw=\"", from);
+                    if (raw < 0) break;
+                    int start = raw + 5;
+                    int end = chat.IndexOf('"', start);
+                    if (end < 0) break;
+                    if (text.Length > 0) text.Append('\n');
+                    text.Append(chat.Substring(start, end - start));
+                    from = end + 1;
+                }
+                string body = text.ToString();
+                if (ChatPrep.TornPotion(body)) sawTorn = true;
+                List<ChatHit> hits = ChatPhrase.FromOcr(body);
+                if (ChatPrep.TornPotion(body) && Has(hits, "aggression", "expired")) tornOnClean = true;
+                List<ChatNotice> notices = book.Observe(hits);
+                for (int n = 0; n < notices.Count; n++)
+                    alerts.Add(notices[n].Title ?? "");
+            }
+            string got = string.Join(" | ", alerts.ToArray());
+            Check(alerts.Count == 4, "v0.2.24 pot log raises four alerts, got " + got);
+            Check(got.IndexOf("Elder overload is running low") >= 0 && got.IndexOf("Aggression is running low") >= 0, "v0.2.24 pot log still alerts both low warnings, got " + got);
+            Check(got.IndexOf("Elder overload has expired") >= 0 && got.IndexOf("Aggression has expired") >= 0, "v0.2.24 pot log still alerts both expired warnings, got " + got);
+            int lowAt = got.IndexOf("running low");
+            int expiredAt = got.IndexOf("has expired");
+            Check(lowAt >= 0 && expiredAt > lowAt, "low warnings stay ahead of the expired warnings");
+            Check(sawTorn && !tornOnClean, "the scrolling line asks for another read and the clean expiry does not");
+            book.Refresh(DateTime.UtcNow.AddSeconds(46));
+            Check((book.Detail ?? "").IndexOf("expired") < 0, "the v0.2.24 expired rows still clear after 45 seconds");
+            notes.Add("debug-log-v0224-pots-ok.txt replay: " + got);
         }
 
         private static void ReplayPotLogs(string root)
@@ -2030,7 +2112,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.24" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.25" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -2041,10 +2123,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.24\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.25\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.24.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.25.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }
