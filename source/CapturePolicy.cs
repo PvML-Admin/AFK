@@ -2,8 +2,18 @@
 
 namespace KavrosAfkWarden
 {
-    // Sit inside the chosen client at a saved offset. Hide only while that
-    // client is minimized. Other applications cover the panel by z-order.
+    public sealed class DockTarget
+    {
+        public long Handle;
+        public int X;
+        public int Y;
+        public int Width;
+        public int Height;
+        public bool InFront;
+    }
+
+    // Sit inside the tracked client at a saved offset. The panel follows that
+    // window only. Another client in front of the same spot hides it.
     public static class PanelDock
     {
         public static void Place(int gameX, int gameY, int gameW, int gameH, int panelW, int panelH, int offsetX, int offsetY, int deskX, int deskY, int deskW, int deskH, out int x, out int y)
@@ -33,12 +43,51 @@ namespace KavrosAfkWarden
             if (y > areaY + areaH - panelH) y = areaY + areaH - panelH;
         }
 
+        public static bool Overlaps(int ax, int ay, int aw, int ah, int bx, int by, int bw, int bh)
+        {
+            if (aw <= 0 || ah <= 0 || bw <= 0 || bh <= 0) return false;
+            return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+        }
+
+        // Another Kavros client that is above the tracked window and crosses the
+        // panel's rectangle. A client beside it, or a window behind it, does not.
+        public static bool OtherClientCovers(long bound, int panelX, int panelY, int panelW, int panelH, System.Collections.Generic.List<DockTarget> others)
+        {
+            if (bound == 0 || others == null) return false;
+            for (int i = 0; i < others.Count; i++)
+            {
+                DockTarget other = others[i];
+                if (other == null || other.Handle == 0 || other.Handle == bound || !other.InFront) continue;
+                if (Overlaps(panelX, panelY, panelW, panelH, other.X, other.Y, other.Width, other.Height)) return true;
+            }
+            return false;
+        }
+
+        public static long OwnerOf(long bound)
+        {
+            return bound > 0 ? bound : 0;
+        }
+
+        public static string PanelHeading(string label)
+        {
+            if (label == null) return "";
+            string text = label.Trim();
+            if (text.Length == 0 || text == "Choose a client" || text == "Client closed") return "";
+            return text;
+        }
+
         public static bool Visible(bool enabled, bool gameExists, bool minimized, bool gameForeground, bool panelFocused, bool settingsFocused)
         {
-            // Owned by the game window, so other applications cover it. Only a
-            // minimized client should hide the panel. gameForeground is kept
-            // in the signature so callers stay explicit.
-            if (!enabled || minimized) return false;
+            return Visible(enabled, gameExists, minimized, gameForeground, panelFocused, settingsFocused, false);
+        }
+
+        public static bool Visible(bool enabled, bool gameExists, bool minimized, bool gameForeground, bool panelFocused, bool settingsFocused, bool coveredByOtherClient)
+        {
+            // Owned by the tracked client. Another application may cover it by
+            // z-order. A minimized client, or another Kavros client in front of
+            // this spot, hides the panel. gameForeground stays in the signature
+            // so callers stay explicit.
+            if (!enabled || minimized || coveredByOtherClient) return false;
             if (!gameExists && !panelFocused && !settingsFocused) return true;
             return true;
         }

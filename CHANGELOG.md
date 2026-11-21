@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.18
+
+- The floating panel stays on the client it is tracking. It follows that window, and it hides when that client is minimized or when another Kavros client is in front of the same spot. The panel shows that client's name.
+
 ## 0.2.17
 
 - Coloured chat lines match. Red, orange and green game messages, including the six potion warnings on a red chat, map to the right pot and state. The strip along the top of the window is not treated as chat. The debug log includes the text read from each line.

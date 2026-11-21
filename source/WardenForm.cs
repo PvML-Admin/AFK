@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
+using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
@@ -284,6 +285,7 @@ namespace KavrosAfkWarden
             gameFound = found;
             gameName = name ?? "";
             note.Invalidate();
+            title.Invalidate();
         }
 
         private void Place(StatusRow row, int y)
@@ -319,6 +321,9 @@ namespace KavrosAfkWarden
             using (Brush brush = new SolidBrush(KavrosTheme.BgRaise)) g.FillRectangle(brush, label.ClientRectangle);
             using (Brush gold = new SolidBrush(KavrosTheme.Gold)) g.FillRectangle(gold, 0, 0, label.Width, 2);
             KavrosTheme.DrawTracked(g, "AFK WARDEN", KavrosTheme.Display(8F), 12, 8, KavrosTheme.Text, KavrosTheme.BgRaise, 1.4F, Math.Max(40, label.Width - 120));
+            string heading = PanelDock.PanelHeading(gameName);
+            if (heading.Length > 0)
+                TextRenderer.DrawText(g, heading, KavrosTheme.Ui(8.5F, false), new Rectangle(128, 0, Math.Max(1, label.Width - 250), label.Height), KavrosTheme.Ice, KavrosTheme.BgRaise, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
         }
 
         private void DrawGame(Graphics g, PaintedLabel label)
@@ -400,8 +405,6 @@ namespace KavrosAfkWarden
         private readonly AlertSound sound = new AlertSound();
         private readonly SystemToast toast = new SystemToast();
         private readonly FrameGrab grab = new FrameGrab();
-        private Rectangle dockedGame;
-        private bool haveDockedGame;
         private SceneActivity activity = new SceneActivity();
         private DateTime lastDebugSave = DateTime.MinValue;
         private DateTime metricsAbsentSince = DateTime.MinValue;
@@ -954,6 +957,7 @@ namespace KavrosAfkWarden
                     + " pots=" + (chatPots.Log ?? "")
                     + " metrics=" + (reading.MetricsFound ? ("xp=" + reading.MetricsXp.ToString()) : ("lost " + (reading.MetricsNote ?? "not found")))
                     + " idleReset=" + (moving ? "yes" : "no")
+                    + " " + panelDebug
                     + "\r\n";
                 string logPath = Path.Combine(dir, "debug-log.txt");
                 File.AppendAllText(logPath, line);
@@ -1049,43 +1053,116 @@ namespace KavrosAfkWarden
             panelTopKnown = true;
         }
 
+        private string panelDebug = "bound=0 pid=0 owner=0 panel=hidden";
+        private bool panelShownKnown;
+        private bool panelWasShown;
+
         private void FollowPanel()
         {
             bool exists = selected != IntPtr.Zero && NativeMethods.IsWindow(selected);
-            IntPtr owner=exists ? selected : IntPtr.Zero;
-            if (owner!=panelOwner && (exists || panel.IsHandleCreated))
+            IntPtr owner = exists ? selected : IntPtr.Zero;
+            if (owner != panelOwner && (exists || panel.IsHandleCreated))
             {
-                try { NativeMethods.SetOwner(panel.Handle, owner); panelOwner=owner; }
+                try { NativeMethods.SetOwner(panel.Handle, owner); panelOwner = owner; }
                 catch (DllNotFoundException) { }
                 catch (EntryPointNotFoundException) { }
             }
             bool minimized = exists && NativeMethods.IsIconic(selected);
             bool foreground = exists && WindowLocator.IsForeground(selected);
-            bool show = PanelDock.Visible(true, exists, minimized, foreground, panel.ContainsFocus, Visible && ContainsFocus);
+            Rectangle game = exists ? NativeMethods.ClientBounds(selected) : (Screen.PrimaryScreen == null ? new Rectangle(0, 0, 1920, 1080) : Screen.PrimaryScreen.WorkingArea);
+            Rectangle desk = Screen.FromRectangle(game).WorkingArea;
+            int x, y;
+            PanelDock.Place(game.X, game.Y, game.Width, game.Height, panel.Width, panel.Height, settings.PanelOffsetX, settings.PanelOffsetY, desk.X, desk.Y, desk.Width, desk.Height, out x, out y);
+            if (exists && panel.IsDragging) ClampDraggedPanel(game, desk);
+            bool covered = exists && !panel.IsDragging && OtherClientCovers(x, y, panel.Width, panel.Height);
+            bool show = PanelDock.Visible(true, exists, minimized, foreground, panel.ContainsFocus, Visible && ContainsFocus, covered);
+            NotePanel(exists, show, minimized, covered);
             if (!show)
             {
                 if (panel.Visible) panel.Hide();
                 return;
             }
-            Rectangle game = exists ? NativeMethods.ClientBounds(selected) : Screen.PrimaryScreen.WorkingArea;
-            Rectangle desk = Screen.FromRectangle(game).WorkingArea;
-            int x, y;
-            PanelDock.Place(game.X, game.Y, game.Width, game.Height, panel.Width, panel.Height, settings.PanelOffsetX, settings.PanelOffsetY, desk.X, desk.Y, desk.Width, desk.Height, out x, out y);
             if (panel.IsDragging)
             {
                 if (!panel.Visible) panel.Show();
                 KeepPanelOnTop(exists, minimized, foreground);
                 return;
             }
-            Rectangle now = game;
-            if (!haveDockedGame || dockedGame != now)
-            {
-                haveDockedGame = true;
-                dockedGame = now;
-                if (panel.Left != x || panel.Top != y) panel.Location = new Point(x, y);
-            }
+            if (panel.Left != x || panel.Top != y) panel.Location = new Point(x, y);
             if (!panel.Visible) { panel.Show(); panelTopKnown = false; }
             KeepPanelOnTop(exists, minimized, foreground);
+        }
+
+        private bool clamping;
+
+        private void ClampDraggedPanel(Rectangle game, Rectangle desk)
+        {
+            if (clamping) return;
+            int x, y;
+            PanelDock.Place(game.X, game.Y, game.Width, game.Height, panel.Width, panel.Height, panel.Left - game.X, panel.Top - game.Y, desk.X, desk.Y, desk.Width, desk.Height, out x, out y);
+            if (panel.Left == x && panel.Top == y) return;
+            clamping = true;
+            panel.Location = new Point(x, y);
+            clamping = false;
+        }
+
+        // Windows above the tracked client. Another Kavros client that crosses
+        // the panel hides it. The Companion overlay and Clue Helper do not count.
+        private bool OtherClientCovers(int x, int y, int width, int height)
+        {
+            IntPtr cursor = selected;
+            for (int n = 0; n < 24; n++)
+            {
+                cursor = NativeMethods.GetWindow(cursor, 3);
+                if (cursor == IntPtr.Zero) return false;
+                if (cursor == panel.Handle || cursor == Handle || cursor == selected) continue;
+                if (!IsOtherClient(cursor)) continue;
+                Rectangle bounds = NativeMethods.ClientBounds(cursor);
+                if (PanelDock.Overlaps(x, y, width, height, bounds.X, bounds.Y, bounds.Width, bounds.Height)) return true;
+            }
+            return false;
+        }
+
+        private bool IsOtherClient(IntPtr window)
+        {
+            if (window == IntPtr.Zero || window == selected) return false;
+            for (int i = 0; i < found.Count; i++)
+            {
+                if (found[i].Handle != window) continue;
+                return WindowLocator.Score(found[i]) >= 100;
+            }
+            StringBuilder title = new StringBuilder(256);
+            NativeMethods.GetWindowText(window, title, title.Capacity);
+            Rectangle bounds = NativeMethods.ClientBounds(window);
+            return WindowScore.Score(title.ToString(), "", "", bounds.Width, bounds.Height) >= 100;
+        }
+
+        private void NotePanel(bool exists, bool show, bool minimized, bool covered)
+        {
+            uint pid = 0;
+            if (exists) NativeMethods.GetWindowThreadProcessId(selected, out pid);
+            string state = show ? "shown" : "hidden";
+            string why = !exists ? "no-client" : minimized ? "minimized" : covered ? "covered" : "anchored";
+            panelDebug = "bound=" + (exists ? selected.ToInt64().ToString() : "0")
+                + " pid=" + pid.ToString()
+                + " owner=" + panelOwner.ToInt64().ToString()
+                + " panel=" + state;
+            if (panelShownKnown && panelWasShown == show) return;
+            panelShownKnown = true;
+            panelWasShown = show;
+            AppendDebug(DateTime.Now.ToString("HH:mm:ss") + " panel visible=" + state + " reason=" + why + " " + panelDebug);
+        }
+
+        private void AppendDebug(string line)
+        {
+            if (settings == null || !settings.SaveDebug) return;
+            try
+            {
+                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KavrosAfkWarden");
+                Directory.CreateDirectory(dir);
+                File.AppendAllText(Path.Combine(dir, "debug-log.txt"), line + "\r\n");
+            }
+            catch (Exception) { }
         }
 
         private void TryPickClient()
@@ -1201,7 +1278,6 @@ namespace KavrosAfkWarden
             raiseUntil = DateTime.UtcNow.AddSeconds(8);
             panelTopKnown = false;
             ShowPanel();
-            if (panel.IsHandleCreated && !panel.Visible) { panel.Show(); KeepPanelOnTop(selected != IntPtr.Zero, false, false); }
         }
 
         private void Exit()

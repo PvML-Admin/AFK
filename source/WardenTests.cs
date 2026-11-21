@@ -858,10 +858,34 @@ namespace KavrosAfkWarden
             int px, py;
             PanelDock.Place(100, 80, 900, 600, 400, 262, 12, 72, 0, 0, 1920, 1080, out px, out py);
             Check(px == 112 && py == 152, "the panel keeps its offset inside the chosen client");
+            int farX, farY;
+            PanelDock.Place(0, 0, 800, 600, 400, 262, 900, 72, 0, 0, 1920, 1080, out farX, out farY);
+            Check(farX >= 0 && farX + 400 <= 800 && farY >= 0 && farY + 262 <= 600, "a drag toward another client stays inside the tracked client");
+            int movedX, movedY;
+            PanelDock.Place(300, 40, 800, 600, 400, 262, 12, 72, 0, 0, 1920, 1080, out movedX, out movedY);
+            Check(movedX == 312 && movedY == 112, "the panel follows the tracked client when that window moves");
             Check(!PanelDock.Visible(true, true, true, true, false, false), "a minimized client hides the panel");
             Check(PanelDock.Visible(true, true, false, false, false, false), "tabbing out keeps the panel owned by the game instead of hiding it");
             Check(PanelDock.Visible(true, true, false, true, false, false), "the panel shows while the chosen client is in front");
             Check(PanelDock.Visible(true, false, false, false, false, true), "settings keeps the panel available while it is focused");
+            List<DockTarget> clients = new List<DockTarget>();
+            DockTarget second = new DockTarget();
+            second.Handle = 2;
+            second.X = 700;
+            second.Y = 0;
+            second.Width = 800;
+            second.Height = 600;
+            second.InFront = true;
+            clients.Add(second);
+            Check(PanelDock.OtherClientCovers(1, 420, 80, 400, 262, clients), "another client in front of the panel hides it");
+            Check(!PanelDock.Visible(true, true, false, false, false, false, true), "a covered panel is not shown");
+            second.X = 1200;
+            Check(!PanelDock.OtherClientCovers(1, 12, 72, 400, 262, clients), "a client beside the tracked one does not take the panel");
+            second.X = 700;
+            second.InFront = false;
+            Check(!PanelDock.OtherClientCovers(1, 420, 80, 400, 262, clients), "a client behind the tracked one leaves the panel up");
+            Check(PanelDock.OwnerOf(1) == 1 && PanelDock.OwnerOf(1) != 2, "the panel owner is the tracked client");
+            Check(PanelDock.PanelHeading("Zezima") == "Zezima" && PanelDock.PanelHeading("Client 2") == "Client 2" && PanelDock.PanelHeading("Choose a client").Length == 0, "the panel shows the tracked client's name");
         }
 
         private static void Motion()
@@ -1633,7 +1657,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.17" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.18" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -1644,10 +1668,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.17\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.18\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.17.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.18.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }
