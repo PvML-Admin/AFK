@@ -194,8 +194,6 @@ namespace KavrosAfkWarden
         private int chatBusy;
         private int ocrFollow;
         private readonly ChatOcrGate chatGate = new ChatOcrGate();
-        private XpFloat.Sight lastPopup;
-        private DateTime popupHold = DateTime.MinValue;
         private HudReading lastGood;
         private IntRect heldLife;
         private IntRect heldPrayer;
@@ -275,17 +273,10 @@ namespace KavrosAfkWarden
         {
             try { Thread.CurrentThread.Priority = ThreadPriority.BelowNormal; } catch (Exception) { }
             DateTime nextSample = DateTime.MinValue;
-            DateTime nextPopup = DateTime.MinValue;
             DateTime nextChat = DateTime.MinValue;
             try { while (alive)
             {
                 PollKeys();
-                if (DateTime.UtcNow >= nextPopup)
-                {
-                    try { ScanPopup(); }
-                    catch (Exception) { }
-                    nextPopup = DateTime.UtcNow.AddMilliseconds(200);
-                }
                 if (DateTime.UtcNow >= nextChat)
                 {
                     try { ScheduleChat(); }
@@ -705,36 +696,6 @@ namespace KavrosAfkWarden
             ApplyMetrics(reading, metrics, image);
         }
 
-        private void ScanPopup()
-        {
-            IntPtr hwnd;
-            bool capture;
-            lock (gate)
-            {
-                hwnd = requestHwnd;
-                capture = requestCapture;
-            }
-            if (!capture || hwnd == IntPtr.Zero || !NativeMethods.IsWindow(hwnd) || NativeMethods.IsIconic(hwnd)) return;
-            Rectangle client = NativeMethods.ClientBounds(hwnd);
-            if (client.Width < 200 || client.Height < 200) return;
-            if (CapturePlan.OfferWindowSurface) windowSurface.Ensure(hwnd);
-            useSurface = windowSurface.Available;
-            ImageBuffer image = null;
-            if (useSurface) image = windowSurface.Copy(0, 0, client.Width, client.Height);
-            if (image == null) return;
-            XpFloat.Sight sight = XpFloat.Look(image);
-            bool moved = sight.Found && XpFloat.Changed(lastPopup, sight);
-            bool live = sight.Found && (moved || DateTime.UtcNow < popupHold);
-            if (moved) popupHold = DateTime.UtcNow.AddSeconds(2);
-            lastPopup = sight;
-            if (!live) return;
-            lock (gate)
-            {
-                publishedXp = true;
-                publishedSkillTrace = "xp=popup";
-            }
-        }
-
         private void ScheduleChat()
         {
             if (System.Threading.Interlocked.CompareExchange(ref chatBusy, 1, 0) != 0) return;
@@ -865,17 +826,8 @@ namespace KavrosAfkWarden
         {
             lock (gate)
             {
-                if (skills.XpEvent) publishedXp = true;
                 if (skills.PackEvent) publishedPack = true;
-                if (DateTime.UtcNow < popupHold)
-                {
-                    publishedXp = true;
-                    string rest = skills.Trace ?? "";
-                    if (rest.StartsWith("xp=none")) rest = "xp=popup" + rest.Substring(7);
-                    else if (rest.IndexOf("xp=popup") < 0) rest = "xp=popup " + rest;
-                    publishedSkillTrace = rest;
-                }
-                else publishedSkillTrace = skills.Trace;
+                publishedSkillTrace = skills.Trace;
                 publishedSkillView = skills.View;
             }
         }

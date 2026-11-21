@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.27
+
+- Idle follows a rising RuneMetrics total, or a clear drop in hitpoints. An on-screen XP popup does not reset idle. Potion lines are unchanged.
+- Low hitpoints, prayer, idle and potion alerts no longer open a window or a toast. Sound and the panel status remain. Nothing the module shows takes focus from the game.
+- Boosted hitpoints and prayer can read up to 4000, including while they sit above the cap. A total above 4000 is ignored. The boosted number keeps updating instead of sticking.
+- The RuneMetrics tip is larger, brighter, and on its own lines above the buttons. It says to keep RuneMetrics open with precise values.
+
 ## 0.2.26
 
 - Idle follows an XP total that is going up, an XP popup, or a clear drop in hitpoints. The backpack and key presses do not count, and neither does prayer or a heal. A flat RuneMetrics total leaves only popups and hitpoint drops.

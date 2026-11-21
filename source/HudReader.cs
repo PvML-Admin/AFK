@@ -1331,7 +1331,7 @@ namespace KavrosAfkWarden
         {
             if (!number.Ok || number.Current < 0 || (number.Current == 0 && !number.HasMax)) return;
             if (number.HasMax && number.Max <= 0) number.HasMax = false;
-            // Above the cap is fine (boosts), at more than double it is a misread.
+            // Above the cap is fine (boosts). Above 4000 is a misread.
             if (number.HasMax && !ReadGate.Plausible(number.Current, number.Max)) return;
             if (life)
             {

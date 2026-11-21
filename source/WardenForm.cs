@@ -245,23 +245,20 @@ namespace KavrosAfkWarden
             Place(Potion, 162);
             Potion.ColorParts = true;
             Place(Afk, 194);
-            metricsHint.SetBounds(12, 216, 376, 32);
-            metricsHint.Text = "Enable precise values in RuneMetrics. The client can be unfocused, but not minimized.";
-            metricsHint.Font = KavrosTheme.Ui(7.5F, false);
-            metricsHint.ForeColor = Color.FromArgb(120, 128, 136);
+            metricsHint.Text = PanelHint.Line1 + "\n" + PanelHint.Line2;
+            metricsHint.ForeColor = KavrosTheme.Text;
             metricsHint.BackColor = KavrosTheme.Bg;
             metricsHint.Renderer = DrawHint;
             Controls.Add(metricsHint);
             pause.Text = "Pause";
             pause.Tone = ButtonTone.Primary;
-            pause.SetBounds(12, 252, 184, 24);
             pause.Click += delegate { if (PauseRequested != null) PauseRequested(); };
             Controls.Add(pause);
             exit.Text = "Exit";
             exit.Tone = ButtonTone.Secondary;
-            exit.SetBounds(204, 252, 184, 24);
             exit.Click += delegate { if (ExitRequested != null) ExitRequested(); };
             Controls.Add(exit);
+            LayoutFoot();
             FormClosing += delegate(object sender, FormClosingEventArgs e)
             {
                 if (e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); }
@@ -302,7 +299,47 @@ namespace KavrosAfkWarden
             metricsHint.Visible = !collapsed && hintWanted;
             Idle.Visible = Hp.Visible = Prayer.Visible = Potion.Visible = Afk.Visible = !collapsed;
             pause.Visible = exit.Visible = !collapsed;
-            ClientSize = new Size(400, collapsed ? 32 : 294);
+            ClientSize = new Size(ClientSize.Width < 80 ? 400 : ClientSize.Width, collapsed ? 32 : openHeight);
+        }
+
+        private int openHeight = 360;
+        private bool layingOut;
+
+        private void LayoutFoot()
+        {
+            if (layingOut) return;
+            layingOut = true;
+            try
+            {
+                Font font = KavrosTheme.Ui(12F, true);
+                Size first = TextRenderer.MeasureText(PanelHint.Line1, font);
+                Size second = TextRenderer.MeasureText(PanelHint.Line2, font);
+                int lineH = Math.Max(first.Height, second.Height);
+                int lineW = Math.Max(first.Width, second.Width);
+                int panelW, hintY, hintH, buttonY, panelH;
+                PanelHint.Foot(lineH, lineW, out panelW, out hintY, out hintH, out buttonY, out panelH);
+                int textW = panelW - 24;
+                note.SetBounds(12, 40, textW, 22);
+                Idle.SetBounds(12, 66, textW, 28);
+                Hp.SetBounds(12, 98, textW, 28);
+                Prayer.SetBounds(12, 130, textW, 28);
+                Potion.SetBounds(12, 162, textW, 28);
+                Afk.SetBounds(12, 194, textW, 28);
+                metricsHint.SetBounds(12, hintY, textW, hintH);
+                int buttonW = Math.Max(120, (textW - 8) / 2);
+                pause.SetBounds(12, buttonY, buttonW, 28);
+                exit.SetBounds(12 + buttonW + 8, buttonY, buttonW, 28);
+                openHeight = panelH;
+                if (!collapsed) ClientSize = new Size(panelW, openHeight);
+                LayoutHeader();
+            }
+            finally { layingOut = false; }
+        }
+
+        protected override void OnDpiChanged(DpiChangedEventArgs e)
+        {
+            base.OnDpiChanged(e);
+            LayoutFoot();
         }
 
         private void LayoutHeader()
@@ -337,7 +374,10 @@ namespace KavrosAfkWarden
         private void DrawHint(Graphics g, PaintedLabel label)
         {
             using (Brush brush = new SolidBrush(KavrosTheme.Bg)) g.FillRectangle(brush, label.ClientRectangle);
-            TextRenderer.DrawText(g, label.Text, KavrosTheme.Ui(7.5F, false), label.ClientRectangle, Color.FromArgb(120, 128, 136), KavrosTheme.Bg, TextFormatFlags.WordBreak | TextFormatFlags.NoPadding);
+            Font font = KavrosTheme.Ui(12F, true);
+            int lineH = Math.Max(16, label.Height / 2);
+            TextRenderer.DrawText(g, PanelHint.Line1, font, new Rectangle(0, 4, label.Width, lineH), KavrosTheme.Text, KavrosTheme.Bg, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
+            TextRenderer.DrawText(g, PanelHint.Line2, font, new Rectangle(0, 4 + lineH, label.Width, lineH), KavrosTheme.Text, KavrosTheme.Bg, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
         }
 
         protected override void WndProc(ref Message message)
@@ -402,9 +442,7 @@ namespace KavrosAfkWarden
         private readonly ComboBox soundChoice = new ComboBox();
         private readonly Label status = new Label();
         private readonly WatchPanel panel = new WatchPanel();
-        private readonly AlertPopup popup = new AlertPopup();
         private readonly AlertSound sound = new AlertSound();
-        private readonly SystemToast toast = new SystemToast();
         private readonly FrameGrab grab = new FrameGrab();
         private SceneActivity activity = new SceneActivity();
         private DateTime lastDebugSave = DateTime.MinValue;
@@ -519,7 +557,7 @@ namespace KavrosAfkWarden
             {
                 if (!closing && e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); ShowPanel(); }
             };
-            FormClosed += delegate { closing = true; try { timer.Stop(); } catch (Exception) { } try { Save(); } catch (Exception) { } try { CompanionStatus.Write("stopped", settings.Paused); } catch (Exception) { } try { grab.Stop(); } catch (Exception) { } try { tray.Visible = false; tray.Dispose(); } catch (Exception) { } try { panel.Dispose(); } catch (Exception) { } try { popup.Dispose(); } catch (Exception) { } };
+            FormClosed += delegate { closing = true; try { timer.Stop(); } catch (Exception) { } try { Save(); } catch (Exception) { } try { CompanionStatus.Write("stopped", settings.Paused); } catch (Exception) { } try { grab.Stop(); } catch (Exception) { } try { tray.Visible = false; tray.Dispose(); } catch (Exception) { } try { panel.Dispose(); } catch (Exception) { } };
             timer.Interval = CapturePlan.SampleMilliseconds;
             timer.Tick += delegate { Tick(); };
         }
@@ -604,7 +642,7 @@ namespace KavrosAfkWarden
 
             potionOn = Check("Potion alerts from chat", 28, 484, 220, settings.PotionEnabled);
             Caption("Keep the chatbox visible, with game messages on.", 250, 488);
-            Caption("RuneMetrics needs precise values. The client can be in the background, but not minimized.", 28, 260);
+            Caption(PanelHint.Line1 + " " + PanelHint.Line2, 28, 260);
             Caption("Below", 28, 512);
             Number(potionSeconds, 88, 508, 1, 600, settings.PotionSeconds);
             Caption("seconds", 172, 512);
@@ -645,8 +683,7 @@ namespace KavrosAfkWarden
             Controls.Add(soundChoice);
             updates = Check("Check for updates at startup", 28, 800, 320, settings.CheckForUpdates);
             saveDebug = Check("Save debug capture", 360, 800, 240, settings.SaveDebug);
-            AddButton("Test notification", 28, 888, 160, ButtonTone.Primary, delegate { popup.Present(SampleAlert(), (int)banner.Value); });
-            AddButton("Test sound", 198, 888, 120, ButtonTone.Secondary, delegate
+            AddButton("Test sound", 28, 888, 160, ButtonTone.Primary, delegate
             {
                 sound.Volume = volume.Value;
                 sound.Tone = soundChoice.SelectedItem == null ? "By alert" : soundChoice.SelectedItem.ToString();
@@ -658,7 +695,7 @@ namespace KavrosAfkWarden
             status.ForeColor = KavrosTheme.TextSoft;
             status.BackColor = KavrosTheme.Bg;
             status.Font = KavrosTheme.Ui(8.5F, false);
-            status.Text = "Live alerts obey the switches above. Test buttons always play.";
+            status.Text = "Alerts are sound and the panel. No window is opened over the game.";
             Controls.Add(status);
 
             hpPercent.CheckedChanged += delegate { if (!loading) hpThreshold.Maximum = hpPercent.Checked ? 999 : 9999999; };
@@ -1487,11 +1524,6 @@ namespace KavrosAfkWarden
             sound.Tone = settings.SoundTone;
             for (int i = 0; i < events.Count; i++)
             {
-                if (events[i].Notify)
-                {
-                    popup.Present(events[i], settings.BannerSeconds);
-                    toast.Show(events[i].Title, events[i].Detail);
-                }
                 if (events[i].Sound) sound.Play(events[i].Kind);
             }
             UpdatePanel(pixels);
@@ -1547,11 +1579,10 @@ namespace KavrosAfkWarden
             panel.Potion.Value = closed ? "Client closed" : roster.Length > 0 && !settings.Paused
                 ? roster
                 : (minimized ? "Minimized" : !pixels ? "No view" : waiting);
-            bool popup = grab.SkillTrace != null && grab.SkillTrace.IndexOf("xp=") >= 0 && grab.SkillTrace.IndexOf("xp=none") < 0;
             bool fullTotal = lastHud.MetricsFound;
-            if (popup || fullTotal) metricsAbsentSince = DateTime.MinValue;
+            if (fullTotal) metricsAbsentSince = DateTime.MinValue;
             else if (metricsAbsentSince == DateTime.MinValue) metricsAbsentSince = DateTime.UtcNow;
-            bool metricsHint = SceneActivity.XpPopup.WantHint(popup, fullTotal) && metricsAbsentSince != DateTime.MinValue
+            bool metricsHint = !fullTotal && metricsAbsentSince != DateTime.MinValue
                 && (DateTime.UtcNow - metricsAbsentSince).TotalSeconds >= 5;
             panel.SetMetricsHint(metricsHint);
             int left = Math.Max(0, (int)engine.AfkRemaining.TotalSeconds);
@@ -1651,15 +1682,6 @@ namespace KavrosAfkWarden
             }
             string text = windows.Items[e.Index].ToString();
             TextRenderer.DrawText(e.Graphics, text, KavrosTheme.Ui(9F, false), new Rectangle(e.Bounds.X + 8, e.Bounds.Y, e.Bounds.Width - 12, e.Bounds.Height), ink, fill, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.Left | TextFormatFlags.SingleLine);
-        }
-
-        private static AlertEvent SampleAlert()
-        {
-            AlertEvent alert = new AlertEvent();
-            alert.Kind = "hp";
-            alert.Title = "Hitpoints are low";
-            alert.Detail = "This is a test notification. It stays above other windows.";
-            return alert;
         }
 
         private static Icon LoadIcon()

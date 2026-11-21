@@ -272,4 +272,23 @@ namespace KavrosAfkWarden
             return union <= parts * 3 && bottom - top <= Math.Max(a.Height, b.Height) * 2;
         }
     }
+
+    // The RuneMetrics tip sits on its own lines, above the buttons, and grows
+    // with the measured text so 150% and 200% do not clip it.
+    public static class PanelHint
+    {
+        public const string Line1 = "Keep RuneMetrics open with precise values.";
+        public const string Line2 = "Idle uses that total. Background is fine; not minimized.";
+
+        public static void Foot(int lineHeight, int lineWidth, out int panelW, out int hintY, out int hintH, out int buttonY, out int panelH)
+        {
+            if (lineHeight < 16) lineHeight = 16;
+            if (lineWidth < 280) lineWidth = 280;
+            panelW = Math.Max(400, lineWidth + 32);
+            hintY = 230;
+            hintH = lineHeight * 2 + 12;
+            buttonY = hintY + hintH + 16;
+            panelH = buttonY + 28 + 16;
+        }
+    }
 }

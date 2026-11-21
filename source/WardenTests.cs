@@ -96,7 +96,8 @@ namespace KavrosAfkWarden
         private static void ReadFixes(string root)
         {
             Check(ReadGate.Plausible(1633, 1060) && ReadGate.Plausible(1040, 990), "boosted life and prayer above the cap are plausible");
-            Check(!ReadGate.Plausible(6633, 1060) && !ReadGate.Plausible(5, 0), "more than double the cap, or no cap, is a misread");
+            Check(ReadGate.Plausible(1058, 990) && ReadGate.Plausible(3500, 990) && ReadGate.Plausible(4000, 990), "hitpoints up to 4000 stay legal above the cap");
+            Check(!ReadGate.Plausible(4001, 990) && !ReadGate.Plausible(6633, 1060) && !ReadGate.Plausible(5, 0), "above 4000, or no cap, is a misread");
             DateTime t = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
             ReadGate wild = new ReadGate();
             wild.Push(900, 1060, t); wild.Push(900, 1060, t.AddMilliseconds(500));
@@ -1027,7 +1028,7 @@ namespace KavrosAfkWarden
             wideNumber.Fill(270, 48, 200, 8, purpleWide);
             DrawLifeNumber(wideNumber, 270, 26, new int[] { 1, 0, 4, 0 }, new int[] { 9, 9, 0 }, white);
             HudReading wideReading = HudReader.Read(wideNumber, new WardenSettings());
-            Check(wideReading.Hp == 1234567 && wideReading.HpMax == 1000000, "a seven-digit boosted life value is kept, got " + (wideReading.Hp == null ? "none" : wideReading.Hp.Value.ToString()) + "/" + (wideReading.HpMax == null ? "-" : wideReading.HpMax.Value.ToString()) + " " + HudReader.Explain(wideNumber, new IntRect(10, 16, 240, 40)));
+            Check(wideReading.Hp == null, "a life total above 4000 is not shown, got " + (wideReading.Hp == null ? "none" : wideReading.Hp.Value.ToString()));
             Check(wideReading.Prayer == 1040 && wideReading.PrayerMax == 990, "prayer above its cap is kept");
             int sevenPct;
             Check(Thresholds.TryMeasure(1234567, 1000000, true, out sevenPct) && sevenPct == 123, "seven-digit life uses the cap as the percent base, got " + sevenPct.ToString());
@@ -1573,6 +1574,7 @@ namespace KavrosAfkWarden
             ReplayMetrics(root);
             ChatConfirm(root);
             Live026(root);
+            BoostedLife(root);
             string[] chatter = new string[] {
                 "-a ALL CHAT",
                 ". 14KlllS In core",
@@ -1868,12 +1870,124 @@ namespace KavrosAfkWarden
             notes.Add("debug-log-v0224-pots-ok.txt replay: " + got);
         }
 
+        private static void BoostedLife(string root)
+        {
+            DateTime t = new DateTime(2026, 11, 21, 22, 0, 0, DateTimeKind.Utc);
+            ReadGate life = new ReadGate();
+            life.Push(990, 990, t);
+            life.Push(990, 990, t.AddMilliseconds(500));
+            Check(life.Value == 990 && life.Max == 990, "the unboosted total locks, got " + life.Value);
+            life.Push(1058, 990, t.AddSeconds(1));
+            Check(life.Value == 1058 && life.Max == 990, "1058/990 is shown at once, got " + life.Value + "/" + life.Max);
+            life.Push(1200, 990, t.AddSeconds(2));
+            life.Push(1104, 990, t.AddSeconds(3));
+            Check(life.Value == 1104, "a boosted total keeps updating instead of sticking, got " + life.Value);
+            life.Push(3500, 990, t.AddSeconds(4));
+            Check(life.Value == 3500, "3500/990 is accepted, got " + life.Value);
+            life.Push(4500, 990, t.AddSeconds(5));
+            Check(life.Value == 3500, "above 4000 does not replace the shown hitpoints, got " + life.Value);
+            ReadGate prayer = new ReadGate();
+            prayer.Push(990, 990, t);
+            prayer.Push(990, 990, t.AddMilliseconds(500));
+            prayer.Push(1040, 990, t.AddSeconds(1));
+            prayer.Push(1200, 990, t.AddSeconds(2));
+            Check(prayer.Value == 1200 && prayer.Max == 990, "boosted prayer uses the same ceiling and keeps moving, got " + prayer.Value);
+            prayer.Push(4001, 990, t.AddSeconds(3));
+            Check(prayer.Value == 1200, "prayer above 4000 is rejected");
+            int panelW, hintY, hintH, buttonY, panelH;
+            PanelHint.Foot(18, 360, out panelW, out hintY, out hintH, out buttonY, out panelH);
+            Check(hintH >= 18 * 2 && buttonY >= hintY + hintH + 16 && panelH >= buttonY + 28, "the tip has its own lines and a gap above the buttons at 100%");
+            int wideW, wideY, wideH, wideButton, widePanel;
+            PanelHint.Foot(36, 720, out wideW, out wideY, out wideH, out wideButton, out widePanel);
+            Check(wideH >= 36 * 2 && wideButton >= wideY + wideH + 16 && wideW >= 752 && widePanel >= wideButton + 28, "the tip grows at 200% and still sits above the buttons");
+            Check(PanelHint.Line1.IndexOf("precise values") >= 0 && PanelHint.Line1.IndexOf("RuneMetrics") >= 0 && PanelHint.Line2.IndexOf("minimized") >= 0, "the tip says to keep RuneMetrics open, and not minimized");
+            Check(!AlertSurface.ShowsWindow, "low alerts do not open a window or a toast");
+            string path = Path.Combine(root, "verification", "fixtures", "live027", "debug-log-v0226-hp.txt");
+            if (!File.Exists(path))
+            {
+                Check(false, "missing debug-log-v0226-hp.txt");
+                return;
+            }
+            string[] lines = File.ReadAllLines(path);
+            ReadGate logged = new ReadGate();
+            int shown = 0;
+            DateTime when = t;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                int at = lines[i].IndexOf("hp=");
+                if (at < 0) continue;
+                string token = lines[i].Substring(at + 3);
+                int end = token.IndexOf(' ');
+                if (end > 0) token = token.Substring(0, end);
+                int slash = token.IndexOf('/');
+                if (slash <= 0) continue;
+                int current, max;
+                if (!int.TryParse(token.Substring(0, slash), out current)) continue;
+                if (!int.TryParse(token.Substring(slash + 1), out max)) continue;
+                when = when.AddSeconds(1);
+                logged.Push(current, max, when);
+                if (logged.Value == current) shown++;
+            }
+            Check(shown > 0 && logged.Value == 1633 && logged.Max == 1060, "the v0.2.26 hitpoint log stays on 1633/1060, got " + logged.Value + "/" + logged.Max);
+            notes.Add("debug-log-v0226-hp.txt ends before the stuck boost; replay shows " + logged.Value + "/" + logged.Max);
+            string idleLog = Path.Combine(root, "verification", "fixtures", "live027", "debug-log-v0226-idlereset.txt");
+            if (!File.Exists(idleLog))
+            {
+                Check(false, "missing debug-log-v0226-idlereset.txt");
+                return;
+            }
+            string[] idleLines = File.ReadAllLines(idleLog);
+            int falsePopups = 0;
+            int countedPopups = 0;
+            int gains = 0;
+            long previousXp = -1;
+            WardenEngine idleEngine = new WardenEngine();
+            WardenSettings idleSettings = new WardenSettings();
+            idleSettings.IdleSeconds = 12;
+            idleSettings.HpEnabled = false;
+            idleSettings.PrayerEnabled = false;
+            idleSettings.AfkEnabled = false;
+            DateTime idleTime = new DateTime(2026, 11, 21, 23, 2, 0, DateTimeKind.Utc);
+            WatchSample quiet = Sample(idleTime, true, true, false, false);
+            idleEngine.Tick(quiet, idleSettings);
+            idleEngine.Tick(Sample(idleTime.AddSeconds(12), true, true, true, true), idleSettings);
+            Check(idleEngine.IdleLatched, "keys and a popup-sized scene do not keep the player active");
+            for (int i = 0; i < idleLines.Length; i++)
+            {
+                if (idleLines[i].Length < 8 || idleLines[i][2] != ':') continue;
+                int skillAt = idleLines[i].IndexOf("skill=");
+                int metricsAt = idleLines[i].IndexOf("metrics=xp=");
+                if (skillAt < 0 || metricsAt < 0) continue;
+                string skill = idleLines[i].Substring(skillAt + 6);
+                int skillEnd = skill.IndexOf(' ');
+                if (skillEnd > 0) skill = skill.Substring(0, skillEnd);
+                string number = idleLines[i].Substring(metricsAt + 11);
+                int numberEnd = number.IndexOf(' ');
+                if (numberEnd > 0) number = number.Substring(0, numberEnd);
+                long xp;
+                if (!long.TryParse(number, out xp)) continue;
+                bool gain = previousXp >= 0 && xp > previousXp;
+                if (gain) gains++;
+                bool popup = skill.IndexOf("xp=popup") >= 0;
+                bool counts = ActivitySignals.Xp(gain, popup);
+                if (xp == 7402846L && popup && idleLines[i].IndexOf("idleReset=yes") >= 0)
+                {
+                    falsePopups++;
+                    if (counts) countedPopups++;
+                }
+                previousXp = xp;
+            }
+            Check(falsePopups > 0 && countedPopups == 0, "flat 7402846 popup hits do not reset idle, lines " + falsePopups.ToString() + " counted " + countedPopups.ToString());
+            Check(gains > 0, "a rising total in the same log still counts");
+            notes.Add("debug-log-v0226-idlereset.txt popup resets while flat: " + falsePopups.ToString() + ", counted " + countedPopups.ToString());
+        }
+
         private static void Live026(string root)
         {
             Check(!ActivitySignals.HpDrop(1000, 1000) && !ActivitySignals.HpDrop(1000, 999) && !ActivitySignals.HpDrop(1000, 998), "one or two hitpoints of wobble is not a hit");
             Check(!ActivitySignals.HpDrop(1000, 1100), "hitpoints rising is not activity");
             Check(ActivitySignals.HpDrop(1000, 990), "a clear hitpoints drop is activity");
-            Check(ActivitySignals.Xp(true, false) && ActivitySignals.Xp(false, true) && !ActivitySignals.Xp(false, false), "activity XP is a rising total or a popup");
+            Check(ActivitySignals.Xp(true, false) && !ActivitySignals.Xp(false, true) && !ActivitySignals.Xp(false, false), "only a rising RuneMetrics total counts, and a popup does not");
             SceneActivity scene = new SceneActivity();
             HudReading steady = new HudReading();
             steady.Hp = 1471;
@@ -2221,7 +2335,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.26" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.27" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -2232,10 +2346,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.26\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.27\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.26.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.27.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

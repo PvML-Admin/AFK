@@ -14,8 +14,8 @@ namespace KavrosAfkWarden
         public int PrayerThreshold = 20;
         public bool PrayerPercent = true;
         public bool AfkEnabled = true;
-        // Skilling mode: idle means no XP gain and no XP popup for SkillingIdleSeconds.
-        // A clear hitpoints drop still counts. Keys, the backpack and prayer do not.
+        // Skilling mode: idle means the RuneMetrics total has not risen for SkillingIdleSeconds.
+        // A clear hitpoints drop still counts. Popups, keys, the backpack and prayer do not.
         public bool SkillingMode;
         public int SkillingIdleSeconds = 45;
         public int ActiveIdleSeconds { get { return SkillingMode ? SkillingIdleSeconds : IdleSeconds; } }
@@ -359,11 +359,11 @@ namespace KavrosAfkWarden
     // into the current value.
     public sealed class ReadGate
     {
-        // Boosted life and prayer can sit above the cap (the live capture shows
-        // 1,633/1,060), but never at double it. Anything beyond is a misread.
+        // Boosted life and prayer can sit well above the cap on this server.
+        // Anything above 4000 is a misread, not a bigger boost.
         public static bool Plausible(int current, int max)
         {
-            return max >= 1 && max <= 10000000 && current >= 0 && current <= max * 2;
+            return max >= 1 && max <= 10000000 && current >= 0 && current <= 4000;
         }
 
         private StableValue current = new StableValue();
@@ -404,6 +404,16 @@ namespace KavrosAfkWarden
             int delta=previous.HasValue?value-previous.Value:0;
             int direction=Math.Sign(delta);
             int? agreed=current.Push(value);
+            // A boost above the cap must move the panel on the next read. Holding
+            // the old total because it is under the cap is what froze 1058/990.
+            if (lockedMax == nowMax && value > nowMax.Value)
+            {
+                Value = value;
+                previousDirection = Math.Abs(delta) <= Math.Max(5, nowMax.Value / 8) ? direction : 0;
+                previous = value;
+                Max = lockedMax;
+                return;
+            }
             // A draining bar can change on every frame. Three plausible readings
             // travelling in one direction corroborate each other at the same cap.
             bool trend=lockedMax==nowMax && direction!=0 && direction==previousDirection && Math.Abs(delta)<=Math.Max(5,nowMax.Value/8);
@@ -1042,8 +1052,8 @@ namespace KavrosAfkWarden
             if (sample.SkillProgress) { lastSkill = sample.Time; sawSkill = true; }
             bool skilling = settings.SkillingMode || (sawSkill && (sample.Time - lastSkill).TotalSeconds <= settings.SkillingIdleSeconds + 2);
             Skilling = skilling;
-            // Activity is an XP gain, an XP popup, or a clear hitpoints drop.
-            // Keys, the backpack, prayer and scene motion do not reset idle.
+            // Activity is a rising RuneMetrics total or a clear hitpoints drop.
+            // Popups, keys, the backpack, prayer and scene motion do not reset idle.
             bool active = sample.SkillProgress || sample.HpDrop;
             StillFor = stillness.StillFor(see && active, sample.Time, see);
             inactivity.Observe(sample.InputActivity, sample.Time, attached);
@@ -1121,6 +1131,13 @@ namespace KavrosAfkWarden
         }
     }
 
+    // Alert windows and toasts are off. They take focus from the game.
+    // Sound and the panel status are the only signals.
+    public static class AlertSurface
+    {
+        public static bool ShowsWindow { get { return false; } }
+    }
+
     // What counts as the player doing something. Banking, keys and prayer do not.
     public static class ActivitySignals
     {
@@ -1132,7 +1149,7 @@ namespace KavrosAfkWarden
 
         public static bool Xp(bool metricsGain, bool popup)
         {
-            return metricsGain || popup;
+            return metricsGain;
         }
     }
 

@@ -1,10 +1,10 @@
 # AFK Warden
 
-AFK Warden is a Companion module for Kavros. It watches the game window and warns you when you have gone idle, when hitpoints or prayer run low, and shortly before the inactivity timer would send you to AFK. Version 0.2.26 is a Windows .NET Framework 4.8 application.
+AFK Warden is a Companion module for Kavros. It watches the game window and warns you when you have gone idle, when hitpoints or prayer run low, and shortly before the inactivity timer would send you to AFK. Version 0.2.27 is a Windows .NET Framework 4.8 application.
 
 Keep the RuneMetrics window open and turn on precise values, so the total is a full number. The game client can sit in the background, but it must not be minimized. Keep the chatbox visible, with game messages on, so the elder overload and aggression lines are read from chat.
 
-The public module record is [`companion.module.json`](companion.module.json). The Companion panel can read it from this repository's `main` branch. While the program is running it also writes `%LocalAppData%\Kavros\Companion\modules\afk-warden.json` with `Running · v0.2.26`.
+The public module record is [`companion.module.json`](companion.module.json). The Companion panel can read it from this repository's `main` branch. While the program is running it also writes `%LocalAppData%\Kavros\Companion\modules\afk-warden.json` with `Running · v0.2.27`.
 
 The window uses the shared Companion theme: `source/KavrosTheme.cs`, `OpaqueButton`, `KavrosCheckBox`, the Cinzel and Outfit fonts, the crest, the navy panels, the gold primary button, the dark secondary buttons, and the status pills.
 
@@ -12,7 +12,7 @@ The window uses the shared Companion theme: `source/KavrosTheme.cs`, `OpaqueButt
 
 Requires Windows 10 or 11 and .NET Framework 4.8.
 
-A release tag `v0.2.26` (the first three parts of `source/app.manifest`) builds with `source/build.ps1`, packs with Velopack 1.2.161, and publishes:
+A release tag `v0.2.27` (the first three parts of `source/app.manifest`) builds with `source/build.ps1`, packs with Velopack 1.2.161, and publishes:
 
 - `KavrosAfkWarden-win-Setup.exe`
 - `KavrosAfkWarden-win-Portable.zip`
@@ -29,7 +29,7 @@ The small panel is owned by the Kavros window you picked. It moves with that win
 
 **Settings** is the large window: crest, Cinzel "AFK WARDEN" title, and three cards (Watch, Alerts, Channels). Closing that window returns to the panel.
 
-An alert is an always-on-top popup on the monitor you are using, drawn with the same navy, gold rule, and status pill. It does not take keyboard focus. A Windows toast is also raised when the shell accepts `Kavros.AfkWarden`. Sound is separate from that popup.
+An alert is a sound and a change on the panel. No extra window or Windows toast is opened, so the game keeps focus.
 
 ## Settings
 
@@ -38,19 +38,19 @@ Saved in `%LocalAppData%\KavrosAfkWarden\settings.txt`. They come back the next 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | Idle alert | On, 12 seconds | Warns when the character view and minimap dot have been still for this long. |
-| Skilling mode | Off, 45 seconds | For AFK skilling. Idle then means no XP drop, no backpack change and no click or key for this long, and the alert says you stopped skilling. Life, prayer and adrenaline changes do not count. The "After" box keeps a separate time for each mode. |
+| Skilling mode | Off, 45 seconds | For AFK skilling. Idle then means the RuneMetrics total has not risen for this long. A clear hitpoints drop still counts. Popups, the backpack and keys do not. The "After" box keeps a separate time for each mode. |
 | Low hitpoints | On, 30 percent | Warns below this percent, or below an absolute number if Percent is off. |
 | Low prayer | On, 20 percent | Same, for prayer. |
 | Potion running out | On, 15 seconds | Warns when any buff-bar timer drops below this. Each alert still has its own Sound and Notify boxes. |
 | AFK teleport | On, 25 minutes, 30-second warning | Warns this many seconds before the inactivity timer expires. |
 | Play sounds | On | Master switch. Also each alert has its own Sound box. Both must be on. |
 | Volume | 100 percent | Scales every alert sound and Test sound. |
-| Show notifications | On | Master switch for the popup and the toast. Each alert has its own Notify box. Both must be on. |
+| Show notifications | On | Kept in the settings file. Alerts do not open a window or a toast. |
 | Cooldown | 20 seconds | After an alert fires, it will not fire again until the condition has cleared and this long has passed. |
-| Stays | 8 seconds | How long the popup stays up. Click it to dismiss it sooner. |
+| Stays | 8 seconds | Unused. Alerts do not open a banner. |
 | Pause watching | Off | Freezes every timer and does not alert. |
 
-Test notification and Test sound always run, so you can check the devices. Live alerts obey the switches.
+Test sound always runs, so you can check the device. Live alerts obey the sound switches.
 
 Pin hitpoints or Pin prayer if the automatic search is looking at the wrong number. Drag a rectangle around that readout. Pin buff bar does the same for the row of potion timers. Clear pins returns to the automatic search.
 
@@ -87,7 +87,7 @@ KavrosAfkWarden.exe --self-test results.txt
 
 The headless test checks the alert gates, the per-alert sound and notification switches, the settings file, idle versus the AFK clock, minimized and covered capture decisions, digit and bar reading, and that `companion.module.json` matches `source/app.manifest`. It does not open a window and it does not capture the desktop.
 
-Tag `v0.2.26` to publish a release. The tag must match the first three parts of the version in `source/app.manifest`. While **Check for updates at startup** is on, an installed copy also checks GitHub Releases every three hours. A folder copy that was not installed with Setup cannot update itself.
+Tag `v0.2.27` to publish a release. The tag must match the first three parts of the version in `source/app.manifest`. While **Check for updates at startup** is on, an installed copy also checks GitHub Releases every three hours. A folder copy that was not installed with Setup cannot update itself.
 
 ## What was not verified
 
