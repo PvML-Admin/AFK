@@ -1073,7 +1073,7 @@ namespace KavrosAfkWarden
             }
 
             TimeSpan cooldown = TimeSpan.FromSeconds(settings.CooldownSeconds);
-            bool idle = see && settings.IdleEnabled && StillFor >= TimeSpan.FromSeconds(skilling ? settings.SkillingIdleSeconds : settings.IdleSeconds);
+            bool idle = see && settings.IdleEnabled && StillFor >= TimeSpan.FromSeconds(45);
             IdleLatched = idle;
             if (idleGate.ShouldFire(idle, sample.Time, cooldown))
             {
@@ -1175,19 +1175,112 @@ namespace KavrosAfkWarden
             return names[index];
         }
 
-        public static double[] Pair(string tone, string kind)
+        public const int Rate = 22050;
+
+        // By alert picks a different pattern for each alert. The named choices
+        // ignore the alert kind so the test button plays exactly what was picked.
+        public static short[] Render(string tone, string kind, int volume)
         {
             string name = Canonical(tone);
-            if (name == "Chime") return new double[] { 520, 780 };
-            if (name == "Bell") return new double[] { 880, 660 };
-            if (name == "Soft") return new double[] { 660, 520 };
-            if (name == "Drop") return new double[] { 740, 520 };
-            if (name == "Alarm") return new double[] { 988, 740 };
-            if (kind == "hp") return new double[] { 880, 660 };
-            if (kind == "afk") return new double[] { 988, 740 };
-            if (kind == "prayer") return new double[] { 660, 520 };
-            if (kind == "potion") return new double[] { 740, 520 };
-            return new double[] { 520, 780 };
+            if (name == "By alert") name = ForKind(kind);
+            int level = volume < 0 ? 0 : volume > 100 ? 100 : volume;
+            if (name == "Chime") return Chime(level);
+            if (name == "Bell") return Bell(level);
+            if (name == "Soft") return Soft(level);
+            if (name == "Drop") return Horn(level);
+            if (name == "Alarm") return Alarm(level);
+            return Chime(level);
+        }
+
+        private static string ForKind(string kind)
+        {
+            if (kind == "hp") return "Alarm";
+            if (kind == "afk") return "Drop";
+            if (kind == "prayer") return "Soft";
+            if (kind == "potion") return "Bell";
+            return "Chime";
+        }
+
+        // Four short high notes, each a step higher.
+        private static short[] Chime(int level)
+        {
+            short[] buffer = Blank(0.62);
+            double amp = 7000.0 * level / 100.0;
+            double[] notes = new double[] { 784, 988, 1175, 1568 };
+            for (int i = 0; i < notes.Length; i++)
+                Add(buffer, 0.14 * i, 0.12, notes[i], amp, 2, 22);
+            return buffer;
+        }
+
+        // Doorbell: a higher ding, then a lower dong.
+        private static short[] Bell(int level)
+        {
+            short[] buffer = Blank(1.05);
+            double amp = 6500.0 * level / 100.0;
+            Add(buffer, 0, 0.40, 830, amp, 4, 6);
+            Add(buffer, 0.50, 0.52, 622, amp, 4, 4);
+            return buffer;
+        }
+
+        // One quiet low note.
+        private static short[] Soft(int level)
+        {
+            short[] buffer = Blank(0.55);
+            Add(buffer, 0, 0.48, 294, 3200.0 * level / 100.0, 1, 2.2);
+            return buffer;
+        }
+
+        // A longer low buzz.
+        private static short[] Horn(int level)
+        {
+            short[] buffer = Blank(1.25);
+            Add(buffer, 0, 1.15, 92, 4800.0 * level / 100.0, 6, 0.35);
+            return buffer;
+        }
+
+        // Six short high beeps.
+        private static short[] Alarm(int level)
+        {
+            short[] buffer = Blank(0.70);
+            double amp = 5500.0 * level / 100.0;
+            for (int i = 0; i < 6; i++)
+                Add(buffer, 0.11 * i, 0.05, 1760, amp, 1, 1);
+            return buffer;
+        }
+
+        private static short[] Blank(double seconds)
+        {
+            int count = (int)(Rate * seconds);
+            if (count < 1) count = 1;
+            return new short[count];
+        }
+
+        private static void Add(short[] buffer, double start, double dur, double freq, double amp, int partials, double decay)
+        {
+            if (buffer == null || partials < 1) return;
+            int from = (int)(start * Rate);
+            int count = (int)(dur * Rate);
+            for (int i = 0; i < count; i++)
+            {
+                int at = from + i;
+                if (at < 0 || at >= buffer.Length) continue;
+                double t = i / (double)Rate;
+                double attack = t < 0.006 ? t / 0.006 : 1.0;
+                double env = Math.Exp(-decay * t) * attack;
+                double wave = 0;
+                double weight = 0;
+                for (int h = 1; h <= partials; h++)
+                {
+                    double part = 1.0 / h;
+                    wave += Math.Sin(2 * Math.PI * freq * h * t) * part;
+                    weight += part;
+                }
+                if (weight > 0) wave /= weight;
+                int mixed = buffer[at] + (int)(wave * amp * env);
+                if (mixed > 11000) mixed = 11000;
+                if (mixed < -11000) mixed = -11000;
+                buffer[at] = (short)mixed;
+            }
         }
     }
 

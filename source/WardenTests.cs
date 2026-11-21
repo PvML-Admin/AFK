@@ -222,20 +222,20 @@ namespace KavrosAfkWarden
             // Combat-style signals (life changing) do not count while skilling.
             List<AlertEvent> early = engine.Tick(Sample(t.AddSeconds(20), true, true, true, false), settings);
             Check(Find(early, "idle") == null, "twenty seconds without XP is not yet idle in skilling mode");
-            List<AlertEvent> stopped = engine.Tick(Sample(t.AddSeconds(31), true, true, true, false), settings);
+            List<AlertEvent> stopped = engine.Tick(Sample(t.AddSeconds(46), true, true, true, false), settings);
             AlertEvent alert = Find(stopped, "idle");
-            Check(alert != null && alert.Title == "You stopped skilling", "no XP or backpack change for the skilling time warns that skilling stopped");
+            Check(alert != null && alert.Title == "You stopped skilling", "forty-five seconds without an XP gain warns that skilling stopped");
             PotionRoster();
-            WatchSample xp = Sample(t.AddSeconds(32), true, true, false, false);
+            WatchSample xp = Sample(t.AddSeconds(47), true, true, false, false);
             xp.SkillProgress = true;
             engine.Tick(xp, settings);
             Check(!engine.IdleLatched && engine.StillFor == TimeSpan.Zero, "an XP drop resets skilling idle");
-            engine.Tick(Sample(t.AddSeconds(40), true, true, false, false), settings);
-            WatchSample clicked = Sample(t.AddSeconds(50), true, true, true, true);
+            engine.Tick(Sample(t.AddSeconds(50), true, true, false, false), settings);
+            WatchSample clicked = Sample(t.AddSeconds(60), true, true, true, true);
             engine.Tick(clicked, settings);
             Check(engine.StillFor >= TimeSpan.FromSeconds(9), "a click or key does not reset skilling idle, still " + engine.StillFor.TotalSeconds.ToString());
-            engine.Tick(Sample(t.AddSeconds(51), true, true, false, false), settings);
-            engine.Tick(Sample(t.AddSeconds(80), true, true, false, false), settings);
+            engine.Tick(Sample(t.AddSeconds(61), true, true, false, false), settings);
+            engine.Tick(Sample(t.AddSeconds(100), true, true, false, false), settings);
             Check(engine.StillFor >= TimeSpan.FromSeconds(29), "idle counts up when the clicks, XP and backpack stop");
             WardenEngine combat = new WardenEngine();
             WardenSettings normal = new WardenSettings();
@@ -754,25 +754,25 @@ namespace KavrosAfkWarden
             WardenSettings settings = new WardenSettings();
             settings.HpEnabled = false;
             settings.PrayerEnabled = false;
-            settings.IdleSeconds = 12;
+            settings.IdleSeconds = 45;
             settings.AfkLeadSeconds = 30;
-            settings.CooldownSeconds = 20;
+            settings.CooldownSeconds = 60;
             DateTime t = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
             engine.Tick(Sample(t, true, true, false, false), settings);
-            List<AlertEvent> early = engine.Tick(Sample(t.AddSeconds(5), true, true, false, false), settings);
-            Check(Find(early, "idle") == null && Find(early, "afk") == null, "five quiet seconds is not idle and not an AFK warning");
-            List<AlertEvent> idle = engine.Tick(Sample(t.AddSeconds(12), true, true, false, true), settings);
+            List<AlertEvent> early = engine.Tick(Sample(t.AddSeconds(20), true, true, false, false), settings);
+            Check(Find(early, "idle") == null && Find(early, "afk") == null, "twenty quiet seconds is not idle and not an AFK warning");
+            List<AlertEvent> idle = engine.Tick(Sample(t.AddSeconds(45), true, true, false, true), settings);
             AlertEvent idleEvent = Find(idle, "idle");
-            Check(idleEvent != null && idleEvent.Sound && idleEvent.Notify, "stillness fires idle while input keeps the AFK timer reset");
-            Check(Find(engine.Tick(Sample(t.AddSeconds(20), true, true, false, true), settings), "idle") == null, "idle does not repeat while you stay still");
-            WatchSample struck = Sample(t.AddSeconds(13), true, true, true, true);
+            Check(idleEvent != null && idleEvent.Sound && idleEvent.Notify, "stillness fires idle after 45 seconds while input keeps the AFK timer reset");
+            Check(Find(engine.Tick(Sample(t.AddSeconds(50), true, true, false, true), settings), "idle") == null, "idle does not repeat while you stay still");
+            WatchSample struck = Sample(t.AddSeconds(51), true, true, true, true);
             struck.HpDrop = true;
             engine.Tick(struck, settings);
             Check(!engine.IdleLatched, "a clear hitpoints drop clears idle");
-            engine.Tick(Sample(t.AddSeconds(14), true, true, false, true), settings);
-            List<AlertEvent> cooled = engine.Tick(Sample(t.AddSeconds(26), true, true, false, true), settings);
+            engine.Tick(Sample(t.AddSeconds(52), true, true, false, true), settings);
+            List<AlertEvent> cooled = engine.Tick(Sample(t.AddSeconds(97), true, true, false, true), settings);
             Check(Find(cooled, "idle") == null, "idle cooldown blocks the return of stillness");
-            Check(Find(engine.Tick(Sample(t.AddSeconds(34), true, true, false, true), settings), "idle") != null, "idle fires again after cooldown");
+            Check(Find(engine.Tick(Sample(t.AddSeconds(110), true, true, false, true), settings), "idle") != null, "idle fires again after cooldown");
         }
 
         private static void Background()
@@ -1950,7 +1950,7 @@ namespace KavrosAfkWarden
             DateTime idleTime = new DateTime(2026, 11, 21, 23, 2, 0, DateTimeKind.Utc);
             WatchSample quiet = Sample(idleTime, true, true, false, false);
             idleEngine.Tick(quiet, idleSettings);
-            idleEngine.Tick(Sample(idleTime.AddSeconds(12), true, true, true, true), idleSettings);
+            idleEngine.Tick(Sample(idleTime.AddSeconds(45), true, true, true, true), idleSettings);
             Check(idleEngine.IdleLatched, "keys and a popup-sized scene do not keep the player active");
             for (int i = 0; i < idleLines.Length; i++)
             {
@@ -2004,8 +2004,20 @@ namespace KavrosAfkWarden
             tone.SoundTone = "Bell";
             WardenSettings toneBack = SettingsText.Read(SettingsText.Write(tone));
             Check(toneBack.SoundTone == "Bell", "the alert sound choice round-trips, got " + toneBack.SoundTone);
-            Check(AlertTones.Pair("Bell", "hp")[0] == 880, "Bell is its own pair");
-            Check(AlertTones.Pair("By alert", "potion")[0] == 740, "By alert keeps the potion tone");
+            short[] chime = AlertTones.Render("Chime", "preview", 100);
+            short[] bell = AlertTones.Render("Bell", "preview", 100);
+            short[] soft = AlertTones.Render("Soft", "preview", 100);
+            short[] horn = AlertTones.Render("Drop", "preview", 100);
+            short[] alarm = AlertTones.Render("Alarm", "preview", 100);
+            Check(chime.Length < AlertTones.Rate * 3 / 2 && bell.Length < AlertTones.Rate * 3 / 2 && soft.Length < AlertTones.Rate * 3 / 2 && horn.Length < AlertTones.Rate * 3 / 2 && alarm.Length < AlertTones.Rate * 3 / 2, "each alert sound is shorter than a second and a half");
+            Check(Bursts(chime) >= 4, "Chime is a rising run of notes, got " + Bursts(chime).ToString());
+            Check(Bursts(bell) == 2, "Bell is a two-tone ding-dong, got " + Bursts(bell).ToString());
+            Check(Bursts(alarm) >= 5, "Alarm is a run of short beeps, got " + Bursts(alarm).ToString());
+            Check(Bursts(soft) == 1 && Bursts(horn) == 1 && horn.Length > soft.Length * 2, "Soft is one quiet note and Drop is a longer buzz");
+            Check(Crossings(alarm) > Crossings(horn) * 3, "Alarm is much higher than the horn");
+            Check(Peak(chime) <= 11000 && Peak(alarm) <= 11000 && Peak(horn) <= 11000, "the tones stay under a hard ceiling");
+            Check(SameWave(AlertTones.Render("By alert", "potion", 100), bell), "By alert plays the doorbell for a potion");
+            Check(SameWave(AlertTones.Render("By alert", "hp", 100), alarm), "By alert plays the beeps for hitpoints");
             ChatPotionBook warning = new ChatPotionBook();
             List<ChatHit> low = new List<ChatHit>();
             low.Add(Hit("Your elder overload is about to run out.", "elder", "low", 10));
@@ -2313,6 +2325,52 @@ namespace KavrosAfkWarden
             return window;
         }
 
+        private static int Bursts(short[] samples)
+        {
+            if (samples == null) return 0;
+            int bursts = 0;
+            int quiet = 1000;
+            for (int i = 0; i < samples.Length; i++)
+            {
+                int mag = samples[i] < 0 ? -samples[i] : samples[i];
+                if (mag > 1400)
+                {
+                    if (quiet > 400) bursts++;
+                    quiet = 0;
+                }
+                else quiet++;
+            }
+            return bursts;
+        }
+
+        private static int Crossings(short[] samples)
+        {
+            if (samples == null || samples.Length < 2) return 0;
+            int count = 0;
+            for (int i = 1; i < samples.Length; i++)
+                if ((samples[i - 1] < 0 && samples[i] >= 0) || (samples[i - 1] >= 0 && samples[i] < 0)) count++;
+            return count;
+        }
+
+        private static int Peak(short[] samples)
+        {
+            int peak = 0;
+            if (samples == null) return 0;
+            for (int i = 0; i < samples.Length; i++)
+            {
+                int mag = samples[i] < 0 ? -samples[i] : samples[i];
+                if (mag > peak) peak = mag;
+            }
+            return peak;
+        }
+
+        private static bool SameWave(short[] a, short[] b)
+        {
+            if (a == null || b == null || a.Length != b.Length) return false;
+            for (int i = 0; i < a.Length; i++) if (a[i] != b[i]) return false;
+            return true;
+        }
+
         private static bool Has(List<ChatHit> lines, string kind, string state)
         {
             if (lines == null) return false;
@@ -2335,7 +2393,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.27" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.28" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -2346,10 +2404,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.27\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.28\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.27.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.28.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.28
+
+- The alert tones are easy to tell apart: Chime climbs, Bell is a ding-dong, Alarm is fast beeps, Soft is one low note, and Drop is a longer low buzz. By alert still picks one of those for each alert. Test sound plays the one you chose.
+- Closing RuneMetrics drops the saved spot. Opening it again is found within a few seconds.
+- The RuneMetrics tip sits on the panel, above Resume and Exit. Settings is one row per alert, then Sound, then App. Idle is 45 seconds.
+
 ## 0.2.27
 
 - Idle follows a rising RuneMetrics total, or a clear drop in hitpoints. An on-screen XP popup does not reset idle. Potion lines are unchanged.

@@ -185,6 +185,8 @@ namespace KavrosAfkWarden
         private IntRect packHold;
         private IntRect chatBox;
         private IntRect metricsBox;
+        private int metricsMisses;
+        private DateTime nextMetricsSearch = DateTime.MinValue;
         private readonly WindowSurfaceCapture windowSurface = new WindowSurfaceCapture();
         private bool useSurface;
         private readonly MetricsLock xpLock = new MetricsLock();
@@ -378,6 +380,8 @@ namespace KavrosAfkWarden
             {
                 lastClient=hwnd; lastSize=client.Size; lastSettings=settings;
                 lifeBox=prayerBox=buffStrip=xpBox=packBox=packHold=chatBox=metricsBox=new IntRect();
+                metricsMisses = 0;
+                nextMetricsSearch = DateTime.MinValue;
                 heldLife=heldPrayer=new IntRect();
                 haveBoxes=false; missedLocks=0; nextFullSearch=DateTime.MinValue;
             }
@@ -624,12 +628,27 @@ namespace KavrosAfkWarden
             if (metricsBox.Width > 8)
             {
                 ImageBuffer metrics = Grab(hwnd, client, metricsBox, 5);
+                bool found = false;
                 if (metrics != null)
                 {
                     MetricsReader.Result read = MetricsReader.Read(metrics);
                     ApplyMetrics(reading, read, null);
+                    found = read.Found;
+                }
+                if (found) metricsMisses = 0;
+                else
+                {
+                    metricsMisses++;
+                    if (metricsMisses >= 2)
+                    {
+                        metricsBox = new IntRect();
+                        metricsMisses = 0;
+                        nextMetricsSearch = DateTime.UtcNow;
+                    }
                 }
             }
+            if (metricsBox.Width < 8 && DateTime.UtcNow >= nextMetricsSearch)
+                SeekMetrics(hwnd, client, reading);
             PublishSkills();
             return reading;
         }
@@ -796,6 +815,18 @@ namespace KavrosAfkWarden
                 reading.ChatHits = ocrHits ?? new List<ChatHit>();
                 ChatReader.Trace = ocrTrace ?? "";
             }
+        }
+
+        // A closed RuneMetrics panel leaves a stale rectangle. After it fails,
+        // drop that cache and look over the whole client every few seconds.
+        private void SeekMetrics(IntPtr hwnd, Rectangle client, HudReading reading)
+        {
+            nextMetricsSearch = DateTime.UtcNow.AddSeconds(3);
+            ImageBuffer image = Grab(hwnd, client, new IntRect(0, 0, client.Width, client.Height), 0);
+            if (!CapturePlan.AcceptFrame(image)) return;
+            MetricsReader.Result read = MetricsReader.Read(image);
+            ApplyMetrics(reading, read, image);
+            if (read.Found) metricsMisses = 0;
         }
 
         private void ApplyMetrics(HudReading reading, MetricsReader.Result metrics, ImageBuffer image)

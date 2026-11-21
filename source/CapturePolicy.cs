@@ -278,7 +278,7 @@ namespace KavrosAfkWarden
     public static class PanelHint
     {
         public const string Line1 = "Keep RuneMetrics open with precise values.";
-        public const string Line2 = "Idle uses that total. Background is fine; not minimized.";
+        public const string Line2 = "Background is fine; not minimized.";
 
         public static void Foot(int lineHeight, int lineWidth, out int panelW, out int hintY, out int hintH, out int buttonY, out int panelH)
         {

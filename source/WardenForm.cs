@@ -376,8 +376,8 @@ namespace KavrosAfkWarden
             using (Brush brush = new SolidBrush(KavrosTheme.Bg)) g.FillRectangle(brush, label.ClientRectangle);
             Font font = KavrosTheme.Ui(12F, true);
             int lineH = Math.Max(16, label.Height / 2);
-            TextRenderer.DrawText(g, PanelHint.Line1, font, new Rectangle(0, 4, label.Width, lineH), KavrosTheme.Text, KavrosTheme.Bg, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
-            TextRenderer.DrawText(g, PanelHint.Line2, font, new Rectangle(0, 4 + lineH, label.Width, lineH), KavrosTheme.Text, KavrosTheme.Bg, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
+            TextRenderer.DrawText(g, PanelHint.Line1, font, new Rectangle(0, 4, label.Width, lineH), KavrosTheme.TextSoft, KavrosTheme.Bg, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
+            TextRenderer.DrawText(g, PanelHint.Line2, font, new Rectangle(0, 4 + lineH, label.Width, lineH), KavrosTheme.TextSoft, KavrosTheme.Bg, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
         }
 
         protected override void WndProc(ref Message message)
@@ -408,28 +408,20 @@ namespace KavrosAfkWarden
         private readonly PaintedLabel connection = new PaintedLabel();
         private KavrosCheckBox pause = new KavrosCheckBox();
         private KavrosCheckBox idleOn = new KavrosCheckBox();
-        private KavrosCheckBox skillingOn = new KavrosCheckBox();
         private KavrosCheckBox hpOn = new KavrosCheckBox();
         private KavrosCheckBox prayerOn = new KavrosCheckBox();
         private KavrosCheckBox afkOn = new KavrosCheckBox();
         private KavrosCheckBox hpPercent = new KavrosCheckBox();
         private KavrosCheckBox prayerPercent = new KavrosCheckBox();
         private KavrosCheckBox soundMaster = new KavrosCheckBox();
-        private KavrosCheckBox notifyMaster = new KavrosCheckBox();
         private KavrosCheckBox idleSound = new KavrosCheckBox();
-        private KavrosCheckBox idleNotify = new KavrosCheckBox();
         private KavrosCheckBox hpSound = new KavrosCheckBox();
-        private KavrosCheckBox hpNotify = new KavrosCheckBox();
         private KavrosCheckBox prayerSound = new KavrosCheckBox();
-        private KavrosCheckBox prayerNotify = new KavrosCheckBox();
         private KavrosCheckBox afkSound = new KavrosCheckBox();
-        private KavrosCheckBox afkNotify = new KavrosCheckBox();
         private KavrosCheckBox potionOn = new KavrosCheckBox();
         private KavrosCheckBox potionSound = new KavrosCheckBox();
-        private KavrosCheckBox potionNotify = new KavrosCheckBox();
         private KavrosCheckBox updates = new KavrosCheckBox();
         private KavrosCheckBox saveDebug = new KavrosCheckBox();
-        private readonly NumberField idleSeconds = new NumberField();
         private readonly NumberField hpThreshold = new NumberField();
         private readonly NumberField prayerThreshold = new NumberField();
         private KavrosCheckBox grandmaster, treePerk;
@@ -437,10 +429,23 @@ namespace KavrosAfkWarden
         private readonly NumberField afkLead = new NumberField();
         private readonly NumberField potionSeconds = new NumberField();
         private readonly NumberField cooldown = new NumberField();
-        private readonly NumberField banner = new NumberField();
         private readonly VolumeSlider volume = new VolumeSlider();
         private readonly ComboBox soundChoice = new ComboBox();
         private readonly Label status = new Label();
+        private readonly Label chatHint = new Label();
+        private readonly Label idleFixed = new Label();
+        private Label potionUnit;
+        private Label afkUnit;
+        private Label toneCaption;
+        private Label volumeCaption;
+        private Label coolCaption;
+        private Label coolUnit;
+        private OpaqueButton refreshButton;
+        private OpaqueButton pickButton;
+        private OpaqueButton testSoundButton;
+        private OpaqueButton updateButton;
+        private OpaqueButton debugButton;
+        private MainSurface settingsBody;
         private readonly WatchPanel panel = new WatchPanel();
         private readonly AlertSound sound = new AlertSound();
         private readonly FrameGrab grab = new FrameGrab();
@@ -609,133 +614,113 @@ namespace KavrosAfkWarden
             windows.DrawItem += DrawWindowItem;
             windows.SelectedIndexChanged += delegate { if (!loading) AttachSelected(); };
             Controls.Add(windows);
-            AddButton("Refresh", 520, 128, 128, ButtonTone.Secondary, delegate { RefreshWindows(); });
+            refreshButton = AddButton("Refresh", 520, 128, 128, ButtonTone.Secondary, delegate { RefreshWindows(); });
             connection.SetBounds(28, 164, 620, 28);
             connection.Renderer = DrawConnection;
             connection.Text = "Waiting for Kavros";
             Controls.Add(connection);
             pause = Check("Pause watching", 28, 200, 160, settings.Paused);
-            AddButton("Pick client", 210, 196, 120, ButtonTone.Secondary, delegate { picking = true; SetStatus("Click the Kavros window to watch."); });
+            pickButton = AddButton("Pick client", 210, 196, 120, ButtonTone.Secondary, delegate { picking = true; SetStatus("Click the Kavros window to watch."); });
 
-            idleOn = Check("Idle alert", 28, 292, 160, settings.IdleEnabled);
-            skillingOn = Check("Skilling mode (XP drops)", 210, 292, 280, settings.SkillingMode);
-            skillingOn.CheckedChanged += delegate { if (!loading) SwitchIdleMode(); };
-            Caption("After", 28, 320);
-            Number(idleSeconds, 88, 316, 3, 600, settings.ActiveIdleSeconds);
-            Caption("seconds", 172, 320);
-            idleSound = Check("Sound", 500, 316, 84, settings.IdleSound);
-            idleNotify = Check("Notify", 590, 316, 78, settings.IdleNotify);
+            idleOn = Check("Idle", 0, 0, 220, settings.IdleEnabled);
+            idleFixed.Text = "45 seconds";
+            idleFixed.AutoSize = false;
+            idleFixed.ForeColor = KavrosTheme.TextFaint;
+            idleFixed.BackColor = KavrosTheme.Panel;
+            idleFixed.Font = KavrosTheme.Ui(8.5F, false);
+            Controls.Add(idleFixed);
+            idleSound = Check("Sound", 0, 0, 90, settings.IdleSound);
 
-            hpOn = Check("Low hitpoints", 28, 356, 180, settings.HpEnabled);
-            Caption("Below", 28, 384);
-            Number(hpThreshold, 88, 380, 1, settings.HpPercent ? 999 : 9999999, settings.HpThreshold);
-            hpPercent = Check("Percent", 176, 380, 120, settings.HpPercent);
-            hpSound = Check("Sound", 500, 380, 84, settings.HpSound);
-            hpNotify = Check("Notify", 590, 380, 78, settings.HpNotify);
+            hpOn = Check("Low hitpoints", 0, 0, 220, settings.HpEnabled);
+            Number(hpThreshold, 0, 0, 1, settings.HpPercent ? 999 : 9999999, settings.HpThreshold);
+            hpPercent = Check("Percent", 0, 0, 110, settings.HpPercent);
+            hpSound = Check("Sound", 0, 0, 90, settings.HpSound);
 
-            prayerOn = Check("Low prayer", 28, 420, 180, settings.PrayerEnabled);
-            Caption("Below", 28, 448);
-            Number(prayerThreshold, 88, 444, 1, settings.PrayerPercent ? 999 : 9999999, settings.PrayerThreshold);
-            prayerPercent = Check("Percent", 176, 444, 120, settings.PrayerPercent);
-            prayerSound = Check("Sound", 500, 444, 84, settings.PrayerSound);
-            prayerNotify = Check("Notify", 590, 444, 78, settings.PrayerNotify);
+            prayerOn = Check("Low prayer", 0, 0, 220, settings.PrayerEnabled);
+            Number(prayerThreshold, 0, 0, 1, settings.PrayerPercent ? 999 : 9999999, settings.PrayerThreshold);
+            prayerPercent = Check("Percent", 0, 0, 110, settings.PrayerPercent);
+            prayerSound = Check("Sound", 0, 0, 90, settings.PrayerSound);
 
-            potionOn = Check("Potion alerts from chat", 28, 484, 220, settings.PotionEnabled);
-            Caption("Keep the chatbox visible, with game messages on.", 250, 488);
-            Caption(PanelHint.Line1 + " " + PanelHint.Line2, 28, 260);
-            Caption("Below", 28, 512);
-            Number(potionSeconds, 88, 508, 1, 600, settings.PotionSeconds);
-            Caption("seconds", 172, 512);
-            potionSound = Check("Sound", 500, 508, 84, settings.PotionSound);
-            potionNotify = Check("Notify", 590, 508, 78, settings.PotionNotify);
+            potionOn = Check("Potion alerts", 0, 0, 220, settings.PotionEnabled);
+            Number(potionSeconds, 0, 0, 1, 600, settings.PotionSeconds);
+            potionUnit = Caption("sec", 0, 0);
+            potionSound = Check("Sound", 0, 0, 90, settings.PotionSound);
+            chatHint.Text = "Keep the chatbox visible, with game messages on.";
+            chatHint.AutoSize = false;
+            chatHint.ForeColor = KavrosTheme.TextFaint;
+            chatHint.BackColor = KavrosTheme.Panel;
+            chatHint.Font = KavrosTheme.Ui(8F, false);
+            Controls.Add(chatHint);
 
-            afkOn = Check("AFK teleport warning", 28, 548, 240, settings.AfkEnabled);
-            afkDuration = Caption(settings.AfkSeconds / 60 + " min timer", 28, 576);
-            grandmaster = Check("Grandmaster (+25 min)", 28, 604, 200, settings.Grandmaster);
-            treePerk = Check("Tree perk (+15 min)", 232, 604, 205, settings.TreePerk);
-            Caption("lead", 176, 576);
-            Number(afkLead, 220, 572, 5, Math.Max(5, settings.AfkSeconds - 5), settings.AfkLeadSeconds);
-            Caption("sec", 304, 576);
-            afkSound = Check("Sound", 500, 572, 84, settings.AfkSound);
-            afkNotify = Check("Notify", 590, 572, 78, settings.AfkNotify);
+            afkOn = Check("AFK teleport warning", 0, 0, 220, settings.AfkEnabled);
+            Number(afkLead, 0, 0, 5, Math.Max(5, settings.AfkSeconds - 5), settings.AfkLeadSeconds);
+            afkUnit = Caption("sec", 0, 0);
+            afkSound = Check("Sound", 0, 0, 90, settings.AfkSound);
+            afkDuration = Caption(settings.AfkSeconds / 60 + " min timer", 0, 0);
+            grandmaster = Check("Grandmaster (+25 min)", 0, 0, 210, settings.Grandmaster);
+            treePerk = Check("Tree perk (+15 min)", 0, 0, 200, settings.TreePerk);
 
-            soundMaster = Check("Play sounds", 28, 700, 160, settings.SoundMaster);
-            notifyMaster = Check("Show notifications", 210, 700, 200, settings.NotifyMaster);
-            Caption("Cooldown", 28, 734);
-            Number(cooldown, 112, 730, 0, 600, settings.CooldownSeconds);
-            Caption("sec", 196, 734);
-            Caption("Stays", 250, 734);
-            Number(banner, 310, 730, 2, 120, settings.BannerSeconds);
-            Caption("sec", 394, 734);
-            Caption("Volume", 28, 768);
-            volume.SetBounds(112, 764, 250, 22);
-            volume.SetValue(settings.Volume);
-            volume.ValueChanged += delegate { if (!loading) { sound.Volume = volume.Value; Save(); } };
-            Controls.Add(volume);
-            Caption("Tone", 380, 768);
+            soundMaster = Check("Play sounds", 0, 0, 180, settings.SoundMaster);
+            toneCaption = Caption("Tone", 0, 0);
             soundChoice.DropDownStyle = ComboBoxStyle.DropDownList;
-            soundChoice.SetBounds(430, 764, 150, 24);
             string[] tones = AlertTones.Names();
             for (int i = 0; i < tones.Length; i++) soundChoice.Items.Add(tones[i]);
             soundChoice.SelectedIndex = AlertTones.Index(settings.SoundTone);
             KavrosTheme.StyleCombo(soundChoice);
             soundChoice.SelectedIndexChanged += delegate { if (!loading) Save(); };
             Controls.Add(soundChoice);
-            updates = Check("Check for updates at startup", 28, 800, 320, settings.CheckForUpdates);
-            saveDebug = Check("Save debug capture", 360, 800, 240, settings.SaveDebug);
-            AddButton("Test sound", 28, 888, 160, ButtonTone.Primary, delegate
+            testSoundButton = AddButton("Test sound", 0, 0, 140, ButtonTone.Primary, delegate
             {
                 sound.Volume = volume.Value;
                 sound.Tone = soundChoice.SelectedItem == null ? "By alert" : soundChoice.SelectedItem.ToString();
                 sound.Play(sound.Tone == "By alert" ? "hp" : "preview");
             });
-            AddButton("Check for updates", 328, 888, 150, ButtonTone.Secondary, delegate { AppUpdates.Check(this, true, SetStatus); });
-            AddButton("Debug", 488, 888, 150, ButtonTone.Secondary, delegate { OpenDebugFolder(); });
-            status.SetBounds(28, 928, 620, 40);
-            status.ForeColor = KavrosTheme.TextSoft;
-            status.BackColor = KavrosTheme.Bg;
-            status.Font = KavrosTheme.Ui(8.5F, false);
-            status.Text = "Alerts are sound and the panel. No window is opened over the game.";
+            volumeCaption = Caption("Volume", 0, 0);
+            volume.SetValue(settings.Volume);
+            volume.ValueChanged += delegate { if (!loading) { sound.Volume = volume.Value; Save(); } };
+            Controls.Add(volume);
+            coolCaption = Caption("Cooldown", 0, 0);
+            Number(cooldown, 0, 0, 0, 600, settings.CooldownSeconds);
+            coolUnit = Caption("sec", 0, 0);
+
+            updates = Check("Check for updates at startup", 0, 0, 320, settings.CheckForUpdates);
+            saveDebug = Check("Save debug capture", 0, 0, 240, settings.SaveDebug);
+            updateButton = AddButton("Check for updates", 0, 0, 170, ButtonTone.Secondary, delegate { AppUpdates.Check(this, true, SetStatus); });
+            debugButton = AddButton("Debug", 0, 0, 120, ButtonTone.Secondary, delegate { OpenDebugFolder(); });
+            status.ForeColor = KavrosTheme.TextFaint;
+            status.BackColor = KavrosTheme.Panel;
+            status.Font = KavrosTheme.Ui(8F, false);
+            status.Text = "";
             Controls.Add(status);
 
             hpPercent.CheckedChanged += delegate { if (!loading) hpThreshold.Maximum = hpPercent.Checked ? 999 : 9999999; };
             prayerPercent.CheckedChanged += delegate { if (!loading) prayerThreshold.Maximum = prayerPercent.Checked ? 999 : 9999999; };
-            Wire(grandmaster, treePerk, pause, idleOn, hpOn, prayerOn, afkOn, potionOn, hpPercent, prayerPercent, soundMaster, notifyMaster, idleSound, idleNotify, hpSound, hpNotify, prayerSound, prayerNotify, afkSound, afkNotify, potionSound, potionNotify, updates, saveDebug);
-            idleSeconds.ValueChanged += delegate { if (!loading) Save(); };
+            Wire(grandmaster, treePerk, pause, idleOn, hpOn, prayerOn, afkOn, potionOn, hpPercent, prayerPercent, soundMaster, idleSound, hpSound, prayerSound, afkSound, potionSound, updates, saveDebug);
             hpThreshold.ValueChanged += delegate { if (!loading) Save(); };
             prayerThreshold.ValueChanged += delegate { if (!loading) Save(); };
             afkLead.ValueChanged += delegate { if (!loading) Save(); };
             potionSeconds.ValueChanged += delegate { if (!loading) Save(); };
             cooldown.ValueChanged += delegate { if (!loading) Save(); };
-            banner.ValueChanged += delegate { if (!loading) Save(); };
         }
 
         private void ApplySettingsToControls()
         {
             pause.Checked = settings.Paused;
             idleOn.Checked = settings.IdleEnabled;
-            skillingOn.Checked = settings.SkillingMode;
             hpOn.Checked = settings.HpEnabled;
             prayerOn.Checked = settings.PrayerEnabled;
             afkOn.Checked = settings.AfkEnabled;
             hpPercent.Checked = settings.HpPercent;
             prayerPercent.Checked = settings.PrayerPercent;
             soundMaster.Checked = settings.SoundMaster;
-            notifyMaster.Checked = settings.NotifyMaster;
             idleSound.Checked = settings.IdleSound;
-            idleNotify.Checked = settings.IdleNotify;
             hpSound.Checked = settings.HpSound;
-            hpNotify.Checked = settings.HpNotify;
             prayerSound.Checked = settings.PrayerSound;
-            prayerNotify.Checked = settings.PrayerNotify;
             afkSound.Checked = settings.AfkSound;
-            afkNotify.Checked = settings.AfkNotify;
             potionOn.Checked = settings.PotionEnabled;
             potionSound.Checked = settings.PotionSound;
-            potionNotify.Checked = settings.PotionNotify;
             updates.Checked = settings.CheckForUpdates;
             saveDebug.Checked = settings.SaveDebug;
-            idleSeconds.SetValue(Clamp(settings.ActiveIdleSeconds, idleSeconds), false);
             hpThreshold.Maximum = settings.HpPercent ? 999 : 9999999;
             hpThreshold.SetValue(Clamp(settings.HpThreshold, hpThreshold), false);
             prayerThreshold.Maximum = settings.PrayerPercent ? 999 : 9999999;
@@ -747,7 +732,6 @@ namespace KavrosAfkWarden
             afkLead.SetValue(Clamp(settings.AfkLeadSeconds, afkLead), false);
             potionSeconds.SetValue(Clamp(settings.PotionSeconds, potionSeconds), false);
             cooldown.SetValue(Clamp(settings.CooldownSeconds, cooldown), false);
-            banner.SetValue(Clamp(settings.BannerSeconds, banner), false);
             volume.SetValue(settings.Volume);
             soundChoice.SelectedIndex = AlertTones.Index(settings.SoundTone);
         }
@@ -800,7 +784,7 @@ namespace KavrosAfkWarden
             Controls.Add(number);
         }
 
-        private void AddButton(string text, int x, int y, int width, ButtonTone tone, Action click)
+        private OpaqueButton AddButton(string text, int x, int y, int width, ButtonTone tone, Action click)
         {
             OpaqueButton button = new OpaqueButton();
             button.Text = text;
@@ -809,6 +793,7 @@ namespace KavrosAfkWarden
             button.Font = KavrosTheme.Ui(9F, tone == ButtonTone.Primary);
             button.Click += delegate { click(); };
             Controls.Add(button);
+            return button;
         }
 
         private void DrawConnection(Graphics g, PaintedLabel label)
@@ -855,24 +840,112 @@ namespace KavrosAfkWarden
             body.Dock = DockStyle.Fill;
             body.AutoScroll = true;
             body.AutoScrollMinSize = new Size(0, original.Height);
-            body.Cards.Add(new MainSurface.Card { Label = "WATCH", Bounds = new Rectangle(16, 96, 648, 140) });
-            body.Cards.Add(new MainSurface.Card { Label = "ALERTS", Bounds = new Rectangle(16, 248, 648, 390) });
-            body.Cards.Add(new MainSurface.Card { Label = "CHANNELS", Bounds = new Rectangle(16, 652, 648, 340) });
+            settingsBody = body;
             Control[] controls = new Control[Controls.Count];
             Controls.CopyTo(controls, 0);
             Controls.Clear();
             body.Controls.AddRange(controls);
             if (crest != null) body.Controls.Add(crest);
-            foreach (Control control in body.Controls)
-            {
-                if (control is CheckBox || control is Label || control is PaintedLabel)
-                {
-                    if (control.Top >= 96) control.BackColor = KavrosTheme.Panel;
-                }
-            }
             Controls.Add(body);
             Controls.Add(footer);
-            ClientSize = new Size(original.Width, original.Height + footer.Height);
+            PlaceSettings();
+        }
+
+        private int U(int value)
+        {
+            int dpi = DeviceDpi;
+            if (dpi < 96) dpi = 96;
+            return value * dpi / 96;
+        }
+
+        private void PlaceSettings()
+        {
+            if (settingsBody == null) return;
+            int row = U(36);
+            int left = U(28);
+            int mid = U(280);
+            int right = U(520);
+            int nameW = U(230);
+            int numW = U(72);
+            int y = U(276);
+            int alertTop = y - U(16);
+            idleOn.SetBounds(left, y, nameW, U(24));
+            idleFixed.SetBounds(mid, y + U(2), U(140), U(22));
+            idleSound.SetBounds(right, y, U(100), U(24));
+            y += row;
+            hpOn.SetBounds(left, y, nameW, U(24));
+            hpThreshold.SetBounds(mid, y, numW, U(24));
+            hpPercent.SetBounds(mid + numW + U(8), y, U(110), U(24));
+            hpSound.SetBounds(right, y, U(100), U(24));
+            y += row;
+            prayerOn.SetBounds(left, y, nameW, U(24));
+            prayerThreshold.SetBounds(mid, y, numW, U(24));
+            prayerPercent.SetBounds(mid + numW + U(8), y, U(110), U(24));
+            prayerSound.SetBounds(right, y, U(100), U(24));
+            y += row;
+            potionOn.SetBounds(left, y, nameW, U(24));
+            potionSeconds.SetBounds(mid, y, numW, U(24));
+            potionUnit.Location = new Point(mid + numW + U(8), y + U(4));
+            potionSound.SetBounds(right, y, U(100), U(24));
+            y += U(26);
+            chatHint.SetBounds(left + U(22), y, U(460), U(20));
+            y += U(28);
+            afkOn.SetBounds(left, y, nameW, U(24));
+            afkLead.SetBounds(mid, y, numW, U(24));
+            afkUnit.Location = new Point(mid + numW + U(8), y + U(4));
+            afkSound.SetBounds(right, y, U(100), U(24));
+            y += row;
+            grandmaster.SetBounds(left + U(22), y, U(210), U(24));
+            treePerk.SetBounds(left + U(240), y, U(210), U(24));
+            afkDuration.Location = new Point(right, y + U(4));
+            int alertBottom = y + U(28);
+            y = alertBottom + U(28);
+            int soundTop = y - U(16);
+            soundMaster.SetBounds(left, y, U(200), U(24));
+            y += row;
+            toneCaption.Location = new Point(left, y + U(4));
+            soundChoice.SetBounds(left + U(70), y, U(180), U(24));
+            testSoundButton.SetBounds(left + U(262), y, U(140), U(28));
+            y += row + U(4);
+            volumeCaption.Location = new Point(left, y + U(2));
+            volume.SetBounds(left + U(70), y, U(250), U(22));
+            y += row;
+            coolCaption.Location = new Point(left, y + U(4));
+            cooldown.SetBounds(left + U(90), y, numW, U(24));
+            coolUnit.Location = new Point(left + U(90) + numW + U(8), y + U(4));
+            int soundBottom = y + U(32);
+            y = soundBottom + U(24);
+            int appTop = y - U(16);
+            updates.SetBounds(left, y, U(340), U(24));
+            y += row;
+            saveDebug.SetBounds(left, y, U(280), U(24));
+            y += row;
+            updateButton.SetBounds(left, y, U(180), U(28));
+            debugButton.SetBounds(left + U(196), y, U(120), U(28));
+            y += U(36);
+            status.SetBounds(left, y, U(560), U(22));
+            int content = y + U(36);
+            int width = U(680);
+            int cardW = width - U(32);
+            settingsBody.Cards.Clear();
+            settingsBody.Cards.Add(new MainSurface.Card { Label = "WATCH", Bounds = new Rectangle(U(16), U(96), cardW, U(156)) });
+            settingsBody.Cards.Add(new MainSurface.Card { Label = "ALERTS", Bounds = new Rectangle(U(16), alertTop, cardW, alertBottom - alertTop) });
+            settingsBody.Cards.Add(new MainSurface.Card { Label = "SOUND", Bounds = new Rectangle(U(16), soundTop, cardW, soundBottom - soundTop) });
+            settingsBody.Cards.Add(new MainSurface.Card { Label = "APP", Bounds = new Rectangle(U(16), appTop, cardW, content - appTop) });
+            settingsBody.AutoScrollMinSize = new Size(0, content);
+            windows.SetBounds(left, U(128), U(470), U(28));
+            if (refreshButton != null) refreshButton.SetBounds(left + U(486), U(128), U(128), U(28));
+            connection.SetBounds(left, U(164), cardW - U(24), U(28));
+            pause.SetBounds(left, U(204), U(170), U(24));
+            if (pickButton != null) pickButton.SetBounds(left + U(186), U(200), U(130), U(28));
+            ClientSize = new Size(width, Math.Min(U(920), content + U(48)));
+            settingsBody.Invalidate();
+        }
+
+        protected override void OnDpiChanged(DpiChangedEventArgs e)
+        {
+            base.OnDpiChanged(e);
+            PlaceSettings();
         }
 
         private void Save()
@@ -885,8 +958,9 @@ namespace KavrosAfkWarden
             sound.Tone = settings.SoundTone;
             settings.ClientTitle = clientTitle;
             settings.IdleEnabled = idleOn.Checked;
-            if (settings.SkillingMode) settings.SkillingIdleSeconds = (int)idleSeconds.Value;
-            else settings.IdleSeconds = (int)idleSeconds.Value;
+            settings.IdleSeconds = 45;
+            settings.SkillingIdleSeconds = 45;
+            settings.SkillingMode = false;
             settings.HpEnabled = hpOn.Checked;
             settings.HpThreshold = (int)hpThreshold.Value;
             settings.HpPercent = hpPercent.Checked;
@@ -900,40 +974,19 @@ namespace KavrosAfkWarden
             afkLead.Maximum = settings.AfkSeconds - 5;
             settings.AfkLeadSeconds = (int)afkLead.Value;
             settings.SoundMaster = soundMaster.Checked;
-            settings.NotifyMaster = notifyMaster.Checked;
             settings.IdleSound = idleSound.Checked;
-            settings.IdleNotify = idleNotify.Checked;
             settings.HpSound = hpSound.Checked;
-            settings.HpNotify = hpNotify.Checked;
             settings.PrayerSound = prayerSound.Checked;
-            settings.PrayerNotify = prayerNotify.Checked;
             settings.AfkSound = afkSound.Checked;
-            settings.AfkNotify = afkNotify.Checked;
             settings.PotionEnabled = potionOn.Checked;
             settings.PotionSeconds = (int)potionSeconds.Value;
             settings.PotionSound = potionSound.Checked;
-            settings.PotionNotify = potionNotify.Checked;
             settings.CooldownSeconds = (int)cooldown.Value;
-            settings.BannerSeconds = (int)banner.Value;
             settings.CheckForUpdates = updates.Checked;
             settings.SaveDebug = saveDebug.Checked;
             settings.Clamp();
             try { SettingsText.Save(settingsPath, settings); } catch (IOException) { }
             panel.SetPaused(settings.Paused);
-        }
-
-        // Combat idle and skilling idle keep their own "After N seconds"; the
-        // one field shows whichever mode is on.
-        private void SwitchIdleMode()
-        {
-            if (settings.SkillingMode) settings.SkillingIdleSeconds = (int)idleSeconds.Value;
-            else settings.IdleSeconds = (int)idleSeconds.Value;
-            settings.SkillingMode = skillingOn.Checked;
-            loading = true;
-            try { idleSeconds.SetValue(Clamp(settings.ActiveIdleSeconds, idleSeconds), false); }
-            finally { loading = false; }
-            activity = new SceneActivity();
-            Save();
         }
 
         private void SetStatus(string text) { if (!status.IsDisposed) status.Text = text; }

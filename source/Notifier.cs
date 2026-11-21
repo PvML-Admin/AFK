@@ -29,20 +29,13 @@ namespace KavrosAfkWarden
 
         private static byte[] Build(string kind, string tone, int volume)
         {
-            int rate = 22050;
-            double[] tones = AlertTones.Pair(tone, kind);
-            int samples = (int)(rate * 0.42);
-            byte[] data = new byte[samples * 2];
-            int level = volume < 0 ? 0 : volume > 100 ? 100 : volume;
-            for (int i = 0; i < samples; i++)
+            short[] pcm = AlertTones.Render(tone, kind, volume);
+            int rate = AlertTones.Rate;
+            byte[] data = new byte[pcm.Length * 2];
+            for (int i = 0; i < pcm.Length; i++)
             {
-                double t = i / (double)rate;
-                int which = t < 0.18 ? 0 : 1;
-                double local = which == 0 ? t : t - 0.2;
-                double envelope = local < 0 || local > 0.18 ? 0 : Math.Sin(Math.PI * Math.Min(1, local / 0.18));
-                short sample = (short)(Math.Sin(2 * Math.PI * tones[which] * t) * envelope * 14000 * level / 100);
-                data[i * 2] = (byte)(sample & 255);
-                data[i * 2 + 1] = (byte)((sample >> 8) & 255);
+                data[i * 2] = (byte)(pcm[i] & 255);
+                data[i * 2 + 1] = (byte)((pcm[i] >> 8) & 255);
             }
             using (MemoryStream stream = new MemoryStream())
             using (BinaryWriter writer = new BinaryWriter(stream))
