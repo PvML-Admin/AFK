@@ -277,6 +277,60 @@ namespace KavrosAfkWarden
             return changed;
         }
 
+    public static class XpPopup
+    {
+        public static bool Matches(string text)
+        {
+            string n = Fold(text);
+            if (n.Length < 4 || n[0] != '+') return false;
+            int i = 1;
+            bool digit = false;
+            while (i < n.Length && n[i] >= '0' && n[i] <= '9') { digit = true; i++; }
+            if (!digit) return false;
+            if (i >= n.Length || n[i] != ' ') return false;
+            i++;
+            if (i + 1 >= n.Length || n[i] != 'x' || n[i + 1] != 'p') return false;
+            i += 2;
+            if (i >= n.Length) return true;
+            if (n[i] != ' ') return false;
+            i++;
+            if (i >= n.Length || n[i] != '(') return false;
+            i++;
+            bool any = false;
+            while (i < n.Length && ((n[i] >= '0' && n[i] <= '9') || n[i] == '.')) { any = true; i++; }
+            if (!any || i >= n.Length || n[i] != ' ') return false;
+            return n.Substring(i).IndexOf("bonus xp") >= 0;
+        }
+
+        public static bool WantHint(bool popup, bool fullTotal)
+        {
+            return !popup && !fullTotal;
+        }
+
+        private static string Fold(string text)
+        {
+            if (text == null) return "";
+            System.Text.StringBuilder sb = new System.Text.StringBuilder(text.Length);
+            bool space = false;
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (c == ',') continue;
+                if (c >= 'A' && c <= 'Z') c = (char)(c + 32);
+                if (char.IsWhiteSpace(c))
+                {
+                    if (sb.Length == 0 || space) continue;
+                    space = true;
+                    sb.Append(' ');
+                    continue;
+                }
+                space = false;
+                sb.Append(c);
+            }
+            return sb.ToString().Trim();
+        }
+    }
+
     public static class XpWatch
     {
         public static IntRect Find(ImageBuffer image)

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.19
+
+- An on-screen XP popup, such as "+351 xp" or "+2,437 xp (162.5 bonus xp)", resets idle. A RuneMetrics total is only a backup, and only when it is a full number. 1.6M and 250K are ignored. The hint appears only when neither signal is there.
+- Potion lines are matched on the row of pixels that actually holds the glyphs, and the debug log shows the raw read beside the nearest phrase. The four red warnings each keep their own pot.
+- Client 1, Client 2 and Client 3 follow process id order, in the picker and on the panel. Each client writes its own debug log. Settings has a Debug button that opens that folder. With no potion seen yet, the row says Watching chat.
+
 ## 0.2.18
 
 - The floating panel stays on the client it is tracking. It follows that window, and it hides when that client is minimized or when another Kavros client is in front of the same spot. The panel shows that client's name.

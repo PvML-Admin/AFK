@@ -155,7 +155,23 @@ namespace KavrosAfkWarden
             }
             if (best < 12) return false;
             string text = ReadDigits(ink, w, h, top);
+            if (!IsFullTotal(text)) return false;
             return Parse(text, out xp);
+        }
+
+        // A full total is digits and thousands commas. 1.6M and 250K are not.
+        public static bool IsFullTotal(string text)
+        {
+            if (text == null || text.Length == 0) return false;
+            bool digit = false;
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (c >= '0' && c <= '9') { digit = true; continue; }
+                if (c == ',') continue;
+                return false;
+            }
+            return digit;
         }
 
         private static string ReadDigits(bool[] ink, int width, int height, int top)
@@ -177,9 +193,12 @@ namespace KavrosAfkWarden
                 int start = x;
                 while (x < width && Column(ink, width, top, x)) x++;
                 int gw = x - start;
-                if (gw <= 2 && BottomDot(ink, width, top, start, gw))
+                // A real digit in this face is at least four pixels wide. A narrower
+                // mark is a thousands comma or the dot in 1.6M.
+                if (gw <= 3)
                 {
-                    text.Append(',');
+                    if (BottomDot(ink, width, top, start, gw) && !MidDot(ink, width, top, start, gw)) text.Append(',');
+                    else text.Append('.');
                     continue;
                 }
                 char digit = '?';
@@ -192,8 +211,18 @@ namespace KavrosAfkWarden
                     if (score < best) { best = score; digit = glyph.Name; }
                 }
                 if (digit != '?' && best <= glyphLimit(gw)) text.Append(digit);
+                else text.Append('?');
             }
             return text.ToString();
+        }
+
+        private static bool MidDot(bool[] ink, int width, int top, int x, int gw)
+        {
+            int mid = 0;
+            for (int dy = 2; dy <= 4; dy++)
+                for (int dx = 0; dx < gw; dx++)
+                    if (x + dx < width && ink[(top + dy) * width + x + dx]) mid++;
+            return mid >= 1;
         }
 
         private static int glyphLimit(int gw)

@@ -682,8 +682,9 @@ namespace KavrosAfkWarden
 
         private void NoteActivity(ImageBuffer image)
         {
-            // Idle follows the RuneMetrics total, the backpack, hitpoints and input.
-            skills.Observe(null, image);
+            // An on-screen XP popup is the activity signal. A full RuneMetrics
+            // total is only the backup, and an abbreviated total is ignored.
+            skills.Observe(image, image);
             PublishSkills();
         }
 

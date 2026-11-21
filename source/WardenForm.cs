@@ -246,7 +246,7 @@ namespace KavrosAfkWarden
             Potion.ColorParts = true;
             Place(Afk, 194);
             metricsHint.SetBounds(12, 224, 376, 16);
-            metricsHint.Text = "Keep RuneMetrics XP open";
+            metricsHint.Text = "No XP popup or total";
             metricsHint.Font = KavrosTheme.Ui(7.5F, false);
             metricsHint.ForeColor = Color.FromArgb(120, 128, 136);
             metricsHint.BackColor = KavrosTheme.Bg;
@@ -639,7 +639,8 @@ namespace KavrosAfkWarden
 
             AddButton("Test notification", 28, 888, 160, ButtonTone.Primary, delegate { popup.Present(SampleAlert(), (int)banner.Value); });
             AddButton("Test sound", 198, 888, 120, ButtonTone.Secondary, delegate { sound.Play("hp"); });
-            AddButton("Check for updates", 328, 888, 170, ButtonTone.Secondary, delegate { AppUpdates.Check(this, true, SetStatus); });
+            AddButton("Check for updates", 328, 888, 150, ButtonTone.Secondary, delegate { AppUpdates.Check(this, true, SetStatus); });
+            AddButton("Debug", 488, 888, 150, ButtonTone.Secondary, delegate { OpenDebugFolder(); });
             status.SetBounds(28, 928, 620, 40);
             status.ForeColor = KavrosTheme.TextSoft;
             status.BackColor = KavrosTheme.Bg;
@@ -959,7 +960,7 @@ namespace KavrosAfkWarden
                     + " idleReset=" + (moving ? "yes" : "no")
                     + " " + panelDebug
                     + "\r\n";
-                string logPath = Path.Combine(dir, "debug-log.txt");
+                string logPath = Path.Combine(dir, DebugLogName());
                 File.AppendAllText(logPath, line);
                 FileInfo info = new FileInfo(logPath);
                 if (info.Exists && info.Length > 200000)
@@ -1153,6 +1154,26 @@ namespace KavrosAfkWarden
             AppendDebug(DateTime.Now.ToString("HH:mm:ss") + " panel visible=" + state + " reason=" + why + " " + panelDebug);
         }
 
+        private void OpenDebugFolder()
+        {
+            try
+            {
+                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KavrosAfkWarden");
+                Directory.CreateDirectory(dir);
+                System.Diagnostics.Process.Start("explorer.exe", dir);
+            }
+            catch (Exception) { SetStatus("The debug log folder could not be opened."); }
+        }
+
+        private string DebugLogName()
+        {
+            uint pid = 0;
+            if (selected != IntPtr.Zero && NativeMethods.IsWindow(selected))
+                NativeMethods.GetWindowThreadProcessId(selected, out pid);
+            if (pid == 0) return "debug-log.txt";
+            return "debug-log-" + pid.ToString() + ".txt";
+        }
+
         private void AppendDebug(string line)
         {
             if (settings == null || !settings.SaveDebug) return;
@@ -1160,7 +1181,7 @@ namespace KavrosAfkWarden
             {
                 string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KavrosAfkWarden");
                 Directory.CreateDirectory(dir);
-                File.AppendAllText(Path.Combine(dir, "debug-log.txt"), line + "\r\n");
+                File.AppendAllText(Path.Combine(dir, DebugLogName()), line + "\r\n");
             }
             catch (Exception) { }
         }
@@ -1196,18 +1217,10 @@ namespace KavrosAfkWarden
         private string ClientCaption()
         {
             if (selected == IntPtr.Zero) return "Choose a client";
-            int index = 0;
-            int seen = 0;
-            for (int i = 0; i < found.Count; i++)
-            {
-                if (WindowLocator.Score(found[i]) < 100) continue;
-                seen++;
-                if (found[i].Handle == selected) index = seen;
-            }
             GameWindow current = null;
             for (int i = 0; i < found.Count; i++) if (found[i].Handle == selected) current = found[i];
             if (current == null) return clientTitle;
-            return WindowLocator.ClientLabel(current, Math.Max(0, index - 1));
+            return WindowLocator.ClientLabel(current, StableIndex(current));
         }
 
         private void Bootstrap()
@@ -1303,12 +1316,10 @@ namespace KavrosAfkWarden
             found = list == null ? new List<GameWindow>() : list;
             loading = true;
             windows.Items.Clear();
-            int shown = 0;
             for (int i = 0; i < found.Count; i++)
             {
                 if (WindowLocator.Score(found[i]) < 100) continue;
-                found[i].Label = WindowLocator.ClientLabel(found[i], shown);
-                shown++;
+                found[i].Label = WindowLocator.ClientLabel(found[i], StableIndex(found[i]));
                 windows.Items.Add(found[i]);
             }
             long pick = WindowLocator.ChooseHandle(found, selected, ClientLaunch.Hwnd, ClientLaunch.Pid);
@@ -1337,6 +1348,18 @@ namespace KavrosAfkWarden
             else connection.Text = "Waiting for Kavros";
             connection.Invalidate();
             if(choice!=null && !everAttached){everAttached=true;BringUp();}
+        }
+
+        private int StableIndex(GameWindow window)
+        {
+            int count = 0;
+            for (int i = 0; i < found.Count; i++)
+                if (WindowLocator.Score(found[i]) >= 100 && found[i].Pid > 0) count++;
+            int[] pids = new int[count];
+            int n = 0;
+            for (int i = 0; i < found.Count; i++)
+                if (WindowLocator.Score(found[i]) >= 100 && found[i].Pid > 0) pids[n++] = found[i].Pid;
+            return ClientOrder.Place(window == null ? 0 : window.Pid, pids);
         }
 
         private bool Listed(long handle)
@@ -1496,10 +1519,12 @@ namespace KavrosAfkWarden
             panel.Potion.Tone = potionExpired ? PillTone.Bad : potionLow ? PillTone.Warn : roster.Length == 0 ? PillTone.Example : PillTone.Ok;
             panel.Potion.Value = closed ? "Client closed" : roster.Length > 0 && !settings.Paused
                 ? roster
-                : (minimized ? "Minimized" : !pixels ? "No view" : "No potion timer");
-            if (lastHud.MetricsFound) metricsAbsentSince = DateTime.MinValue;
+                : (minimized ? "Minimized" : !pixels ? "No view" : "Watching chat");
+            bool popup = grab.SkillTrace != null && grab.SkillTrace.IndexOf("xp=") >= 0 && grab.SkillTrace.IndexOf("xp=none") < 0;
+            bool fullTotal = lastHud.MetricsFound;
+            if (popup || fullTotal) metricsAbsentSince = DateTime.MinValue;
             else if (metricsAbsentSince == DateTime.MinValue) metricsAbsentSince = DateTime.UtcNow;
-            bool metricsHint = !lastHud.MetricsFound && metricsAbsentSince != DateTime.MinValue
+            bool metricsHint = SceneActivity.XpPopup.WantHint(popup, fullTotal) && metricsAbsentSince != DateTime.MinValue
                 && (DateTime.UtcNow - metricsAbsentSince).TotalSeconds >= 5;
             panel.SetMetricsHint(metricsHint);
             int left = Math.Max(0, (int)engine.AfkRemaining.TotalSeconds);

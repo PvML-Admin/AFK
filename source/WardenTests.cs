@@ -1519,7 +1519,27 @@ namespace KavrosAfkWarden
                     Check(Has(red, "elder", "low") && Has(red, "elder", "expired") && Has(red, "prayer", "low") && Has(red, "prayer", "expired") && Has(red, "antifire", "low") && Has(red, "antifire", "expired") && Has(red, "poison", "low") && Has(red, "poison", "expired"),
                         "red potion chat at " + names[s] + " matches every line, got " + Describe(red));
                 }
-                Check(ChatReader.Trace.IndexOf("Your elder") >= 0 && ChatReader.Trace.IndexOf("skip-top") < 0, "the debug line quotes the text that was read");
+                Check(ChatReader.Trace.IndexOf("Your elder") >= 0 && ChatReader.Trace.IndexOf("raw=") >= 0 && ChatReader.Trace.IndexOf("candidate=") >= 0, "the debug line quotes the raw read and the candidate");
+            string four = Path.Combine(chatDir, "chat-four-pots-low-missed-v0218.png");
+            if (!File.Exists(four)) Check(false, "missing chat-four-pots-low-missed-v0218.png");
+            else
+            {
+                List<ChatHit> missed = ChatReader.Read(PngImage.Load(four));
+                Check(Has(missed, "elder", "low") && Has(missed, "prayer", "low") && Has(missed, "antifire", "low") && Has(missed, "poison", "low") && missed.Count == 4,
+                    "the four missed red lines each match their own pot, got " + Describe(missed) + " " + ChatReader.Trace);
+            }
+            Check(ChatPhrase.KindOf("[16:12:16] Your elder overload is about to run out...") == "elder" && ChatPhrase.StateOf("[16:12:16] Your elder overload is about to run out...") == "low", "a timestamped elder warning is low");
+            Check(ChatPhrase.KindOf("Your prayer renewal effect will run out in 30 seconds.") == "prayer" && ChatPhrase.StateOf("Your prayer renewal effect will run out in 30 seconds.") == "low", "prayer renewal 30 seconds is low");
+            Check(ChatPhrase.KindOf("Your super antifire potion is about to run out") == "antifire" && ChatPhrase.KindOf("Your immunity to poison is about to run out") == "poison", "antifire and poison warnings keep their pots");
+            Check(ChatPhrase.StateOf("The effects of elder overload have worn off.") == "expired" && ChatPhrase.KindOf("Welcome to the trivia server") == "", "worn off is expired, and trivia is not a potion");
+            Check(SceneActivity.XpPopup.Matches("+351 xp (23.4 bonus xp)") && SceneActivity.XpPopup.Matches("+2,437 xp (162.5 bonus xp)") && SceneActivity.XpPopup.Matches("+12 xp"), "an XP popup with or without bonus xp counts");
+            Check(!SceneActivity.XpPopup.Matches("1.6M") && !SceneActivity.XpPopup.Matches("Your elder overload is about to run out"), "a total and a chat line are not XP popups");
+            Check(MetricsReader.IsFullTotal("5,947,600") && MetricsReader.IsFullTotal("0") && !MetricsReader.IsFullTotal("1.6M") && !MetricsReader.IsFullTotal("250K") && !MetricsReader.IsFullTotal("1.6"), "only a full integer total counts");
+            long parsed;
+            Check(MetricsReader.Parse("5,947,600", out parsed) && parsed == 5947600L, "commas stay in a full total");
+            Check(!SceneActivity.XpPopup.WantHint(true, false) && !SceneActivity.XpPopup.WantHint(false, true) && SceneActivity.XpPopup.WantHint(false, false), "the XP hint shows only when both signals are missing");
+            Check(ClientOrder.Place(34692, new int[] { 34692, 33960 }) == 1 && ClientOrder.Place(33960, new int[] { 34692, 33960 }) == 0, "client numbers follow process id, so the higher pid is Client 2");
+            Check(ClientNames.Label(0, ClientOrder.Place(34692, new int[] { 33960, 34692 })) == "Client 2", "the bound higher pid is labelled Client 2");
             }
             ImageBuffer chrome = ImageBuffer.Blank(200, 800, ImageBuffer.Pack(8, 12, 16));
             chrome.Fill(10, 4, 80, 8, ImageBuffer.Pack(230, 230, 230));
@@ -1657,7 +1677,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.18" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.19" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -1668,10 +1688,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.18\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.19\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.18.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.19.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

@@ -242,6 +242,27 @@ namespace KavrosAfkWarden
         }
     }
 
+    public static class ClientOrder
+    {
+        public static int Place(int pid, int[] pids)
+        {
+            if (pids == null || pid <= 0) return 0;
+            int[] copy = new int[pids.Length];
+            for (int i = 0; i < pids.Length; i++) copy[i] = pids[i];
+            System.Array.Sort(copy);
+            int place = 0;
+            int last = int.MinValue;
+            for (int i = 0; i < copy.Length; i++)
+            {
+                if (copy[i] <= 0 || copy[i] == last) continue;
+                if (copy[i] == pid) return place;
+                last = copy[i];
+                place++;
+            }
+            return 0;
+        }
+    }
+
     public static class ClientNames
     {
         private static readonly ClientRoster Shared = new ClientRoster(DefaultPath());

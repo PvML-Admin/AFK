@@ -131,63 +131,116 @@ namespace KavrosAfkWarden
                 }
                 ChatHit best = null;
                 ChatHit near = null;
-                for (int s = 0; s < stamps.Count; s++)
+                // A one-pixel slip makes a real line score about 0.78 and look like
+                // the wrong phrase. Try the rows just above and below the darkest one.
+                for (int dy = -2; dy <= 2; dy++)
                 {
-                    ChatStamp stamp = stamps[s];
-                    int line = right - left + 1;
-                    if (line < stamp.Width) continue;
-                    int x = left;
-                    int limit = right - stamp.Width + 1;
-                    double topScore = 0;
-                    int topX = left;
-                    while (x <= limit)
-                    {
-                        double score = Score(ink, width, y, x, stamp);
-                        if (score > topScore) { topScore = score; topX = x; }
-                        x++;
-                    }
-                    int extraLeft = topX - left;
-                    int extraRight = right - (topX + stamp.Width - 1);
-                    bool gates = topScore >= 0.92 && extraRight <= 18 && extraLeft <= 120;
-                    if (near == null || topScore > near.Score)
-                    {
-                        near = new ChatHit();
-                        near.Phrase = stamp.Phrase;
-                        near.Kind = stamp.Kind;
-                        near.State = stamp.State;
-                        near.Y = y;
-                        near.Score = topScore;
-                        near.Decision = gates ? "match" : "no-match";
-                    }
-                    // The phrase has to fill the line. A timestamp may sit in front.
-                    // A busy chat line that only overlaps part of a phrase is rejected.
-                    if (!gates) continue;
-                    if (best == null || topScore > best.Score)
-                    {
-                        best = new ChatHit();
-                        best.Phrase = stamp.Phrase;
-                        best.Kind = stamp.Kind;
-                        best.State = stamp.State;
-                        best.Y = y;
-                        best.Score = topScore;
-                        best.Decision = "match";
-                    }
+                    int yy = y + dy;
+                    if (yy < 0 || yy + 5 >= height) continue;
+                    int rowLeft;
+                    int rowRight;
+                    if (!Span(ink, width, height, yy, out rowLeft, out rowRight)) continue;
+                    Consider(ink, width, yy, rowLeft, rowRight, stamps, ref best, ref near);
                 }
+                string raw = ReadRaw(ink, width, height, best != null ? best.Y : y, left, right);
+                string candidate = near == null ? "" : near.Phrase;
+                if (candidate.Length > 48) candidate = candidate.Substring(0, 48);
+                if (raw.Length > 48) raw = raw.Substring(0, 48);
                 if (best == null)
                 {
-                    string read = near == null ? "" : near.Phrase;
-                    if (read.Length > 42) read = read.Substring(0, 42);
                     trace.Append("y=").Append(y).Append(" no-match");
+                    trace.Append(" raw=\"").Append(raw).Append("\"");
                     if (near != null)
-                        trace.Append(" score=").Append(near.Score.ToString("0.00")).Append(" \"").Append(read).Append("\"");
+                        trace.Append(" candidate=\"").Append(candidate).Append("\" score=").Append(near.Score.ToString("0.00"));
                     continue;
                 }
-                trace.Append("y=").Append(y).Append(" ").Append(best.Kind).Append(" ").Append(best.State)
-                    .Append(" score=").Append(best.Score.ToString("0.00")).Append(" \"").Append(best.Phrase).Append("\"");
+                trace.Append("y=").Append(best.Y).Append(" ").Append(best.Kind).Append(" ").Append(best.State)
+                    .Append(" score=").Append(best.Score.ToString("0.00"))
+                    .Append(" raw=\"").Append(raw).Append("\" candidate=\"").Append(candidate).Append("\"");
                 hits.Add(best);
             }
             Trace = trace.ToString();
             return hits;
+        }
+
+        private static void Consider(bool[] ink, int width, int y, int left, int right, List<ChatStamp> stamps, ref ChatHit best, ref ChatHit near)
+        {
+            for (int s = 0; s < stamps.Count; s++)
+            {
+                ChatStamp stamp = stamps[s];
+                int line = right - left + 1;
+                if (line < stamp.Width) continue;
+                int x = left;
+                int limit = right - stamp.Width + 1;
+                double topScore = 0;
+                int topX = left;
+                while (x <= limit)
+                {
+                    double score = Score(ink, width, y, x, stamp);
+                    if (score > topScore) { topScore = score; topX = x; }
+                    x++;
+                }
+                int extraLeft = topX - left;
+                int extraRight = right - (topX + stamp.Width - 1);
+                bool gates = topScore >= 0.92 && extraRight <= 18 && extraLeft <= 120;
+                if (near == null || topScore > near.Score)
+                {
+                    near = new ChatHit();
+                    near.Phrase = stamp.Phrase;
+                    near.Kind = stamp.Kind;
+                    near.State = stamp.State;
+                    near.Y = y;
+                    near.Score = topScore;
+                    near.Decision = gates ? "match" : "no-match";
+                }
+                if (!gates) continue;
+                if (best == null || topScore > best.Score)
+                {
+                    best = new ChatHit();
+                    best.Phrase = stamp.Phrase;
+                    best.Kind = stamp.Kind;
+                    best.State = stamp.State;
+                    best.Y = y;
+                    best.Score = topScore;
+                    best.Decision = "match";
+                }
+            }
+        }
+
+        // Glyph widths of the red line. This is the pixels, not the nearest phrase.
+        private static string ReadRaw(bool[] ink, int width, int height, int y, int left, int right)
+        {
+            if (y < 0 || y + 5 >= height || right < left) return "";
+            System.Text.StringBuilder text = new System.Text.StringBuilder();
+            int x = left;
+            int gap = 0;
+            int glyphs = 0;
+            while (x <= right && glyphs < 28)
+            {
+                bool on = false;
+                for (int dy = 0; dy < 6; dy++) if (ink[(y + dy) * width + x]) on = true;
+                if (!on)
+                {
+                    gap++;
+                    x++;
+                    continue;
+                }
+                if (gap >= 2 && text.Length > 0) text.Append(' ');
+                gap = 0;
+                int start = x;
+                while (x <= right)
+                {
+                    bool col = false;
+                    for (int dy = 0; dy < 6; dy++) if (ink[(y + dy) * width + x]) col = true;
+                    if (!col) break;
+                    x++;
+                }
+                int gw = x - start;
+                text.Append(gw.ToString());
+                if (x <= right) text.Append('.');
+                glyphs++;
+            }
+            return text.ToString();
         }
 
         private static int BestRow(bool[] ink, int width, int top, int bottom)
@@ -269,6 +322,95 @@ namespace KavrosAfkWarden
                 }
             }
             return agree / (double)total;
+        }
+    }
+
+    // Known potion sentences, compared after the timestamp, dots and case are removed.
+    public static class ChatPhrase
+    {
+        public static string Normalize(string text)
+        {
+            if (text == null) return "";
+            System.Text.StringBuilder sb = new System.Text.StringBuilder(text.Length);
+            bool space = false;
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (c == '[' && i + 8 < text.Length && text[i + 3] == ':' && text[i + 6] == ':')
+                {
+                    int end = text.IndexOf(']', i);
+                    if (end > i && end - i < 12) { i = end; continue; }
+                }
+                if (c == '.' || c == ',' || c == '!' || c == '?' || c == ':' || c == ';' || c == '\'' || c == '"') continue;
+                if (char.IsWhiteSpace(c))
+                {
+                    if (sb.Length == 0 || space) continue;
+                    space = true;
+                    sb.Append(' ');
+                    continue;
+                }
+                space = false;
+                if (c >= 'A' && c <= 'Z') c = (char)(c + 32);
+                sb.Append(c);
+            }
+            return sb.ToString().Trim();
+        }
+
+        public static bool Same(string read, string phrase)
+        {
+            string a = Normalize(read);
+            string b = Normalize(phrase);
+            if (a.Length == 0 || b.Length == 0) return false;
+            if (a == b) return true;
+            if (a.IndexOf(b) >= 0 || b.IndexOf(a) >= 0) return true;
+            return Distance(a, b) <= 2;
+        }
+
+        public static string KindOf(string text)
+        {
+            string n = Normalize(text);
+            if (n.IndexOf("elder overload") >= 0 || n.IndexOf("elder overload salve") >= 0) return "elder";
+            if (n.IndexOf("aggression") >= 0 || n.IndexOf("aggroverload") >= 0) return "aggression";
+            if (n.IndexOf("prayer renewal") >= 0) return "prayer";
+            if (n.IndexOf("antifire") >= 0 || n.IndexOf("wyrmfire") >= 0 || n.IndexOf("dragonfire") >= 0) return "antifire";
+            if (n.IndexOf("poison") >= 0 || n.IndexOf("antipoison") >= 0) return "poison";
+            if (n.IndexOf("overload") >= 0) return "overload";
+            return "";
+        }
+
+        public static string StateOf(string text)
+        {
+            string n = Normalize(text);
+            if (n.Length == 0 || KindOf(text).Length == 0) return "";
+            if (n.IndexOf("worn off") >= 0 || n.IndexOf("has run out") >= 0 || n.IndexOf("has expired") >= 0 || n.IndexOf("have worn") >= 0) return "expired";
+            if (n.IndexOf("about to") >= 0 || n.IndexOf("will run out") >= 0 || n.IndexOf("about to expire") >= 0 || n.IndexOf("about to wear") >= 0) return "low";
+            if (n.IndexOf("you drink") >= 0 || n.IndexOf("salve") >= 0 || n.IndexOf("potion") >= 0) return "active";
+            return "";
+        }
+
+        private static int Distance(string a, string b)
+        {
+            if (System.Math.Abs(a.Length - b.Length) > 2) return 9;
+            int n = a.Length;
+            int m = b.Length;
+            int[] row = new int[m + 1];
+            for (int j = 0; j <= m; j++) row[j] = j;
+            for (int i = 1; i <= n; i++)
+            {
+                int prev = row[0];
+                row[0] = i;
+                for (int j = 1; j <= m; j++)
+                {
+                    int cur = row[j];
+                    int cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                    int add = prev + cost;
+                    if (row[j] + 1 < add) add = row[j] + 1;
+                    if (row[j - 1] + 1 < add) add = row[j - 1] + 1;
+                    prev = cur;
+                    row[j] = add;
+                }
+            }
+            return row[m];
         }
     }
 }
