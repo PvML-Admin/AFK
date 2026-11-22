@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.33
+
+- Sacrifice lines are ordered by where they sit on screen, and a garbled gain such as "I IS" still counts. A missing total does not drop the sacrifice.
+- The RuneMetrics tip stays on the panel, dimmed, in the space above Pause and Exit.
+
 ## 0.2.32
 
 - The panel counts sacrifice points from chat. Each new sacrifice message adds its gain once, shows how many sacrifices this session, and shows the latest game total. There is no sound. Reset clears the session counter.

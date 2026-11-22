@@ -301,8 +301,8 @@ namespace KavrosAfkWarden
         }
         internal void SetMetricsHint(bool show)
         {
-            hintWanted = show;
-            metricsHint.Visible = show && !collapsed;
+            hintWanted = PanelHint.Always || show;
+            metricsHint.Visible = hintWanted && !collapsed;
         }
         private bool gameFound;
         private string gameName = "";
@@ -503,7 +503,6 @@ namespace KavrosAfkWarden
         private readonly FrameGrab grab = new FrameGrab();
         private SceneActivity activity = new SceneActivity();
         private DateTime lastDebugSave = DateTime.MinValue;
-        private DateTime metricsAbsentSince = DateTime.MinValue;
         private IntPtr potsClient = IntPtr.Zero;
         private DateTime lastClientSearch = DateTime.MinValue;
         private int? shownHp;
@@ -1720,12 +1719,7 @@ namespace KavrosAfkWarden
             panel.Potion.Value = closed ? "Client closed" : roster.Length > 0 && !settings.Paused
                 ? roster
                 : (minimized ? "Minimized" : !pixels ? "No view" : waiting);
-            bool fullTotal = lastHud.MetricsFound;
-            if (fullTotal) metricsAbsentSince = DateTime.MinValue;
-            else if (metricsAbsentSince == DateTime.MinValue) metricsAbsentSince = DateTime.UtcNow;
-            bool metricsHint = !fullTotal && metricsAbsentSince != DateTime.MinValue
-                && (DateTime.UtcNow - metricsAbsentSince).TotalSeconds >= 5;
-            panel.SetMetricsHint(metricsHint);
+            panel.SetMetricsHint(true);
             int left = Math.Max(0, (int)engine.AfkRemaining.TotalSeconds);
             panel.Afk.Pill = engine.AfkLatched ? "AFK soon" : "AFK timer";
             panel.Afk.Tone = engine.AfkLatched ? PillTone.Bad : PillTone.Ok;

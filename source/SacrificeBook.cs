@@ -8,8 +8,18 @@ namespace KavrosAfkWarden
         public string Item = "";
         public long Gain;
         public long Total;
+        public bool GainKnown;
+        public bool TotalKnown;
         public string Text = "";
         public string Fold = "";
+    }
+
+    public sealed class OcrLine
+    {
+        public string Text = "";
+        public int X;
+        public int Y;
+        public int Order;
     }
 
     // Sacrifice points come from one chat sentence. A message counts once,
@@ -34,6 +44,7 @@ namespace KavrosAfkWarden
         public int SessionCount;
         public long Total;
         public long LastGain;
+        public bool LastGainKnown;
         public string LastItem = "";
         public string Log = "";
 
@@ -56,7 +67,10 @@ namespace KavrosAfkWarden
             if (!haveTotal) return line;
             string second = Commas(Total);
             if (LastItem != null && LastItem.Length > 0)
-                second = second + " \u00b7 " + LastItem + " +" + Commas(LastGain);
+            {
+                second = second + " \u00b7 " + LastItem;
+                if (LastGainKnown) second = second + " +" + Commas(LastGain);
+            }
             return line + "\n" + second;
         }
 
@@ -79,7 +93,7 @@ namespace KavrosAfkWarden
                 }
                 for (int i = 0; i < current.Count; i++)
                 {
-                    Remember(current[i].Total);
+                    if (current[i].TotalKnown) Remember(current[i].Total);
                     Append(log, current[i], "baseline", false, 0);
                 }
                 if (current.Count > 0) Show(current[current.Count - 1]);
@@ -97,16 +111,16 @@ namespace KavrosAfkWarden
                     Append(log, hit, "seen", false, 0);
                     continue;
                 }
-                if (Known(hit.Total))
+                if (hit.TotalKnown && Known(hit.Total))
                 {
                     Append(log, hit, "seen", false, 0);
                     Show(hit);
                     continue;
                 }
                 long prev = Total;
-                bool gap = !haveTotal || prev + hit.Gain != hit.Total;
-                Remember(hit.Total);
-                SessionGained += hit.Gain;
+                bool gap = hit.TotalKnown && (!haveTotal || prev + hit.Gain != hit.Total);
+                if (hit.TotalKnown) Remember(hit.Total);
+                if (hit.GainKnown) SessionGained += hit.Gain;
                 SessionCount++;
                 Show(hit);
                 Append(log, hit, "new", gap, prev);
@@ -123,17 +137,70 @@ namespace KavrosAfkWarden
 
         public static List<string> Join(string text)
         {
-            List<string> done = new List<string>();
-            if (text == null || text.Length == 0) return done;
+            List<OcrLine> lines = new List<OcrLine>();
+            if (text == null || text.Length == 0) return new List<string>();
             string[] raw = text.Replace("\r", "").Split('\n');
             for (int i = 0; i < raw.Length; i++)
             {
                 string line = (raw[i] ?? "").Trim();
                 if (line.Length == 0) continue;
-                if (done.Count > 0 && Open(done[done.Count - 1]) && !StartsNew(line))
+                OcrLine row = new OcrLine();
+                row.Text = line;
+                row.Y = i;
+                row.Order = i;
+                lines.Add(row);
+            }
+            return Join(lines);
+        }
+
+        // Lines are ordered by on-screen Y, then X. A continuation with no
+        // leading timestamp is joined to the sacrifice line above it. Tails
+        // that OCR emitted somewhere else are attached to the open lines in order.
+        public static List<string> Join(List<OcrLine> lines)
+        {
+            List<string> done = new List<string>();
+            List<string> tails = new List<string>();
+            if (lines == null || lines.Count == 0) return done;
+            List<OcrLine> ordered = new List<OcrLine>();
+            for (int i = 0; i < lines.Count; i++)
+            {
+                if (lines[i] == null || lines[i].Text == null) continue;
+                string trimmed = lines[i].Text.Trim();
+                if (trimmed.Length == 0) continue;
+                OcrLine copy = new OcrLine();
+                copy.Text = trimmed;
+                copy.X = lines[i].X;
+                copy.Y = lines[i].Y;
+                copy.Order = lines[i].Order;
+                ordered.Add(copy);
+            }
+            ordered.Sort(delegate(OcrLine a, OcrLine b)
+            {
+                int byY = a.Y.CompareTo(b.Y);
+                if (byY != 0) return byY;
+                int byX = a.X.CompareTo(b.X);
+                if (byX != 0) return byX;
+                return a.Order.CompareTo(b.Order);
+            });
+            for (int i = 0; i < ordered.Count; i++)
+            {
+                string line = ordered[i].Text;
+                bool tail = !StartsNew(line) && LooksLikeTail(line);
+                if (done.Count > 0 && !StartsNew(line) && (Open(done[done.Count - 1]) || (tail && SacrificeStart(done[done.Count - 1]))))
                     done[done.Count - 1] = done[done.Count - 1] + " " + line;
+                else if (tail && (done.Count == 0 || !SacrificeStart(done[done.Count - 1])))
+                    tails.Add(line);
                 else
                     done.Add(line);
+            }
+            int tailAt = 0;
+            for (int i = 0; i < done.Count; i++)
+            {
+                if (!Open(done[i])) continue;
+                while (tailAt < tails.Count && !TailHasGain(tails[tailAt])) tailAt++;
+                if (tailAt >= tails.Count) break;
+                done[i] = done[i] + " " + tails[tailAt];
+                tailAt++;
             }
             return done;
         }
@@ -146,31 +213,86 @@ namespace KavrosAfkWarden
             int verb = Find(tokens, FoldWord("sacrifice"), 0);
             if (verb < 0) return false;
             int gainAt = Find(tokens, FoldWord("gain"), verb + 1);
-            if (gainAt < 0 || gainAt + 1 >= tokens.Count || !tokens[gainAt + 1].Number) return false;
-            int have = Find(tokens, FoldWord("have"), gainAt + 2);
-            if (have < 0) return false;
-            int totalAt = Find(tokens, FoldWord("total"), have + 1);
-            if (totalAt < 1 || !tokens[totalAt - 1].Number) return false;
-            int again = Find(tokens, FoldWord("sacrifice"), totalAt + 1);
-            if (again < 0) return false;
-            if (Find(tokens, FoldWord("points"), again) < 0 && Find(tokens, FoldWord("points"), gainAt + 1) < 0) return false;
-            long gain;
-            long total;
-            if (!ParseNum(tokens[gainAt + 1].Fold, out gain)) return false;
-            if (!ParseNum(tokens[totalAt - 1].Fold, out total)) return false;
+            // "total sacrifice" at the end of a wrapped half is not its own message.
+            if (gainAt < 0) return false;
+            long gain = 0;
+            bool gainKnown = false;
+            int slotEnd = line.Length;
+            int stop = NextStop(tokens, gainAt + 1);
+            if (stop >= 0) slotEnd = tokens[stop].Start;
+            int slotStart = tokens[gainAt].End;
+            if (slotEnd > slotStart)
+            {
+                long parsed;
+                if (FixNum(line.Substring(slotStart, slotEnd - slotStart), out parsed))
+                {
+                    gain = parsed;
+                    gainKnown = true;
+                }
+            }
+            long total = 0;
+            bool totalKnown = false;
+            int totalAt = Find(tokens, FoldWord("total"), gainAt + 1);
+            if (totalAt > 0)
+            {
+                int from = tokens[totalAt].Start;
+                int have = Find(tokens, FoldWord("have"), gainAt);
+                int now = Find(tokens, FoldWord("now"), gainAt);
+                int anchor = -1;
+                if (have >= 0 && have < totalAt) anchor = have;
+                if (now >= 0 && now < totalAt && (anchor < 0 || now > anchor)) anchor = now;
+                int begin = anchor >= 0 ? tokens[anchor].End : Math.Max(0, from - 24);
+                if (from > begin)
+                {
+                    long parsed;
+                    if (FixNum(line.Substring(begin, from - begin), out parsed))
+                    {
+                        total = parsed;
+                        totalKnown = true;
+                    }
+                }
+            }
+            string item = "";
             int itemStart = verb + 1;
             int itemEnd = gainAt;
-            if (itemEnd - 1 > itemStart && tokens[itemEnd - 1].Fold == FoldWord("and")) itemEnd--;
-            if (itemEnd <= itemStart) return false;
-            string item = line.Substring(tokens[itemStart].Start, tokens[itemEnd - 1].End - tokens[itemStart].Start).Trim();
-            if (item.Length == 0) return false;
+            if (itemEnd - 1 >= itemStart && tokens[itemEnd - 1].Fold == FoldWord("and")) itemEnd--;
+            if (itemEnd > itemStart)
+                item = line.Substring(tokens[itemStart].Start, tokens[itemEnd - 1].End - tokens[itemStart].Start).Trim();
+            if (item.Length == 0 && !gainKnown) return false;
             hit = new SacrificeHit();
             hit.Item = item;
             hit.Gain = gain;
+            hit.GainKnown = gainKnown;
             hit.Total = total;
+            hit.TotalKnown = totalKnown;
             hit.Text = line;
             hit.Fold = FoldWord(line);
             return true;
+        }
+
+        // Letter fixes apply only inside a number slot, never to the item name.
+        public static bool FixNum(string slot, out long value)
+        {
+            value = 0;
+            if (slot == null || slot.Length == 0) return false;
+            System.Text.StringBuilder digits = new System.Text.StringBuilder();
+            int junk = 0;
+            for (int i = 0; i < slot.Length; i++)
+            {
+                char c = slot[i];
+                if (c >= '0' && c <= '9') digits.Append(c);
+                else if (c == 'I' || c == 'l' || c == 'L' || c == '|' || c == '!') digits.Append('1');
+                else if (c == 'S' || c == 's') digits.Append('5');
+                else if (c == 'O' || c == 'o') digits.Append('0');
+                else if (c == 'g' || c == 'G' || c == 'q' || c == 'Q') digits.Append('9');
+                else if (c == 'B' || c == 'b') digits.Append('8');
+                else if (c == 'Z' || c == 'z') digits.Append('2');
+                else if (c == ' ' || c == ',' || c == '\'' || c == '\u2019' || c == '.') continue;
+                else junk++;
+            }
+            if (junk > 0) return false;
+            if (digits.Length == 0 || digits.Length > 12) return false;
+            return long.TryParse(digits.ToString(), out value) && value >= 0;
         }
 
         public static string Commas(long value)
@@ -189,9 +311,13 @@ namespace KavrosAfkWarden
         private void Show(SacrificeHit hit)
         {
             Seen = true;
-            haveTotal = true;
-            Total = hit.Total;
+            if (hit.TotalKnown)
+            {
+                haveTotal = true;
+                Total = hit.Total;
+            }
             LastGain = hit.Gain;
+            LastGainKnown = hit.GainKnown;
             LastItem = hit.Item ?? "";
         }
 
@@ -212,7 +338,8 @@ namespace KavrosAfkWarden
             for (int i = 0; i < previous.Count; i++)
             {
                 if (used[i]) continue;
-                if (previous[i].Total != hit.Total && !Similar(previous[i].Fold, hit.Fold)) continue;
+                if (hit.TotalKnown && previous[i].TotalKnown && hit.Total != previous[i].Total) continue;
+                if (!(hit.TotalKnown && previous[i].TotalKnown && hit.Total == previous[i].Total) && !Similar(previous[i].Fold, hit.Fold)) continue;
                 used[i] = true;
                 return true;
             }
@@ -223,19 +350,66 @@ namespace KavrosAfkWarden
         {
             if (log.Length > 0) log.Append(" | ");
             log.Append(decision).Append(" item=\"").Append(hit.Item).Append("\" gain=").Append(hit.Gain.ToString()).Append(" total=").Append(hit.Total.ToString());
+            if (!hit.GainKnown) log.Append(" gain unknown");
             if (decision == "new")
             {
-                log.Append(gap ? " sac gap" : " sac ok");
+                if (!hit.TotalKnown) log.Append(" total unknown");
+                else log.Append(gap ? " sac gap" : " sac ok");
                 log.Append(" prev=").Append(prev.ToString());
             }
         }
 
         private static bool Open(string line)
         {
+            return SacrificeStart(line) && !HasGain(line);
+        }
+
+        private static bool HasGain(string line)
+        {
             SacrificeHit hit;
-            if (TryParse(line, out hit)) return false;
+            return TryParse(line, out hit) && hit.GainKnown;
+        }
+
+        private static bool SacrificeStart(string line)
+        {
             List<Tok> tokens = Tokens(line);
-            return Find(tokens, FoldWord("sacrifice"), 0) >= 0;
+            int verb = Find(tokens, FoldWord("sacrifice"), 0);
+            if (verb < 0) return false;
+            if (verb > 0 && tokens[verb - 1].Fold == FoldWord("total")) return false;
+            return true;
+        }
+
+        private static bool LooksLikeTail(string line)
+        {
+            if (line == null || StartsNew(line) || SacrificeStart(line)) return false;
+            string lower = line.ToLowerInvariant();
+            if (lower.IndexOf("points") >= 0 || lower.IndexOf("total") >= 0) return true;
+            long ignored;
+            return FixNum(line, out ignored);
+        }
+
+        private static bool TailHasGain(string line)
+        {
+            if (HasGain(line)) return true;
+            List<Tok> tokens = Tokens(line);
+            int stop = NextStop(tokens, 0);
+            int end = stop >= 0 ? tokens[stop].Start : Math.Min(line.Length, 16);
+            if (end < 0) end = 0;
+            if (end > line.Length) end = line.Length;
+            long ignored;
+            return FixNum(line.Substring(0, end), out ignored);
+        }
+
+        private static int NextStop(List<Tok> tokens, int start)
+        {
+            string[] stops = new string[] { "points", "you", "now", "total", "have" };
+            int best = -1;
+            for (int s = 0; s < stops.Length; s++)
+            {
+                int at = Find(tokens, FoldWord(stops[s]), start);
+                if (at >= 0 && (best < 0 || at < best)) best = at;
+            }
+            return best;
         }
 
         private static bool StartsNew(string line)
@@ -243,7 +417,7 @@ namespace KavrosAfkWarden
             if (line == null) return false;
             string t = line.Trim();
             if (t.Length == 0) return false;
-            if (t[0] == '[') return true;
+            if (t[0] == '[' || t[0] == ']') return true;
             if (t.Length >= 5 && (t[0] == 'N' || t[0] == 'n') && t.IndexOf("ews") >= 0 && t.IndexOf(':') >= 0) return true;
             return false;
         }

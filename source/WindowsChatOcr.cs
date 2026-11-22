@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using System.Threading;
 using Windows.Foundation;
@@ -62,12 +63,34 @@ namespace KavrosAfkWarden
                 StringBuilder text = new StringBuilder();
                 if (result != null && result.Lines != null)
                 {
+                    List<OcrLine> rows = new List<OcrLine>();
                     for (int i = 0; i < result.Lines.Count; i++)
                     {
                         string line = result.Lines[i].Text ?? "";
                         if (line.Length == 0) continue;
+                        OcrLine row = new OcrLine();
+                        row.Text = line;
+                        row.Order = i;
+                        if (result.Lines[i].Words != null && result.Lines[i].Words.Count > 0)
+                        {
+                            row.X = (int)result.Lines[i].Words[0].BoundingRect.X;
+                            row.Y = (int)result.Lines[i].Words[0].BoundingRect.Y;
+                        }
+                        else row.Y = i;
+                        rows.Add(row);
+                    }
+                    rows.Sort(delegate(OcrLine a, OcrLine b)
+                    {
+                        int byY = a.Y.CompareTo(b.Y);
+                        if (byY != 0) return byY;
+                        int byX = a.X.CompareTo(b.X);
+                        if (byX != 0) return byX;
+                        return a.Order.CompareTo(b.Order);
+                    });
+                    for (int i = 0; i < rows.Count; i++)
+                    {
                         if (text.Length > 0) text.Append('\n');
-                        text.Append(line);
+                        text.Append(rows[i].Text);
                     }
                 }
                 try { bitmap.Dispose(); } catch (Exception) { }

@@ -1578,7 +1578,7 @@ namespace KavrosAfkWarden
             PotLines();
             BarAnchor();
             ChatFresh();
-            SacrificeCases();
+            SacrificeCases(root);
             string[] chatter = new string[] {
                 "-a ALL CHAT",
                 ". 14KlllS In core",
@@ -1904,6 +1904,16 @@ namespace KavrosAfkWarden
             int wideW, wideY, wideH, wideButton, widePanel;
             PanelHint.Foot(36, 720, out wideW, out wideY, out wideH, out wideButton, out widePanel);
             Check(wideH >= 36 * 2 && wideButton >= wideY + wideH + 16 && wideW >= 752 && widePanel >= wideButton + 28, "the tip grows at 200% and still sits above the buttons");
+            int[] tipScale = new int[] { 18, 27, 36 };
+            string[] tipName = new string[] { "100%", "150%", "200%" };
+            for (int scale = 0; scale < tipScale.Length; scale++)
+            {
+                int tipW, tipY, tipH, tipButton, tipPanel;
+                PanelHint.Foot(tipScale[scale], 360 * tipScale[scale] / 18, out tipW, out tipY, out tipH, out tipButton, out tipPanel);
+                int afkBottom = PanelHint.AfkBottom(tipScale[scale]);
+                Check(PanelHint.Always && tipY >= afkBottom && tipH >= tipScale[scale] * 2 && tipButton >= tipY + tipH + 8 && tipPanel >= tipButton + 28,
+                    "the dimmed tip sits in the gap above the buttons at " + tipName[scale] + ", afk " + afkBottom.ToString() + " hint " + tipY.ToString() + " button " + tipButton.ToString());
+            }
             Check(PanelHint.Line1.IndexOf("precise values") >= 0 && PanelHint.Line1.IndexOf("RuneMetrics") >= 0 && PanelHint.Line2.IndexOf("minimized") >= 0, "the tip says to keep RuneMetrics open, and not minimized");
             Check(!AlertSurface.ShowsWindow, "low alerts do not open a window or a toast");
             string path = Path.Combine(root, "verification", "fixtures", "live027", "debug-log-v0226-hp.txt");
@@ -2137,7 +2147,7 @@ namespace KavrosAfkWarden
             Check(box.Width >= 80 && box.Y <= 430 && box.Bottom >= 550, "the chat box reaches the newest line at the bottom, got " + box.X.ToString() + "," + box.Y.ToString() + " " + box.Width.ToString() + "x" + box.Height.ToString());
         }
 
-        private static void SacrificeCases()
+        private static void SacrificeCases(string root)
         {
             string m1 = "[17:31:37] You sacrifice Off-hand khopesh of the Kharidian and gain 11 points. You now have 66 total sacrifice points.";
             string m2 = "[17:34:08] You sacrifice Off-hand khopesh of the Kharidian and gain 11 points. You now have 9,847,166 total sacrifice points.";
@@ -2211,6 +2221,71 @@ namespace KavrosAfkWarden
             Check(book.Value().IndexOf("0 this session") >= 0 && book.Value().IndexOf("9,844,959") >= 0, "the row shows the session counter and the game total, got " + book.Value());
             SacrificeBook hidden = new SacrificeBook();
             Check(hidden.Value() == "\u2014", "the sacrifice row is a dash until a message has been seen");
+            GarbledSacrifice(root);
+        }
+
+        private static void GarbledSacrifice(string root)
+        {
+            string path = Path.Combine(root, "verification", "fixtures", "live032", "debug-log-v0232-sac.txt");
+            if (!File.Exists(path))
+            {
+                Check(false, "missing debug-log-v0232-sac.txt");
+                return;
+            }
+            string[] rows = File.ReadAllLines(path);
+            string raws = "";
+            for (int i = 0; i < rows.Length; i++)
+            {
+                if (rows[i].IndexOf("18:21:23 ") != 0) continue;
+                int at = rows[i].IndexOf(" chat=");
+                int pots = rows[i].IndexOf(" pots=");
+                if (at < 0 || pots < at) continue;
+                raws = rows[i].Substring(at + 6, pots - (at + 6));
+                break;
+            }
+            Check(raws.IndexOf("Blast diffusion bmts") >= 0, "the v0.2.32 log still has the garbled sacrifice lines");
+            System.Text.StringBuilder text = new System.Text.StringBuilder();
+            int from = 0;
+            int count = 0;
+            while (from < raws.Length)
+            {
+                int raw = raws.IndexOf("raw=\"", from);
+                if (raw < 0) break;
+                int start = raw + 5;
+                int end = raws.IndexOf('"', start);
+                if (end < 0) break;
+                if (text.Length > 0) text.Append('\n');
+                text.Append(raws.Substring(start, end - start));
+                from = end + 1;
+                count++;
+            }
+            Check(count >= 10, "the log line keeps the OCR raws in log order, got " + count.ToString());
+            SacrificeBook book = new SacrificeBook();
+            book.Observe(text.ToString());
+            Check(book.SessionCount == 4 && book.SessionGained == 460, "four garbled boots lines count as 4 x 115, got " + book.SessionCount.ToString() + " x " + book.SessionGained.ToString() + " log " + book.Log);
+            book.Observe(text.ToString());
+            Check(book.SessionCount == 4 && book.SessionGained == 460, "re-reading the garbled chat adds nothing");
+            long fixedGain;
+            Check(SacrificeBook.FixNum("I IS", out fixedGain) && fixedGain == 115, "I IS in a number slot is 115");
+            Check(SacrificeBook.FixNum("9,845, 189", out fixedGain) && fixedGain == 9845189, "spaces and commas stay out of the total");
+            Check(SacrificeBook.FixNum("g,845, 189", out fixedGain) && fixedGain == 9845189, "a g in a number slot is a 9");
+            SacrificeBook unknown = new SacrificeBook();
+            unknown.Observe("] You sacrifice Mystery charm and gain later");
+            Check(unknown.SessionCount == 1 && unknown.SessionGained == 0 && unknown.Log.IndexOf("gain unknown") >= 0, "a sacrifice line with no readable gain still counts once, got " + unknown.Log);
+            List<OcrLine> visual = new List<OcrLine>();
+            OcrLine head = new OcrLine();
+            head.Text = "] You sacrifice Blast diffusion bmts and gain";
+            head.Y = 40;
+            head.Order = 1;
+            OcrLine tail = new OcrLine();
+            tail.Text = "I IS points. You now 9,845, 189 total sacrifice";
+            tail.Y = 58;
+            tail.Order = 0;
+            visual.Add(tail);
+            visual.Add(head);
+            List<string> ordered = SacrificeBook.Join(visual);
+            SacrificeHit seen;
+            Check(ordered.Count == 1 && SacrificeBook.TryParse(ordered[0], out seen) && seen.GainKnown && seen.Gain == 115 && seen.TotalKnown && seen.Total == 9845189, "a wrapped half is joined to the line visually above it");
         }
 
         private static void PotLines()
@@ -2614,7 +2689,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.32" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.33" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -2625,10 +2700,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.32\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.33\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.32.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.33.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

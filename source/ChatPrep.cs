@@ -192,10 +192,19 @@ namespace KavrosAfkWarden
                 {
                     int sx = x / 3;
                     if (sx >= image.Width) sx = image.Width - 1;
-                    pixels[y * w + x] = Coloured(image.Argb(sx, sy)) ? black : white;
+                    pixels[y * w + x] = OcrInk(image.Argb(sx, sy)) ? black : white;
                 }
             }
             return new ImageBuffer(w, h, pixels);
+        }
+
+        // The chat crop is tripled before OCR so a small font stays readable.
+        // Dim green game text is included here and left out of the HUD tests.
+        private static bool OcrInk(int color)
+        {
+            if (Coloured(color)) return true;
+            int r = ImageBuffer.R(color), g = ImageBuffer.G(color), b = ImageBuffer.B(color);
+            return g >= 90 && g > r + 12 && g > b + 8;
         }
     }
 

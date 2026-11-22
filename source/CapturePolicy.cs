@@ -279,6 +279,18 @@ namespace KavrosAfkWarden
     {
         public const string Line1 = "Keep RuneMetrics open with precise values.";
         public const string Line2 = "Background is fine; not minimized.";
+        // The tip stays on the panel, dimmed, whether or not RuneMetrics is open.
+        public const bool Always = true;
+
+        public static int AfkBottom(int lineHeight)
+        {
+            if (lineHeight < 16) lineHeight = 16;
+            int rowH = Math.Max(28, lineHeight + 8);
+            int sacH = lineHeight * 2 + 10;
+            int sacY = 66 + (rowH + 4) * 4;
+            int afkY = sacY + sacH + 4;
+            return afkY + rowH;
+        }
 
         public static void Foot(int lineHeight, int lineWidth, out int panelW, out int hintY, out int hintH, out int buttonY, out int panelH)
         {
