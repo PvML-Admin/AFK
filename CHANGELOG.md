@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.30
+
+- A potion line alerts when it is new since the previous chat read and that potion's warning is outside a five-minute cooldown. The same line scrolling up, or an OCR variant of it, does not alert again. Lines already on screen at startup are the baseline. A 30 second warning is still panel only. Expiry still plays a sound.
+- The hitpoint and prayer bars stay where a valid total was read. A smaller overhead bar is not taken in their place. A lost bar shows a dash instead of the last number or a junk total. Boosted totals up to 4000 still count.
+
 ## 0.2.29
 
 - Settings headings have enough room to draw in full, and long labels fit or wrap instead of being cut off at the edge.

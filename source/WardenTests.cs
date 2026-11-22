@@ -1575,6 +1575,8 @@ namespace KavrosAfkWarden
             ChatConfirm(root);
             Live026(root);
             BoostedLife(root);
+            PotLines();
+            BarAnchor();
             string[] chatter = new string[] {
                 "-a ALL CHAT",
                 ". 14KlllS In core",
@@ -2095,6 +2097,109 @@ namespace KavrosAfkWarden
             Check(mainXp.Found && mainXp.Xp > 1000000L, "the main-account layout still reads a full XP total, got " + mainXp.Xp.ToString() + " " + (mainXp.Note ?? ""));
         }
 
+        private static void PotLines()
+        {
+            DateTime t = new DateTime(2026, 11, 22, 13, 33, 42, DateTimeKind.Utc);
+            ChatPotionBook book = new ChatPotionBook();
+            List<ChatHit> clean = new List<ChatHit>();
+            clean.Add(Hit("The effects of your Aggression Potion will expire in 30 seconds.", "aggression", "low", 80));
+            List<ChatNotice> first = book.Observe(clean, t);
+            Check(first.Count == 1 && !first[0].Audible, "the first aggression warning fires with no sound");
+            Check(book.Observe(clean, t.AddSeconds(2)).Count == 0, "the same line on the next read does not fire");
+            List<ChatHit> scrolled = new List<ChatHit>();
+            scrolled.Add(Hit("The effects of your Aggression Potion will expire in 30 seconds.", "aggression", "low", 48));
+            Check(book.Observe(scrolled, t.AddSeconds(4)).Count == 0, "scrolling that line up does not fire");
+            List<ChatHit> shifted = new List<ChatHit>();
+            shifted.Add(Hit("someone says hello", "", "", 24));
+            shifted.Add(Hit("The effects of your Aggression Potion will expire in 30 seconds.", "aggression", "low", 64));
+            Check(book.Observe(shifted, t.AddSeconds(6)).Count == 0, "a new message shifting the line does not fire");
+            List<ChatHit> ocr = new List<ChatHit>();
+            ocr.Add(Hit("The effazts of pur Potion will expire in 30 saonds.", "aggression", "low", 60));
+            Check(book.Observe(ocr, t.AddSeconds(8)).Count == 0, "an OCR variant of the same line does not fire within five minutes");
+            Check(book.Observe(new List<ChatHit>(), t.AddMinutes(1)).Count == 0, "an empty chat read does not fire");
+            Check(book.Observe(ocr, t.AddMinutes(2)).Count == 0, "the same warning coming back inside five minutes does not fire");
+            Check(book.Observe(new List<ChatHit>(), t.AddMinutes(6)).Count == 0, "a gap after the cooldown still does not fire by itself");
+            List<ChatNotice> later = book.Observe(clean, t.AddMinutes(6).AddSeconds(2));
+            Check(later.Count == 1 && !later[0].Audible, "the same line more than five minutes later fires again");
+
+            ChatPotionBook kinds = new ChatPotionBook();
+            List<ChatHit> low = new List<ChatHit>();
+            low.Add(Hit("Your elder overload is about to run out.", "elder", "low", 40));
+            List<ChatNotice> quiet = kinds.Observe(low, t);
+            Check(quiet.Count == 1 && !quiet[0].Audible, "an overload warning does not need a drink line");
+            List<ChatHit> ended = new List<ChatHit>();
+            ended.Add(Hit("The effects of elder overload have worn off and you feel normal again.", "elder", "expired", 40));
+            List<ChatNotice> loud = kinds.Observe(ended, t.AddSeconds(20));
+            Check(loud.Count == 1 && loud[0].Audible, "the low warning does not block the expired line");
+
+            ChatPotionBook pair = new ChatPotionBook();
+            List<ChatHit> both = new List<ChatHit>();
+            both.Add(Hit("The effects of elder overload have worn off and you feel normal again.", "elder", "expired", 30));
+            both.Add(Hit("The effects of your Aggression Potion have expired.", "aggression", "expired", 48));
+            List<ChatNotice> together = pair.Observe(both, t);
+            bool elder = false;
+            bool aggression = false;
+            for (int i = 0; i < together.Count; i++)
+            {
+                if (together[i].Title != null && together[i].Title.IndexOf("Elder") >= 0) elder = true;
+                if (together[i].Title != null && together[i].Title.IndexOf("Aggression") >= 0) aggression = true;
+            }
+            Check(together.Count == 2 && elder && aggression && together[0].Audible && together[1].Audible, "overload and aggression expiring together both fire");
+
+            ChatPotionBook startup = new ChatPotionBook();
+            startup.Attach();
+            Check(startup.Observe(clean, t).Count == 0, "lines already on screen at startup do not fire");
+            Check(startup.Observe(scrolled, t.AddSeconds(2)).Count == 0, "those baseline lines still do not fire after they scroll");
+            Check(startup.Detail.IndexOf("Aggression") < 0, "a baseline line does not put a potion on the row");
+        }
+
+        private static void BarAnchor()
+        {
+            int width = 2560;
+            int height = 1440;
+            IntRect life = new IntRect(717, 1178, 81, 4);
+            IntRect prayer = new IntRect(954, 1179, 83, 3);
+            Check(HudBars.RealBar(life, width, height) && !HudBars.Overhead(life, width, height), "life 717,1178 81x4 is the HUD bar at 1440p 100%");
+            Check(HudBars.RealBar(prayer, width, height) && !HudBars.Overhead(prayer, width, height), "prayer 954,1179 83x3 is the HUD bar at 1440p 100%");
+            IntRect[] junk = new IntRect[] {
+                new IntRect(1401, 787, 34, 2),
+                new IntRect(1574, 1147, 29, 7),
+                new IntRect(1556, 1082, 28, 7),
+                new IntRect(1349, 1073, 28, 3),
+                new IntRect(1741, 1144, 28, 3)
+            };
+            for (int i = 0; i < junk.Length; i++)
+                Check(HudBars.Overhead(junk[i], width, height) && !HudBars.RealBar(junk[i], width, height), "overhead bar " + junk[i].X.ToString() + "," + junk[i].Y.ToString() + " " + junk[i].Width.ToString() + "x" + junk[i].Height.ToString() + " is rejected");
+            Check(HudBars.RealBar(new IntRect(400, 200, 81, 4), width, height), "a full-size bar on another row is still a HUD bar");
+            Check(HudBars.Valid(1515, 1102) && HudBars.Valid(4000, 990), "1515/1102 and a boost up to 4000 are legal");
+            Check(!HudBars.Valid(4001, 990) && !HudBars.Valid(2, 1) && !HudBars.Valid(1, null), "4001, 2/1 and 1/- are rejected");
+            Check(HudBars.Shown(1515, 1102, false, false) == "1515 / 1102", "a live total is shown with its maximum");
+            Check(HudBars.Shown(1515, 1102, true, false) == "\u2014", "a lost bar shows a dash instead of the stale 1515/1102");
+            Check(HudBars.Shown(2, 1, false, false) == "\u2014" && HudBars.Shown(1, null, false, false) == "\u2014", "junk totals show a dash");
+            int wide = 2560 * 3 / 2;
+            int tall = 1440 * 3 / 2;
+            Check(HudBars.RealBar(new IntRect(717 * 3 / 2, 1178 * 3 / 2, 81 * 3 / 2, 6), wide, tall), "the life bar still qualifies at 150%");
+            Check(!HudBars.RealBar(new IntRect(1401 * 3 / 2, 787 * 3 / 2, 34 * 3 / 2, 3), wide, tall), "the overhead bar stays too small at 150%");
+            Check(HudBars.RealBar(new IntRect(717 * 2, 1178 * 2, 81 * 2, 8), 2560 * 2, 1440 * 2), "the life bar still qualifies at 200%");
+            Check(!HudBars.RealBar(new IntRect(1401 * 2, 787 * 2, 34 * 2, 4), 2560 * 2, 1440 * 2), "the overhead bar stays too small at 200%");
+            DateTime t = new DateTime(2026, 11, 22, 13, 0, 0, DateTimeKind.Utc);
+            HudBars.Lock slot = new HudBars.Lock();
+            Check(slot.Open(t), "with no bar yet a candidate can be taken");
+            bool take = HudBars.Valid(1515, 1102) && HudBars.RealBar(life, width, height) && slot.Open(t);
+            Check(take, "717,1178 is taken when it reads 1515/1102");
+            slot.Hold(new IntRect(700, 1148, 140, 36), life);
+            slot.Note(true, t);
+            Check(slot.Held && !slot.Open(t.AddSeconds(9)), "a bar that still reads stays locked");
+            slot.Note(false, t.AddSeconds(1));
+            Check(!slot.Due(t.AddSeconds(9)) && !slot.Open(t.AddSeconds(9)), "nine seconds of misses does not unlock it");
+            Check(slot.Due(t.AddSeconds(12)) && slot.Open(t.AddSeconds(12)), "about ten seconds of misses allows a new search");
+            bool junkTake = HudBars.Valid(2, 1) && HudBars.RealBar(junk[0], width, height) && slot.Open(t.AddSeconds(12));
+            Check(!junkTake, "1401,787 is not taken, and 2/1 is not a reading");
+            bool prayerBrief = HudBars.Valid(990, 990) && HudBars.RealBar(new IntRect(955, 1178, 83, 4), width, height);
+            Check(prayerBrief, "prayer 955,1178 83x4 can be locked");
+            Check(!HudBars.RealBar(new IntRect(1741, 1144, 28, 3), width, height), "prayer does not move to 1741,1144 28x3");
+        }
+
         private static void ReplayPotLogs(string root)
         {
             string dir = Path.Combine(root, "verification", "fixtures", "live0223");
@@ -2393,7 +2498,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.29" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.30" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -2404,10 +2509,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.29\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.30\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.29.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.30.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

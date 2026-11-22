@@ -199,6 +199,8 @@ namespace KavrosAfkWarden
         private HudReading lastGood;
         private IntRect heldLife;
         private IntRect heldPrayer;
+        private readonly HudBars.Lock lifeLock = new HudBars.Lock();
+        private readonly HudBars.Lock prayerLock = new HudBars.Lock();
         private bool haveBoxes;
         private int missedLocks;
         private DateTime nextFullSearch = DateTime.MinValue;
@@ -383,6 +385,8 @@ namespace KavrosAfkWarden
                 metricsMisses = 0;
                 nextMetricsSearch = DateTime.MinValue;
                 heldLife=heldPrayer=new IntRect();
+                lifeLock.Clear();
+                prayerLock.Clear();
                 haveBoxes=false; missedLocks=0; nextFullSearch=DateTime.MinValue;
             }
             bool visible = RectOnGame(hwnd, client, new IntRect(0, 0, client.Width, client.Height));
@@ -466,26 +470,10 @@ namespace KavrosAfkWarden
         private void FillBars(HudReading reading)
         {
             if (lastGood == null || reading == null) return;
-            if (reading.Hp == null && lastGood.Hp != null)
-            {
-                reading.Hp = lastGood.Hp;
-                reading.HpMax = lastGood.HpMax;
-                reading.HpFromOrb = lastGood.HpFromOrb;
-                reading.HpHow = lastGood.HpHow;
-                reading.LifeText = lastGood.LifeText;
-                reading.LifeTrace = lastGood.LifeTrace;
-                if (reading.LifeBar.Width < 8) reading.LifeBar = lastGood.LifeBar;
-            }
-            if (reading.Prayer == null && lastGood.Prayer != null)
-            {
-                reading.Prayer = lastGood.Prayer;
-                reading.PrayerMax = lastGood.PrayerMax;
-                reading.PrayerFromOrb = lastGood.PrayerFromOrb;
-                reading.PrayerHow = lastGood.PrayerHow;
-                reading.PrayerText = lastGood.PrayerText;
-                reading.PrayerTrace = lastGood.PrayerTrace;
-                if (reading.PrayerBar.Width < 8) reading.PrayerBar = lastGood.PrayerBar;
-            }
+            // A missed hitpoint or prayer read stays blank. The last total is not
+            // copied forward, so the panel can show a dash instead of a stale number.
+            if (reading.LifeBar.Width < 8 && lifeLock.Held) reading.LifeBar = lifeLock.Mark;
+            if (reading.PrayerBar.Width < 8 && prayerLock.Held) reading.PrayerBar = prayerLock.Mark;
             if (!reading.MetricsFound && lastGood.MetricsFound && (reading.MetricsNote == null || reading.MetricsNote.Length == 0))
             {
                 reading.MetricsFound = true;
@@ -534,8 +522,9 @@ namespace KavrosAfkWarden
             // Chat and the XP tracker first. The buff bar is not part of this pass.
             HudReading reading = HudReader.Read(image, settings, false);
             ReadSide(image, reading, 0);
-            if (reading.LifeText.Width > 8) lifeBox = reading.LifeText;
-            if (reading.PrayerText.Width > 8) prayerBox = reading.PrayerText;
+            AdoptBars(reading, image.Width, image.Height);
+            if (lifeLock.Held && lifeLock.Box.Width > 8) lifeBox = lifeLock.Box;
+            if (prayerLock.Held && prayerLock.Box.Width > 8) prayerBox = prayerLock.Box;
             IntRect foundBuff = Union(reading.BuffRects);
             if(settings.HasBuffPin) buffStrip=new IntRect((int)(settings.BuffPinX*image.Width),(int)(settings.BuffPinY*image.Height),(int)Math.Ceiling(settings.BuffPinW*image.Width),(int)Math.Ceiling(settings.BuffPinH*image.Height));
             else if(foundBuff.Width>0 && RowHasTimer(reading))
@@ -615,11 +604,31 @@ namespace KavrosAfkWarden
                 // A single miss does not walk the lock onto scenery. The strip
                 // moves only when a later search finds a buff row that has timers.
             }
-            if (reading.HpMax == null || reading.PrayerMax == null || (buffStrip.Width>8 && slow && !reading.BuffBarFound))
+            DateTime readAt = DateTime.UtcNow;
+            bool lifeOk = HudBars.Valid(reading.Hp, reading.HpMax);
+            bool prayerOk = HudBars.Valid(reading.Prayer, reading.PrayerMax);
+            lifeLock.Note(lifeOk, readAt);
+            prayerLock.Note(prayerOk, readAt);
+            if (!lifeOk)
+            {
+                reading.Hp = null;
+                reading.HpMax = null;
+                if (lifeLock.Held) reading.LifeBar = lifeLock.Mark;
+            }
+            if (!prayerOk)
+            {
+                reading.Prayer = null;
+                reading.PrayerMax = null;
+                if (prayerLock.Held) reading.PrayerBar = prayerLock.Mark;
+            }
+            bool buffMiss = buffStrip.Width > 8 && slow && !reading.BuffBarFound;
+            if ((lifeLock.Due(readAt) || prayerLock.Due(readAt)) && nextFullSearch > readAt.AddSeconds(3))
+                nextFullSearch = readAt;
+            else if (buffMiss)
             {
                 missedLocks++;
-                if (missedLocks == 3 && nextFullSearch>DateTime.UtcNow.AddSeconds(3))
-                    nextFullSearch=DateTime.UtcNow.AddSeconds(3);
+                if (missedLocks == 3 && nextFullSearch > readAt.AddSeconds(3))
+                    nextFullSearch = readAt.AddSeconds(3);
             }
             else missedLocks = 0;
             RememberBars(reading);
@@ -664,12 +673,63 @@ namespace KavrosAfkWarden
             return dx * dx + dy * dy < 80 * 80;
         }
 
+        private void AdoptBars(HudReading reading, int imageWidth, int imageHeight)
+        {
+            if (reading == null) return;
+            DateTime now = DateTime.UtcNow;
+            AdoptOne(lifeLock, reading, true, imageWidth, imageHeight, now);
+            AdoptOne(prayerLock, reading, false, imageWidth, imageHeight, now);
+        }
+
+        private static void AdoptOne(HudBars.Lock slot, HudReading reading, bool life, int imageWidth, int imageHeight, DateTime now)
+        {
+            int? current = life ? reading.Hp : reading.Prayer;
+            int? max = life ? reading.HpMax : reading.PrayerMax;
+            IntRect bar = life ? reading.LifeBar : reading.PrayerBar;
+            IntRect text = life ? reading.LifeText : reading.PrayerText;
+            bool valid = HudBars.Valid(current, max);
+            bool real = HudBars.RealBar(bar, imageWidth, imageHeight);
+            bool same = slot.Held && SamePlace(bar, slot.Mark);
+            if (valid && real && slot.Open(now))
+            {
+                IntRect box = text.Width > 8 ? text : bar;
+                slot.Hold(box, bar);
+            }
+            if (!valid || (!real && !same))
+            {
+                if (life) { reading.Hp = null; reading.HpMax = null; }
+                else { reading.Prayer = null; reading.PrayerMax = null; }
+            }
+            if (slot.Held)
+            {
+                if (life) reading.LifeBar = slot.Mark;
+                else reading.PrayerBar = slot.Mark;
+            }
+            else if (!real)
+            {
+                if (life) reading.LifeBar = new IntRect();
+                else reading.PrayerBar = new IntRect();
+            }
+        }
+
+        private static bool SamePlace(IntRect a, IntRect b)
+        {
+            if (a.Width <= 0 || b.Width <= 0) return false;
+            int dx = (a.X + a.Width / 2) - (b.X + b.Width / 2);
+            int dy = (a.Y + a.Height / 2) - (b.Y + b.Height / 2);
+            if (dx < 0) dx = -dx;
+            if (dy < 0) dy = -dy;
+            return dx < 48 && dy < 24;
+        }
+
         private void RememberBars(HudReading reading)
         {
             if (reading == null) return;
-            if (reading.LifeBar.Width >= 8 && reading.LifeBar.Y > 0) heldLife = reading.LifeBar;
+            if (lifeLock.Held) reading.LifeBar = lifeLock.Mark;
+            else if (reading.LifeBar.Width >= 8 && reading.LifeBar.Y > 0) heldLife = reading.LifeBar;
             else if (heldLife.Width >= 8) reading.LifeBar = heldLife;
-            if (reading.PrayerBar.Width >= 8 && reading.PrayerBar.Y > 0) heldPrayer = reading.PrayerBar;
+            if (prayerLock.Held) reading.PrayerBar = prayerLock.Mark;
+            else if (reading.PrayerBar.Width >= 8 && reading.PrayerBar.Y > 0) heldPrayer = reading.PrayerBar;
             else if (heldPrayer.Width >= 8) reading.PrayerBar = heldPrayer;
         }
 

@@ -1286,14 +1286,16 @@ namespace KavrosAfkWarden
                         reading.LifeBar = reds[i];
                         IntRect box = Clamp(image, reds[i].X - 8, reds[i].Y - textH, Math.Max(reds[i].Width + 24, 80), textH);
                         NumberRead number = ReadResource(image, box, true);
-                        if (number.Ok && number.HasMax) Apply(reading, true, number, "thin");
+                        if (number.Ok && number.HasMax && HudBars.Valid(number.Current, number.Max))
+                            Apply(reading, true, number, "thin");
                     }
                     if (reading.Prayer == null)
                     {
                         reading.PrayerBar = purples[j];
                         IntRect box = Clamp(image, purples[j].X - 8, purples[j].Y - textH, Math.Max(purples[j].Width + 24, 80), textH);
                         NumberRead number = ReadResource(image, box, false);
-                        if (number.Ok && number.HasMax) Apply(reading, false, number, "thin");
+                        if (number.Ok && number.HasMax && HudBars.Valid(number.Current, number.Max))
+                            Apply(reading, false, number, "thin");
                     }
                 }
             }
@@ -1331,7 +1333,9 @@ namespace KavrosAfkWarden
         {
             if (!number.Ok || number.Current < 0 || (number.Current == 0 && !number.HasMax)) return;
             if (number.HasMax && number.Max <= 0) number.HasMax = false;
+            // A maximum under 100 is an overhead bar or a broken read (2/1).
             // Above the cap is fine (boosts). Above 4000 is a misread.
+            if (number.HasMax && number.Max < 100) return;
             if (number.HasMax && !ReadGate.Plausible(number.Current, number.Max)) return;
             if (life)
             {
@@ -1895,6 +1899,104 @@ namespace KavrosAfkWarden
             if (w < 0) w = 0;
             if (h < 0) h = 0;
             return new IntRect(x, y, w, h);
+        }
+    }
+
+    // A hitpoint or prayer bar stays where a valid number was read. A later
+    // candidate is taken only after that spot has failed for a while, and only
+    // when the new bar is a real HUD bar with a readable total.
+    public static class HudBars
+    {
+        public const int LostSeconds = 10;
+
+        public sealed class Lock
+        {
+            public IntRect Box;
+            public IntRect Mark;
+            public bool Held;
+            public DateTime MissSince;
+
+            public void Clear()
+            {
+                Box = new IntRect();
+                Mark = new IntRect();
+                Held = false;
+                MissSince = DateTime.MinValue;
+            }
+
+            public bool Due(DateTime now)
+            {
+                return Held && MissSince != DateTime.MinValue && (now - MissSince).TotalSeconds >= LostSeconds;
+            }
+
+            public bool Open(DateTime now)
+            {
+                return !Held || Due(now);
+            }
+
+            public void Note(bool read, DateTime now)
+            {
+                if (!Held) return;
+                if (read) MissSince = DateTime.MinValue;
+                else if (MissSince == DateTime.MinValue) MissSince = now;
+            }
+
+            public void Hold(IntRect text, IntRect bar)
+            {
+                Box = text;
+                Mark = bar;
+                Held = text.Width > 0 && text.Height > 0;
+                MissSince = DateTime.MinValue;
+            }
+        }
+
+        public static bool Valid(int? current, int? max)
+        {
+            if (current == null || max == null) return false;
+            if (max.Value < 100) return false;
+            return ReadGate.Plausible(current.Value, max.Value);
+        }
+
+        public static bool Valid(int current, int max)
+        {
+            return Valid((int?)current, (int?)max);
+        }
+
+        // Full HUD bar width at this picture size. 1440p at 100% is about 80px.
+        // 150% and 200% grow the client, and the bar grows with it.
+        public static int FullWidth(int imageWidth)
+        {
+            int fromPicture = imageWidth / 32;
+            if (fromPicture < 80) fromPicture = 80;
+            return fromPicture;
+        }
+
+        public static bool RealBar(IntRect bar, int imageWidth, int imageHeight)
+        {
+            if (bar.Width <= 0 || bar.Height <= 0) return false;
+            if (imageWidth < 1) return false;
+            int full = FullWidth(imageWidth);
+            if (bar.Width * 2 < full) return false;
+            int maxH = imageHeight > 0 ? Math.Max(16, imageHeight / 60) : 24;
+            if (bar.Height > maxH) return false;
+            return true;
+        }
+
+        // Overhead bars in the 3D view are much shorter than the HUD bar.
+        public static bool Overhead(IntRect bar, int imageWidth, int imageHeight)
+        {
+            if (bar.Width <= 0 || bar.Height <= 0) return true;
+            return !RealBar(bar, imageWidth, imageHeight);
+        }
+
+        public static string Shown(int? current, int? max, bool stale, bool orb)
+        {
+            if (stale) return "\u2014";
+            if (current == null) return "";
+            if (!Valid(current, max)) return "\u2014";
+            if (orb) return current.Value.ToString() + "% orb";
+            if (max != null) return current.Value.ToString() + " / " + max.Value.ToString();
+            return current.Value.ToString();
         }
     }
 }

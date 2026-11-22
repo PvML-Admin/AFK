@@ -12,13 +12,21 @@ namespace KavrosAfkWarden
         public bool Audible;
     }
 
-    // Potion alerts come from chat lines. The same line, including after it
-    // scrolls up, does not fire again. A later copy lower on the screen does.
+    // Potion alerts come from chat lines. A line fires only when it is new
+    // since the previous read and that pot and warning are outside a
+    // five-minute cooldown. Scrolling the same line up does not fire again.
+    // The drink line is not required.
     public sealed class ChatPotionBook
     {
-        private sealed class Seen
+        public const int CooldownSeconds = 300;
+
+        private sealed class Line
         {
-            public string Key;
+            public string Kind;
+            public string State;
+            public string Text;
+            public int Y;
+            public int Order;
         }
 
         private sealed class Pot
@@ -28,56 +36,76 @@ namespace KavrosAfkWarden
             public DateTime Since;
         }
 
-        private readonly List<Seen> seen = new List<Seen>();
+        private sealed class Cool
+        {
+            public string Kind;
+            public string State;
+            public DateTime Fired;
+        }
+
+        private readonly List<Line> previous = new List<Line>();
         private readonly List<Pot> pots = new List<Pot>();
+        private readonly List<Cool> cool = new List<Cool>();
         private bool primed = true;
         public string Detail = "";
         public string Log = "";
 
-        // Lines already on screen when the client is attached are not alerts.
+        // Lines already on screen when the client is attached are the baseline.
         public void Attach()
         {
             primed = false;
-            seen.Clear();
+            previous.Clear();
+            cool.Clear();
         }
 
         public List<ChatNotice> Observe(List<ChatHit> hits)
         {
+            return Observe(hits, DateTime.UtcNow);
+        }
+
+        public List<ChatNotice> Observe(List<ChatHit> hits, DateTime now)
+        {
             List<ChatNotice> notices = new List<ChatNotice>();
             System.Text.StringBuilder log = new System.Text.StringBuilder();
             if (hits == null) hits = new List<ChatHit>();
+            List<Line> current = Lines(hits);
             if (!primed)
             {
-                // Only the lines in this first read are old. An empty read still counts,
-                // so a pot line that shows up afterwards is not treated as preexisting.
+                // Only this first read is old. An empty read still counts, so a
+                // pot line that shows up afterwards is not treated as preexisting.
                 for (int i = 0; i < hits.Count; i++)
-                {
-                    Remember(hits[i]);
                     Append(log, hits[i], "skip-preexisting");
-                }
+                previous.Clear();
+                for (int i = 0; i < current.Count; i++) previous.Add(current[i]);
                 primed = true;
                 Log = log.ToString();
                 Detail = Roster();
                 return notices;
             }
-            for (int i = 0; i < hits.Count; i++)
+            bool[] used = new bool[previous.Count];
+            for (int i = 0; i < current.Count; i++)
             {
-                ChatHit hit = hits[i];
-                if (hit == null || hit.Phrase == null || hit.Kind == null) continue;
+                ChatHit hit = HitAt(hits, current[i]);
+                if (hit == null) continue;
                 if (Drink(hit.Phrase))
                 {
-                    Set(hit.Kind, "active");
+                    Set(hit.Kind, "active", now);
                     ForgetKind(hit.Kind);
-                    Remember(hit);
                     Append(log, hit, "rearm");
                     continue;
                 }
-                if (Already(hit))
+                if (SameAsPrevious(current[i], used))
                 {
                     Append(log, hit, "skip-seen");
                     continue;
                 }
-                Set(hit.Kind, hit.State);
+                if (Cooling(hit.Kind, hit.State, now))
+                {
+                    Append(log, hit, "skip-cooldown");
+                    continue;
+                }
+                Set(hit.Kind, hit.State, now);
+                Stamp(hit.Kind, hit.State, now);
                 ChatNotice notice = new ChatNotice();
                 notice.Kind = "potion";
                 notice.Title = Title(hit.Kind, hit.State);
@@ -86,6 +114,8 @@ namespace KavrosAfkWarden
                 notices.Add(notice);
                 Append(log, hit, "alert");
             }
+            previous.Clear();
+            for (int i = 0; i < current.Count; i++) previous.Add(current[i]);
             Log = log.ToString();
             Detail = Roster();
             return notices;
@@ -119,37 +149,123 @@ namespace KavrosAfkWarden
                 .Append(" score=").Append(hit.Score.ToString("0.00")).Append(" \"").Append(hit.Phrase).Append("\"");
         }
 
-        private static string KeyOf(ChatHit hit)
+        private static List<Line> Lines(List<ChatHit> hits)
         {
-            if (hit == null) return "";
-            return (hit.Kind ?? "") + "|" + (hit.State ?? "") + "|" + (hit.Phrase ?? "");
+            List<Line> lines = new List<Line>();
+            for (int i = 0; i < hits.Count; i++)
+            {
+                ChatHit hit = hits[i];
+                if (hit == null || hit.Kind == null || hit.Kind.Length == 0) continue;
+                if (hit.Phrase == null) continue;
+                Line line = new Line();
+                line.Kind = hit.Kind;
+                line.State = hit.State ?? "";
+                line.Text = hit.Phrase;
+                line.Y = hit.Y;
+                line.Order = i;
+                lines.Add(line);
+            }
+            lines.Sort(delegate(Line a, Line b)
+            {
+                int byY = a.Y.CompareTo(b.Y);
+                if (byY != 0) return byY;
+                return a.Order.CompareTo(b.Order);
+            });
+            return lines;
         }
 
-        private void Remember(ChatHit hit)
+        private static ChatHit HitAt(List<ChatHit> hits, Line line)
         {
-            string key = KeyOf(hit);
-            if (key.Length == 0) return;
-            for (int i = 0; i < seen.Count; i++)
-                if (seen[i].Key == key) return;
-            Seen add = new Seen();
-            add.Key = key;
-            seen.Add(add);
+            if (line == null || line.Order < 0 || line.Order >= hits.Count) return null;
+            return hits[line.Order];
         }
 
-        private bool Already(ChatHit hit)
+        // The same warning, after it scrolls up or an OCR pass rewrites a few
+        // letters, still matches the line from the previous read. A new copy
+        // below the one already on screen does not.
+        private bool SameAsPrevious(Line line, bool[] used)
         {
-            string key = KeyOf(hit);
-            for (int i = 0; i < seen.Count; i++)
-                if (seen[i].Key == key) return true;
-            Remember(hit);
+            for (int i = 0; i < previous.Count; i++)
+            {
+                if (used[i]) continue;
+                if (previous[i].Kind != line.Kind || previous[i].State != line.State) continue;
+                if (!SameText(previous[i].Text, line.Text)) continue;
+                used[i] = true;
+                return true;
+            }
             return false;
+        }
+
+        private static bool SameText(string a, string b)
+        {
+            string fa = ChatPhrase.Fold(a ?? "");
+            string fb = ChatPhrase.Fold(b ?? "");
+            if (fa == fb) return true;
+            if (fa.Length == 0 || fb.Length == 0) return false;
+            if (fa.IndexOf(fb) >= 0 || fb.IndexOf(fa) >= 0) return true;
+            int limit = Math.Max(fa.Length, fb.Length) / 3;
+            if (limit < 4) limit = 4;
+            return Edit(fa, fb) <= limit;
+        }
+
+        private static int Edit(string a, string b)
+        {
+            int n = a.Length;
+            int m = b.Length;
+            if (n > 80) n = 80;
+            if (m > 80) m = 80;
+            int[] row = new int[m + 1];
+            for (int j = 0; j <= m; j++) row[j] = j;
+            for (int i = 1; i <= n; i++)
+            {
+                int previous = row[0];
+                row[0] = i;
+                for (int j = 1; j <= m; j++)
+                {
+                    int cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                    int next = previous + cost;
+                    int del = row[j] + 1;
+                    int ins = row[j - 1] + 1;
+                    if (del < next) next = del;
+                    if (ins < next) next = ins;
+                    previous = row[j];
+                    row[j] = next;
+                }
+            }
+            return row[m];
+        }
+
+        private bool Cooling(string kind, string state, DateTime now)
+        {
+            for (int i = 0; i < cool.Count; i++)
+            {
+                if (cool[i].Kind != kind || cool[i].State != state) continue;
+                return (now - cool[i].Fired).TotalSeconds < CooldownSeconds;
+            }
+            return false;
+        }
+
+        private void Stamp(string kind, string state, DateTime now)
+        {
+            for (int i = 0; i < cool.Count; i++)
+            {
+                if (cool[i].Kind == kind && cool[i].State == state)
+                {
+                    cool[i].Fired = now;
+                    return;
+                }
+            }
+            Cool add = new Cool();
+            add.Kind = kind;
+            add.State = state;
+            add.Fired = now;
+            cool.Add(add);
         }
 
         private void ForgetKind(string kind)
         {
-            string prefix = (kind ?? "") + "|";
-            for (int i = seen.Count - 1; i >= 0; i--)
-                if (seen[i].Key != null && seen[i].Key.StartsWith(prefix)) seen.RemoveAt(i);
+            for (int i = cool.Count - 1; i >= 0; i--)
+                if (cool[i].Kind == kind) cool.RemoveAt(i);
         }
 
         // A drink line re-arms that potion so the next warning can fire.
@@ -170,7 +286,7 @@ namespace KavrosAfkWarden
             return false;
         }
 
-        private void Set(string kind, string state)
+        private void Set(string kind, string state, DateTime now)
         {
             for (int i = 0; i < pots.Count; i++)
             {
@@ -178,14 +294,14 @@ namespace KavrosAfkWarden
                 {
                     bool changed = state != pots[i].State;
                     pots[i].State = state;
-                    if (state == "active" || changed) pots[i].Since = DateTime.UtcNow;
+                    if (state == "active" || changed) pots[i].Since = now;
                     return;
                 }
             }
             Pot pot = new Pot();
             pot.Kind = kind;
             pot.State = state;
-            if (state == "active" || state == "expired" || state == "low") pot.Since = DateTime.UtcNow;
+            if (state == "active" || state == "expired" || state == "low") pot.Since = now;
             pots.Add(pot);
         }
 

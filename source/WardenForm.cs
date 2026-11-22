@@ -1683,27 +1683,16 @@ namespace KavrosAfkWarden
 
         private string HpText(bool pixels)
         {
-            if (shownHp != null) return hpGate.Stale ? Stale(shownHp) : Format(shownHp, shownHpMax, lastHud.HpFromOrb);
+            string shown = HudBars.Shown(shownHp, shownHpMax, hpGate.Stale, lastHud != null && lastHud.HpFromOrb);
+            if (shown.Length > 0) return shown;
             return pixels ? "Unread" : "No view";
         }
 
         private string PrayerText(bool pixels)
         {
-            if (shownPrayer != null) return prayerGate.Stale ? Stale(shownPrayer) : Format(shownPrayer, shownPrayerMax, lastHud.PrayerFromOrb);
+            string shown = HudBars.Shown(shownPrayer, shownPrayerMax, prayerGate.Stale, lastHud != null && lastHud.PrayerFromOrb);
+            if (shown.Length > 0) return shown;
             return pixels ? "Unread" : "No view";
-        }
-
-        private static string Stale(int? value)
-        {
-            return value == null ? "?" : value.Value.ToString() + " ?";
-        }
-
-        private static string Format(int? current, int? max, bool orb)
-        {
-            if (current == null) return "Unread";
-            if (orb) return current.Value.ToString() + "% orb";
-            if (max != null) return current.Value.ToString() + " / " + max.Value.ToString();
-            return current.Value.ToString();
         }
 
         private void Pin(int which)
