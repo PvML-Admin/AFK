@@ -364,7 +364,7 @@ namespace KavrosAfkWarden
                 buttonY = hintY + hintH + 16;
                 panelH = buttonY + 28 + 16;
                 int resetW = Math.Max(64, TextRenderer.MeasureText("Reset", rowFont).Width + 18);
-                string sample = "9,844,959 · Off-hand khopesh of the Kharidian +862";
+                string sample = "1,470 this session · 6 sacrifices";
                 int sampleW = TextRenderer.MeasureText(sample, rowFont).Width;
                 int pillW = TextRenderer.MeasureText("Sacrifice", rowFont).Width + 48;
                 panelW = Math.Max(panelW, pillW + sampleW + resetW + 36);

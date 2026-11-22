@@ -63,15 +63,7 @@ namespace KavrosAfkWarden
         public string Value()
         {
             if (!Seen) return "\u2014";
-            string line = Commas(SessionGained) + " this session \u00b7 " + SessionCount.ToString();
-            if (!haveTotal) return line;
-            string second = Commas(Total);
-            if (LastItem != null && LastItem.Length > 0)
-            {
-                second = second + " \u00b7 " + LastItem;
-                if (LastGainKnown) second = second + " +" + Commas(LastGain);
-            }
-            return line + "\n" + second;
+            return Commas(SessionGained) + " this session \u00b7 " + SessionCount.ToString() + " sacrifices";
         }
 
         public void Observe(string text)
@@ -111,19 +103,7 @@ namespace KavrosAfkWarden
                     Append(log, hit, "seen", false, 0);
                     continue;
                 }
-                if (hit.TotalKnown && Known(hit.Total))
-                {
-                    Append(log, hit, "seen", false, 0);
-                    Show(hit);
-                    continue;
-                }
-                long prev = Total;
-                bool gap = hit.TotalKnown && (!haveTotal || prev + hit.Gain != hit.Total);
-                if (hit.TotalKnown) Remember(hit.Total);
-                if (hit.GainKnown) SessionGained += hit.Gain;
-                SessionCount++;
-                Show(hit);
-                Append(log, hit, "new", gap, prev);
+                if (Accept(hit, log)) { }
             }
             Replace(current);
             Log = log.ToString();
@@ -233,19 +213,20 @@ namespace KavrosAfkWarden
             long total = 0;
             bool totalKnown = false;
             int totalAt = Find(tokens, FoldWord("total"), gainAt + 1);
-            if (totalAt > 0)
+            int have = Find(tokens, FoldWord("have"), gainAt);
+            int now = Find(tokens, FoldWord("now"), gainAt);
+            int anchor = -1;
+            if (have >= 0) anchor = have;
+            if (now >= 0 && (anchor < 0 || now > anchor)) anchor = now;
+            if (totalAt > 0 || anchor >= 0)
             {
-                int from = tokens[totalAt].Start;
-                int have = Find(tokens, FoldWord("have"), gainAt);
-                int now = Find(tokens, FoldWord("now"), gainAt);
-                int anchor = -1;
-                if (have >= 0 && have < totalAt) anchor = have;
-                if (now >= 0 && now < totalAt && (anchor < 0 || now > anchor)) anchor = now;
-                int begin = anchor >= 0 ? tokens[anchor].End : Math.Max(0, from - 24);
+                int begin = anchor >= 0 ? tokens[anchor].End : (totalAt > 0 ? Math.Max(0, tokens[totalAt].Start - 24) : line.Length);
+                int from = totalAt > 0 ? tokens[totalAt].Start : line.Length;
+                if (from < begin) from = line.Length;
                 if (from > begin)
                 {
                     long parsed;
-                    if (FixNum(line.Substring(begin, from - begin), out parsed))
+                    if (FixNum(line.Substring(begin, from - begin), out parsed) && parsed > TotalTolerance)
                     {
                         total = parsed;
                         totalKnown = true;
@@ -326,11 +307,85 @@ namespace KavrosAfkWarden
             if (!Known(total)) seenTotals.Add(total);
         }
 
+        // A last-digit OCR flip is still the same sacrifice. Real gains are larger.
+        private const long TotalTolerance = 9;
+
+        private static bool Close(long a, long b)
+        {
+            long gap = a - b;
+            if (gap < 0) gap = -gap;
+            return gap <= TotalTolerance;
+        }
+
         private bool Known(long total)
         {
             for (int i = 0; i < seenTotals.Count; i++)
-                if (seenTotals[i] == total) return true;
+                if (Close(seenTotals[i], total)) return true;
             return false;
+        }
+
+        private bool Accept(SacrificeHit hit, System.Text.StringBuilder log)
+        {
+            if (hit.TotalKnown && Known(hit.Total))
+            {
+                Note(hit);
+                Append(log, hit, "seen", false, Total);
+                return false;
+            }
+            if (!hit.GainKnown && !hit.TotalKnown)
+            {
+                Append(log, hit, "seen", false, Total);
+                return false;
+            }
+            if (!hit.GainKnown)
+            {
+                if (!haveTotal || Close(hit.Total, Total) || hit.Total + TotalTolerance < Total)
+                {
+                    Note(hit);
+                    Append(log, hit, "seen", false, Total);
+                    return false;
+                }
+                long rise = hit.Total - Total;
+                hit.Gain = rise;
+                hit.GainKnown = true;
+                Commit(hit, log, rise);
+                return true;
+            }
+            if (hit.TotalKnown && haveTotal)
+            {
+                long parsed = hit.Gain;
+                long rise = hit.Total - Total;
+                if (Close(hit.Total, Total))
+                {
+                    Note(hit);
+                    Append(log, hit, "seen", false, Total);
+                    return false;
+                }
+                if (rise > TotalTolerance && !Close(parsed, rise)) hit.Gain = rise;
+                Commit(hit, log, parsed);
+                return true;
+            }
+            Commit(hit, log, hit.Gain);
+            return true;
+        }
+
+        private void Commit(SacrificeHit hit, System.Text.StringBuilder log, long parsedGain)
+        {
+            long prev = haveTotal ? Total : 0;
+            bool gap = hit.TotalKnown && prev + parsedGain != hit.Total;
+            if (hit.TotalKnown) Remember(hit.Total);
+            SessionGained += hit.Gain;
+            SessionCount++;
+            Show(hit);
+            Append(log, hit, "new", gap, prev);
+        }
+
+        private void Note(SacrificeHit hit)
+        {
+            if (!hit.TotalKnown) return;
+            haveTotal = true;
+            Total = hit.Total;
+            Remember(hit.Total);
         }
 
         private bool Matched(SacrificeHit hit, bool[] used)
@@ -338,8 +393,13 @@ namespace KavrosAfkWarden
             for (int i = 0; i < previous.Count; i++)
             {
                 if (used[i]) continue;
-                if (hit.TotalKnown && previous[i].TotalKnown && hit.Total != previous[i].Total) continue;
-                if (!(hit.TotalKnown && previous[i].TotalKnown && hit.Total == previous[i].Total) && !Similar(previous[i].Fold, hit.Fold)) continue;
+                if (hit.TotalKnown && previous[i].TotalKnown)
+                {
+                    if (Close(hit.Total, previous[i].Total)) { used[i] = true; return true; }
+                    continue;
+                }
+                if (hit.TotalKnown && haveTotal && hit.Total > Total + TotalTolerance) continue;
+                if (!Similar(previous[i].Fold, hit.Fold)) continue;
                 used[i] = true;
                 return true;
             }

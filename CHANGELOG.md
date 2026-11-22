@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.34
+
+- A sacrifice is counted from a real rise in the running total. A last-digit OCR flip, or a line with no readable gain, does not count again. The row shows only the session points and how many sacrifices.
+
 ## 0.2.33
 
 - Sacrifice lines are ordered by where they sit on screen, and a garbled gain such as "I IS" still counts. A missing total does not drop the sacrifice.
