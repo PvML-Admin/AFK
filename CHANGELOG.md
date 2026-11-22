@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.36
+
+- A sacrifice line counts once, from its place in the chat. A total that does not match the last trusted total plus the gain is held until the same line is read again, so one misread total cannot add an extra sacrifice. The log lists every sacrifice the panel counted.
+
 ## 0.2.35
 
 - Sacrifice points come from the gain written in the chat line. A total is kept only when it agrees with that gain, so a misread digit cannot add millions. The row still shows the session points and how many sacrifices.

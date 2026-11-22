@@ -2176,21 +2176,22 @@ namespace KavrosAfkWarden
             SacrificeBook book = new SacrificeBook();
             System.Text.StringBuilder chat = new System.Text.StringBuilder();
             string[] steps = new string[] { m1, m2, m3, m4, news1 + "\n" + news2 + "\n" + m5, m6 };
-            long[] gained = new long[] { 11, 22, 33, 148, 608, 1470 };
-            // 66 is tentative. The jump to 9,847,166 does not confirm it. 9,843,177 + 115 confirms 9,843,292.
-            // Later totals that do not match that total plus the parsed gain stay untrusted.
-            long[] trusted = new long[] { 66, 66, 66, 9843292, 9843292, 9843292 };
+            // An unvalidated total waits for the next read. Each step therefore
+            // confirms the previous line, and the newest line stays pending.
+            long[] gained = new long[] { 0, 11, 22, 33, 148, 608 };
+            int[] counted = new int[] { 0, 1, 2, 3, 4, 5 };
+            long[] trusted = new long[] { 0, 66, 66, 66, 66, 66 };
             for (int i = 0; i < steps.Length; i++)
             {
                 if (chat.Length > 0) chat.Append('\n');
                 chat.Append(steps[i]);
                 book.Observe(chat.ToString());
-                Check(book.SessionGained == gained[i] && book.SessionCount == i + 1 && book.Total == trusted[i], "sacrifice step " + (i + 1).ToString() + " gained " + book.SessionGained.ToString() + " count " + book.SessionCount.ToString() + " total " + book.Total.ToString() + " log " + book.Log);
+                Check(book.SessionGained == gained[i] && book.SessionCount == counted[i] && book.Total == trusted[i] && SacCounts(book.Log) == book.SessionCount, "sacrifice step " + (i + 1).ToString() + " gained " + book.SessionGained.ToString() + " count " + book.SessionCount.ToString() + " total " + book.Total.ToString() + " log " + book.Log);
             }
-            Check(book.SessionGained == 11 + 11 + 11 + 115 + 460 + 862 && book.SessionCount == 6, "six sacrifices add the parsed gains, got " + book.SessionGained.ToString());
-            Check(book.Total == 9843292, "the last total that agrees with its gain is kept, got " + book.Total.ToString());
-            Check(book.LastItem == "Scripture of Ful" && book.Value() == "1,470 this session \u00b7 6 sacrifices", "the row is the session counter and the newest item is kept, got " + book.Value() + " " + book.LastItem);
             string full = chat.ToString();
+            book.Observe(full);
+            Check(book.SessionGained == 11 + 11 + 11 + 115 + 460 + 862 && book.SessionCount == 6 && book.Total == 66 && SacCounts(book.Log) == 6, "six sacrifices add the parsed gains once the last line is read again, got " + book.SessionGained.ToString() + " " + book.Log);
+            Check(book.LastItem == "Scripture of Ful" && book.Value() == "1,470 this session \u00b7 6 sacrifices", "the row is the session counter and the newest item is kept, got " + book.Value() + " " + book.LastItem);
             book.Observe(full);
             Check(book.SessionGained == 1470 && book.SessionCount == 6, "re-reading the same chat adds nothing");
             string scrolled = full.Replace("You sacrifice Scripture", "Y0u sacrifice Scripture");
@@ -2199,13 +2200,18 @@ namespace KavrosAfkWarden
             SacrificeBook lower = new SacrificeBook();
             lower.Observe(m2);
             lower.Observe(m2 + "\n" + m3);
+            lower.Observe(m2 + "\n" + m3);
             Check(lower.Total == 9847166 && lower.SessionGained == 22 && lower.SessionCount == 2, "a lower misread total is ignored and the gain still counts, got " + lower.Total.ToString() + " " + lower.SessionGained.ToString());
             SacrificeBook gaps = new SacrificeBook();
             gaps.Observe(m1);
             gaps.Observe(m1 + "\n" + m2);
-            Check(gaps.Log.IndexOf("sac gap") >= 0 && gaps.Log.IndexOf("9847166") >= 0 && gaps.Log.IndexOf("prev=66") >= 0, "a jump in the running total is logged as a gap, got " + gaps.Log);
-            gaps.Observe(m1 + "\n" + m2 + "\n" + m3 + "\n" + m4);
-            Check(gaps.Log.IndexOf("sac ok") >= 0, "a total that matches the previous plus the gain is logged ok, got " + gaps.Log);
+            Check(gaps.Log.IndexOf("sac pending reason=unvalidated") >= 0 && gaps.Log.IndexOf("9847166") >= 0, "a total that does not match the gain is held, got " + gaps.Log);
+            SacrificeBook chain = new SacrificeBook();
+            string chainA = "] You sacrifice Blast diffusion boots and gain 115 points. You now have 1,000 total sacrifice points.";
+            string chainB = "] You sacrifice Blast diffusion boots and gain 115 points. You now have 1,115 total sacrifice points.";
+            chain.Observe(chainA);
+            chain.Observe(chainA + "\n" + chainB);
+            Check(chain.SessionCount == 2 && chain.SessionGained == 230 && chain.Log.IndexOf("reason=total") >= 0 && SacCounts(chain.Log) == 2, "a total that matches the previous plus the gain counts on that read, got " + chain.Log);
             SacrificeBook news = new SacrificeBook();
             news.Observe(news1 + "\n" + news2);
             Check(!news.Seen && news.SessionCount == 0 && news.SessionGained == 0, "news lines do not start the sacrifice counter");
@@ -2215,9 +2221,10 @@ namespace KavrosAfkWarden
             baseline.Observe(m1);
             Check(baseline.Seen && baseline.SessionGained == 0 && baseline.SessionCount == 0 && baseline.Total == 66, "a line already on screen at startup sets the total and does not count, got " + baseline.SessionGained.ToString() + " " + baseline.Total.ToString());
             baseline.Observe(m1 + "\n" + m2);
+            baseline.Observe(m1 + "\n" + m2);
             Check(baseline.SessionGained == 11 && baseline.SessionCount == 1 && baseline.Total == 66, "the next sacrifice after the baseline adds its gain, got " + baseline.SessionGained.ToString() + " total " + baseline.Total.ToString());
             book.ResetSession();
-            Check(book.SessionGained == 0 && book.SessionCount == 0 && book.Total == 9843292, "reset clears the session counter and keeps the last trusted total");
+            Check(book.SessionGained == 0 && book.SessionCount == 0 && book.Total == 66 && SacCounts(book.Log) == 0, "reset clears the session counter and keeps the last trusted total");
             book.Observe(full);
             Check(book.SessionGained == 0 && book.SessionCount == 0, "messages already counted stay counted after a reset");
             Check(book.Value() == "0 this session \u00b7 0 sacrifices", "the row shows only the session counter, got " + book.Value());
@@ -2264,7 +2271,8 @@ namespace KavrosAfkWarden
             Check(count >= 10, "the log line keeps the OCR raws in log order, got " + count.ToString());
             SacrificeBook book = new SacrificeBook();
             book.Observe(text.ToString());
-            Check(book.SessionCount == 4 && book.SessionGained == 460, "four garbled boots lines count as 4 x 115, got " + book.SessionCount.ToString() + " x " + book.SessionGained.ToString() + " log " + book.Log);
+            book.Observe(text.ToString());
+            Check(book.SessionCount == 4 && book.SessionGained == 460 && SacCounts(book.Log) == 4, "four garbled boots lines count as 4 x 115, got " + book.SessionCount.ToString() + " x " + book.SessionGained.ToString() + " log " + book.Log);
             book.Observe(text.ToString());
             Check(book.SessionCount == 4 && book.SessionGained == 460, "re-reading the garbled chat adds nothing");
             long fixedGain;
@@ -2273,7 +2281,8 @@ namespace KavrosAfkWarden
             Check(SacrificeBook.FixNum("g,845, 189", out fixedGain) && fixedGain == 9845189, "a g in a number slot is a 9");
             SacrificeBook unknown = new SacrificeBook();
             unknown.Observe("] You sacrifice Mystery charm and gain later");
-            Check(unknown.SessionCount == 1 && unknown.SessionGained == 0 && unknown.Log.IndexOf("gain unknown") >= 0, "a new line with no readable gain counts once and adds no points, got " + unknown.Log);
+            unknown.Observe("] You sacrifice Mystery charm and gain later");
+            Check(unknown.SessionCount == 1 && unknown.SessionGained == 0 && unknown.Log.IndexOf("gain unknown") >= 0 && SacCounts(unknown.Log) == 1, "a new line with no readable gain counts once and adds no points, got " + unknown.Log);
             List<OcrLine> visual = new List<OcrLine>();
             OcrLine head = new OcrLine();
             head.Text = "] You sacrifice Blast diffusion bmts and gain";
@@ -2355,13 +2364,13 @@ namespace KavrosAfkWarden
             string dropped = "] You sacrifice Blast diffusion boots and gain 115 points. You now have 984,702 total sacrifice points.";
             mis.Observe(good);
             mis.Observe(good + "\n" + nine);
-            Check(mis.SessionCount == 2 && mis.SessionGained == 230 && mis.Total == 9846799, "a 9 read as 3 does not move the total or add millions, got " + mis.SessionGained.ToString() + " total " + mis.Total.ToString());
+            Check(mis.SessionCount == 1 && mis.SessionGained == 115 && mis.Total == 9846799, "a 9 read as 3 is not counted and does not move the total, got " + mis.SessionGained.ToString() + " total " + mis.Total.ToString() + " " + mis.Log);
             mis.Observe(good + "\n" + fixedTotal);
-            Check(mis.SessionCount == 2 && mis.SessionGained == 230 && mis.Total == 9846914, "the corrected total is kept and not counted again, got " + mis.Total.ToString() + " " + mis.SessionGained.ToString());
-            int before = mis.SessionCount;
-            long beforePts = mis.SessionGained;
-            mis.Observe(good + "\n" + fixedTotal + "\n" + dropped);
-            Check(mis.SessionCount == before + 1 && mis.SessionGained == beforePts + 115 && mis.Total == 9846914, "a dropped digit is ignored and the gain still counts once, got " + mis.SessionCount.ToString() + " " + mis.SessionGained.ToString() + " total " + mis.Total.ToString());
+            Check(mis.SessionCount == 2 && mis.SessionGained == 230 && mis.Total == 9846914, "the corrected total is kept and counted once, got " + mis.Total.ToString() + " " + mis.SessionGained.ToString() + " " + mis.Log);
+            string three = good + "\n" + fixedTotal + "\n" + dropped;
+            mis.Observe(three);
+            mis.Observe(three);
+            Check(mis.SessionCount == 3 && mis.SessionGained == 345 && mis.Total == 9846914 && SacCounts(mis.Log) == 3, "a dropped digit is ignored and the gain still counts once, got " + mis.SessionCount.ToString() + " " + mis.SessionGained.ToString() + " total " + mis.Total.ToString());
             string six = Path.Combine(root, "verification", "fixtures", "live034", "debug-log-v0234-sac6m.txt");
             if (!File.Exists(six))
             {
@@ -2397,6 +2406,55 @@ namespace KavrosAfkWarden
             Check(boots.SessionCount == 8 && boots.SessionGained == 920, "the 19:36 log is 8 sacrifices and 920 points, got " + boots.SessionCount.ToString() + " " + boots.SessionGained.ToString() + " " + boots.Log);
             boots.Observe(sixLast);
             Check(boots.SessionCount == 8 && boots.SessionGained == 920, "re-reading the 19:36 chat adds nothing");
+            Check(SacCounts(live.Log) == live.SessionCount && SacCounts(boots.Log) == boots.SessionCount, "every counted sacrifice is in the log");
+            string seven = Path.Combine(root, "verification", "fixtures", "live035", "debug-log-v0235-sac7.txt");
+            if (!File.Exists(seven))
+            {
+                Check(false, "missing debug-log-v0235-sac7.txt");
+                return;
+            }
+            string[] sevenRows = File.ReadAllLines(seven);
+            SacrificeBook over = new SacrificeBook();
+            string sevenLast = "";
+            for (int n = 0; n < sevenRows.Length; n++)
+            {
+                int at = sevenRows[n].IndexOf(" chat=");
+                int potsAt = sevenRows[n].IndexOf(" pots=");
+                if (at < 0 || potsAt < at) continue;
+                string raws = sevenRows[n].Substring(at + 6, potsAt - (at + 6));
+                System.Text.StringBuilder body = new System.Text.StringBuilder();
+                int from = 0;
+                while (from < raws.Length)
+                {
+                    int raw = raws.IndexOf("raw=\"", from);
+                    if (raw < 0) break;
+                    int start = raw + 5;
+                    int end = raws.IndexOf('"', start);
+                    if (end < 0) break;
+                    if (body.Length > 0) body.Append('\n');
+                    body.Append(raws.Substring(start, end - start));
+                    from = end + 1;
+                }
+                sevenLast = body.ToString();
+                over.Observe(sevenLast);
+            }
+            Check(over.SessionCount == 6 && over.SessionGained == 690 && SacCounts(over.Log) == 6, "the 20:10 log is 6 sacrifices and 690 points, got " + over.SessionCount.ToString() + " " + over.SessionGained.ToString() + " " + over.Log);
+            over.Observe(sevenLast);
+            Check(over.SessionCount == 6 && over.SessionGained == 690, "re-reading the 20:10 chat adds nothing");
+        }
+
+        private static int SacCounts(string log)
+        {
+            int n = 0;
+            int at = 0;
+            string mark = "sac count #";
+            if (log == null) return 0;
+            while ((at = log.IndexOf(mark, at)) >= 0)
+            {
+                n++;
+                at += mark.Length;
+            }
+            return n;
         }
 
         private static void PotLines()
@@ -2800,7 +2858,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.35" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.36" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -2811,10 +2869,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.35\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.36\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.35.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.36.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }
