@@ -125,6 +125,7 @@ namespace KavrosAfkWarden
         internal string Value = "";
         internal PillTone Tone = PillTone.Example;
         internal bool ColorParts;
+        internal bool Dim;
 
         internal StatusRow()
         {
@@ -135,12 +136,13 @@ namespace KavrosAfkWarden
 
         private string paintedPill, paintedValue;
         private PillTone paintedTone;
+        private bool paintedDim;
 
         // Repaint only when the text or tone changed. The panel sits over the
         // game, so an unchanged row is not redrawn twice a second.
         internal void Commit()
         {
-            if (Pill == paintedPill && Value == paintedValue && Tone == paintedTone) return;
+            if (Pill == paintedPill && Value == paintedValue && Tone == paintedTone && Dim == paintedDim) return;
             Invalidate();
         }
 
@@ -149,11 +151,22 @@ namespace KavrosAfkWarden
             paintedPill = Pill;
             paintedValue = Value;
             paintedTone = Tone;
+            paintedDim = Dim;
             using (Brush brush = new SolidBrush(KavrosTheme.Bg)) g.FillRectangle(brush, ClientRectangle);
             int width = KavrosTheme.DrawPill(g, 0, Height / 2, Pill, Tone, KavrosTheme.Bg);
+            Color ink = Dim ? KavrosTheme.TextSoft : KavrosTheme.Text;
+            string[] lines = (Value ?? "").Split('\n');
+            if (lines.Length > 1)
+            {
+                int lineH = Math.Max(1, Height / lines.Length);
+                Font font = KavrosTheme.Ui(9F, false);
+                for (int i = 0; i < lines.Length; i++)
+                    TextRenderer.DrawText(g, lines[i], font, new Rectangle(width + 10, i * lineH, Math.Max(1, Width - width - 12), lineH), ink, KavrosTheme.Bg, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+                return;
+            }
             if (!ColorParts)
             {
-                TextRenderer.DrawText(g, Value, KavrosTheme.Ui(9F, false), new Rectangle(width + 10, 0, Math.Max(1, Width - width - 12), Height), KavrosTheme.Text, KavrosTheme.Bg, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+                TextRenderer.DrawText(g, Value, KavrosTheme.Ui(9F, false), new Rectangle(width + 10, 0, Math.Max(1, Width - width - 12), Height), ink, KavrosTheme.Bg, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
                 return;
             }
             string[] parts = (Value ?? "").Split(new string[] { " · " }, StringSplitOptions.None);
@@ -186,7 +199,10 @@ namespace KavrosAfkWarden
         internal readonly StatusRow Hp = new StatusRow();
         internal readonly StatusRow Prayer = new StatusRow();
         internal readonly StatusRow Potion = new StatusRow();
+        internal readonly StatusRow Sacrifice = new StatusRow();
         internal readonly StatusRow Afk = new StatusRow();
+        private readonly OpaqueButton sacrificeReset = new OpaqueButton();
+        private bool sacrificeResetWanted;
         private readonly OpaqueButton pause = new OpaqueButton();
         private readonly OpaqueButton exit = new OpaqueButton();
         private readonly OpaqueButton settings = new OpaqueButton();
@@ -197,6 +213,7 @@ namespace KavrosAfkWarden
         internal event Action ExitRequested;
         internal event Action PauseRequested;
         internal event Action Moved;
+        internal event Action SacrificeReset;
 
         internal WatchPanel()
         {
@@ -244,7 +261,15 @@ namespace KavrosAfkWarden
             Place(Prayer, 130);
             Place(Potion, 162);
             Potion.ColorParts = true;
-            Place(Afk, 194);
+            Place(Sacrifice, 194);
+            Sacrifice.Dim = true;
+            sacrificeReset.Text = "Reset";
+            sacrificeReset.Tone = ButtonTone.Ghost;
+            sacrificeReset.Surface = KavrosTheme.Bg;
+            sacrificeReset.Visible = false;
+            sacrificeReset.Click += delegate { if (SacrificeReset != null) SacrificeReset(); };
+            Controls.Add(sacrificeReset);
+            Place(Afk, 242);
             metricsHint.Text = PanelHint.Line1 + "\n" + PanelHint.Line2;
             metricsHint.ForeColor = KavrosTheme.Text;
             metricsHint.BackColor = KavrosTheme.Bg;
@@ -269,6 +294,11 @@ namespace KavrosAfkWarden
         internal void SetPaused(bool paused) { pause.Text = paused ? "Resume" : "Pause"; }
         internal void SetNote(string text) { note.Text = text; }
         private bool hintWanted = true;
+        internal void ShowSacrificeReset(bool show)
+        {
+            sacrificeResetWanted = show;
+            sacrificeReset.Visible = show && !collapsed;
+        }
         internal void SetMetricsHint(bool show)
         {
             hintWanted = show;
@@ -297,7 +327,8 @@ namespace KavrosAfkWarden
             collapse.Text = collapsed ? "+" : "-";
             note.Visible = !collapsed;
             metricsHint.Visible = !collapsed && hintWanted;
-            Idle.Visible = Hp.Visible = Prayer.Visible = Potion.Visible = Afk.Visible = !collapsed;
+            Idle.Visible = Hp.Visible = Prayer.Visible = Potion.Visible = Sacrifice.Visible = Afk.Visible = !collapsed;
+            sacrificeReset.Visible = !collapsed && sacrificeResetWanted;
             pause.Visible = exit.Visible = !collapsed;
             ClientSize = new Size(ClientSize.Width < 80 ? 400 : ClientSize.Width, collapsed ? 32 : openHeight);
         }
@@ -318,13 +349,34 @@ namespace KavrosAfkWarden
                 int lineW = Math.Max(first.Width, second.Width);
                 int panelW, hintY, hintH, buttonY, panelH;
                 PanelHint.Foot(lineH, lineW, out panelW, out hintY, out hintH, out buttonY, out panelH);
+                Font rowFont = KavrosTheme.Ui(9F, false);
+                int rowLine = Math.Max(16, TextRenderer.MeasureText("Ag", rowFont).Height);
+                int rowH = Math.Max(28, rowLine + 8);
+                int sacH = rowLine * 2 + 10;
+                int idleY = 66;
+                int hpY = idleY + rowH + 4;
+                int prayerY = hpY + rowH + 4;
+                int potionY = prayerY + rowH + 4;
+                int sacY = potionY + rowH + 4;
+                int afkY = sacY + sacH + 4;
+                int stackHint = afkY + rowH + 8;
+                if (stackHint > hintY) hintY = stackHint;
+                buttonY = hintY + hintH + 16;
+                panelH = buttonY + 28 + 16;
+                int resetW = Math.Max(64, TextRenderer.MeasureText("Reset", rowFont).Width + 18);
+                string sample = "9,844,959 · Off-hand khopesh of the Kharidian +862";
+                int sampleW = TextRenderer.MeasureText(sample, rowFont).Width;
+                int pillW = TextRenderer.MeasureText("Sacrifice", rowFont).Width + 48;
+                panelW = Math.Max(panelW, pillW + sampleW + resetW + 36);
                 int textW = panelW - 24;
                 note.SetBounds(12, 40, textW, 22);
-                Idle.SetBounds(12, 66, textW, 28);
-                Hp.SetBounds(12, 98, textW, 28);
-                Prayer.SetBounds(12, 130, textW, 28);
-                Potion.SetBounds(12, 162, textW, 28);
-                Afk.SetBounds(12, 194, textW, 28);
+                Idle.SetBounds(12, idleY, textW, rowH);
+                Hp.SetBounds(12, hpY, textW, rowH);
+                Prayer.SetBounds(12, prayerY, textW, rowH);
+                Potion.SetBounds(12, potionY, textW, rowH);
+                Sacrifice.SetBounds(12, sacY, Math.Max(40, textW - resetW - 8), sacH);
+                sacrificeReset.SetBounds(12 + textW - resetW, sacY + Math.Max(0, (sacH - rowH) / 2), resetW, rowH);
+                Afk.SetBounds(12, afkY, textW, rowH);
                 metricsHint.SetBounds(12, hintY, textW, hintH);
                 int buttonW = Math.Max(120, (textW - 8) / 2);
                 pause.SetBounds(12, buttonY, buttonW, 28);
@@ -467,6 +519,7 @@ namespace KavrosAfkWarden
         private ReadGate prayerGate = new ReadGate();
         private readonly BuffClock buffClock = new BuffClock();
         private readonly ChatPotionBook chatPots = new ChatPotionBook();
+        private readonly SacrificeBook sacrifice = new SacrificeBook();
         private WardenEngine engine = new WardenEngine();
         private readonly System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
         private readonly NotifyIcon tray;
@@ -507,6 +560,7 @@ namespace KavrosAfkWarden
             panel.SettingsRequested += delegate { ShowSettings(); };
             panel.ExitRequested += Exit;
             panel.PauseRequested += delegate { pause.Checked = !pause.Checked; };
+            panel.SacrificeReset += delegate { sacrifice.ResetSession(); };
             panel.Moved += delegate
             {
                 if (selected != IntPtr.Zero && NativeMethods.IsWindow(selected))
@@ -1093,6 +1147,7 @@ namespace KavrosAfkWarden
                     + " icons=" + (buffClock.Log ?? "")
                     + " chat=" + (ChatReader.Trace ?? "")
                     + " pots=" + (chatPots.Log ?? "")
+                    + " sac=" + (sacrifice.Log ?? "")
                     + " metrics=" + (reading.MetricsFound ? ("xp=" + reading.MetricsXp.ToString()) : ("lost " + (reading.MetricsNote ?? "not found")))
                     + " idleReset=" + (moving ? "yes" : "no")
                     + " " + panelDebug
@@ -1522,6 +1577,7 @@ namespace KavrosAfkWarden
             {
                 potsClient = selected;
                 chatPots.Attach();
+                sacrifice.Attach();
             }
             if (picking) TryPickClient();
             if (!windowDragging && (selected == IntPtr.Zero || !NativeMethods.IsWindow(selected)) && (DateTime.UtcNow - lastClientSearch).TotalSeconds > 2)
@@ -1592,6 +1648,7 @@ namespace KavrosAfkWarden
             sample.PotionSeconds = null;
             sample.PotionClear = false;
             List<ChatNotice> potionNotices = freshFrame ? chatPots.Observe(lastHud.ChatHits) : new List<ChatNotice>();
+            if (freshFrame) sacrifice.Observe(lastHud.ChatText);
             List<AlertEvent> events = engine.Tick(sample, settings);
             for (int n = 0; n < potionNotices.Count; n++)
             {
@@ -1678,6 +1735,12 @@ namespace KavrosAfkWarden
             panel.Hp.Commit();
             panel.Prayer.Commit();
             panel.Potion.Commit();
+            panel.Sacrifice.Pill = "Sacrifice";
+            panel.Sacrifice.Tone = PillTone.Example;
+            panel.Sacrifice.Dim = true;
+            panel.Sacrifice.Value = sacrifice.Value();
+            panel.ShowSacrificeReset(sacrifice.Seen);
+            panel.Sacrifice.Commit();
             panel.Afk.Commit();
         }
 

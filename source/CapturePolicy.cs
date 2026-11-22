@@ -285,7 +285,14 @@ namespace KavrosAfkWarden
             if (lineHeight < 16) lineHeight = 16;
             if (lineWidth < 280) lineWidth = 280;
             panelW = Math.Max(400, lineWidth + 32);
-            hintY = 230;
+            // Idle, hitpoints, prayer, potions, then the sacrifice counter and
+            // the AFK row. The tip starts under that stack so it does not cover
+            // the counter at 100%, 150% or 200%.
+            int rowH = Math.Max(28, lineHeight + 8);
+            int sacH = lineHeight * 2 + 10;
+            int y = 66 + (rowH + 4) * 4;
+            y += sacH + 4 + rowH + 8;
+            hintY = y;
             hintH = lineHeight * 2 + 12;
             buttonY = hintY + hintH + 16;
             panelH = buttonY + 28 + 16;

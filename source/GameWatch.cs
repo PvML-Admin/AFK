@@ -191,6 +191,7 @@ namespace KavrosAfkWarden
         private bool useSurface;
         private readonly MetricsLock xpLock = new MetricsLock();
         private List<ChatHit> ocrHits = new List<ChatHit>();
+        private string ocrText = "";
         private string ocrTrace = "";
         private string ocrNote = "";
         private int chatBusy;
@@ -461,6 +462,7 @@ namespace KavrosAfkWarden
             copy.Buffs = source.Buffs;
             copy.BuffRects = source.BuffRects;
             copy.ChatHits = source.ChatHits;
+            copy.ChatText = source.ChatText;
             copy.MetricsFound = source.MetricsFound;
             copy.MetricsXp = source.MetricsXp;
             copy.MetricsNote = source.MetricsNote;
@@ -878,6 +880,7 @@ namespace KavrosAfkWarden
             lock (gate)
             {
                 ocrHits = hits;
+                ocrText = text ?? "";
                 ocrTrace = trace.ToString();
                 ocrNote = "";
                 publishedChatNote = "";
@@ -891,6 +894,7 @@ namespace KavrosAfkWarden
             lock (gate)
             {
                 reading.ChatHits = ocrHits ?? new List<ChatHit>();
+                reading.ChatText = ocrText ?? "";
                 ChatReader.Trace = ocrTrace ?? "";
             }
         }

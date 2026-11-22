@@ -1578,6 +1578,7 @@ namespace KavrosAfkWarden
             PotLines();
             BarAnchor();
             ChatFresh();
+            SacrificeCases();
             string[] chatter = new string[] {
                 "-a ALL CHAT",
                 ". 14KlllS In core",
@@ -2136,6 +2137,82 @@ namespace KavrosAfkWarden
             Check(box.Width >= 80 && box.Y <= 430 && box.Bottom >= 550, "the chat box reaches the newest line at the bottom, got " + box.X.ToString() + "," + box.Y.ToString() + " " + box.Width.ToString() + "x" + box.Height.ToString());
         }
 
+        private static void SacrificeCases()
+        {
+            string m1 = "[17:31:37] You sacrifice Off-hand khopesh of the Kharidian and gain 11 points. You now have 66 total sacrifice points.";
+            string m2 = "[17:34:08] You sacrifice Off-hand khopesh of the Kharidian and gain 11 points. You now have 9,847,166 total sacrifice points.";
+            string m3 = "[17:36:57] You sacrifice Khopesh of the Kharidian and gain 11 points. You now have 9,843,177 total sacrifice points.";
+            string m4 = "[17:37:54] You sacrifice Blast diffusion boots and gain 115 points. You now have 9,843,292 total sacrifice points.";
+            string m5 = "[17:38:59] You sacrifice City of Senntisten codex and gain 460 points. You now have 9,844,097 total sacrifice points.";
+            string m6 = "[17:39:40] You sacrifice Scripture of Ful and gain 862 points. You now have 9,844,959 total sacrifice points.";
+            string news1 = "[17:38:59] News: Zeni received a City of Senntisten codex from TzKal-Zuk at 2 kills!";
+            string news2 = "[17:38:59] News: You received a City of Senntisten codex from TzKal-Zuk.";
+            Check(SacrificeBook.Commas(66) == "66" && SacrificeBook.Commas(1470) == "1,470" && SacrificeBook.Commas(9844959) == "9,844,959", "sacrifice totals use thousands separators");
+            SacrificeHit parsed;
+            Check(SacrificeBook.TryParse(m1, out parsed) && parsed.Item == "Off-hand khopesh of the Kharidian" && parsed.Gain == 11 && parsed.Total == 66, "the first sacrifice line parses, got " + (parsed == null ? "none" : parsed.Item + " +" + parsed.Gain.ToString()));
+            Check(SacrificeBook.TryParse(m2, out parsed) && parsed.Total == 9847166, "a comma total parses");
+            Check(SacrificeBook.TryParse(m4, out parsed) && parsed.Item == "Blast diffusion boots" && parsed.Gain == 115 && parsed.Total == 9843292, "boots parse");
+            Check(SacrificeBook.TryParse(m5, out parsed) && parsed.Gain == 460, "the codex sacrifice parses");
+            Check(SacrificeBook.TryParse(m6, out parsed) && parsed.Item == "Scripture of Ful" && parsed.Gain == 862 && parsed.Total == 9844959, "scripture parses");
+            Check(!SacrificeBook.TryParse(news1, out parsed) && !SacrificeBook.TryParse(news2, out parsed), "a drop announcement is not a sacrifice");
+            string wrapped = "[17:31:37] You sacrifice Off-hand khopesh of the Kharidian and gain 11 points.\nYou now have 66 total sacrifice points.";
+            List<string> joined = SacrificeBook.Join(wrapped);
+            Check(joined.Count == 1 && SacrificeBook.TryParse(joined[0], out parsed) && parsed.Total == 66 && parsed.Gain == 11, "a wrapped sacrifice is joined before it is matched");
+            string splitItem = "[17:38:59] You sacrifice City of Senntisten\ncodex and gain 460 points. You now have 9,844,097 total sacrifice points.";
+            List<string> itemLines = SacrificeBook.Join(splitItem);
+            Check(itemLines.Count == 1 && SacrificeBook.TryParse(itemLines[0], out parsed) && parsed.Item == "City of Senntisten codex" && parsed.Gain == 460, "a wrapped item name is rejoined, got " + (parsed == null ? "none" : parsed.Item));
+            string garbled = "Y0u sacrifice Blast diffusion boots and galn 115 points. You now haue 9,843,292 totel sacrifice points.";
+            Check(SacrificeBook.TryParse(garbled, out parsed) && parsed.Gain == 115 && parsed.Total == 9843292 && parsed.Item == "Blast diffusion boots", "a garbled sacrifice line still parses when the numbers do, got " + (parsed == null ? "none" : parsed.Item));
+            SacrificeBook book = new SacrificeBook();
+            System.Text.StringBuilder chat = new System.Text.StringBuilder();
+            string[] steps = new string[] { m1, m2, m3, m4, news1 + "\n" + news2 + "\n" + m5, m6 };
+            long[] gained = new long[] { 11, 22, 33, 148, 608, 1470 };
+            long[] totals = new long[] { 66, 9847166, 9843177, 9843292, 9844097, 9844959 };
+            for (int i = 0; i < steps.Length; i++)
+            {
+                if (chat.Length > 0) chat.Append('\n');
+                chat.Append(steps[i]);
+                book.Observe(chat.ToString());
+                Check(book.SessionGained == gained[i] && book.SessionCount == i + 1 && book.Total == totals[i], "sacrifice step " + (i + 1).ToString() + " gained " + book.SessionGained.ToString() + " count " + book.SessionCount.ToString() + " total " + book.Total.ToString() + " log " + book.Log);
+            }
+            Check(book.SessionGained == 11 + 11 + 11 + 115 + 460 + 862 && book.SessionCount == 6, "six sacrifices add 11+11+11+115+460+862");
+            Check(book.Total == 9843177 || book.Total == 9844959, "the newest total is shown");
+            Check(book.Total == 9844959 && book.LastItem == "Scripture of Ful", "the panel keeps the latest total and item, got " + book.LastItem + " " + book.Total.ToString());
+            string full = chat.ToString();
+            book.Observe(full);
+            Check(book.SessionGained == 1470 && book.SessionCount == 6, "re-reading the same chat adds nothing");
+            string scrolled = full.Replace("You sacrifice Scripture", "Y0u sacrifice Scripture");
+            book.Observe(scrolled);
+            Check(book.SessionGained == 1470 && book.SessionCount == 6, "scrolling an OCR variant of the same line does not count twice");
+            SacrificeBook lower = new SacrificeBook();
+            lower.Observe(m2);
+            lower.Observe(m2 + "\n" + m3);
+            Check(lower.Total == 9843177 && lower.SessionGained == 22 && lower.SessionCount == 2, "a lower sacrifice total is kept, got " + lower.Total.ToString());
+            SacrificeBook gaps = new SacrificeBook();
+            gaps.Observe(m1);
+            gaps.Observe(m1 + "\n" + m2);
+            Check(gaps.Log.IndexOf("sac gap") >= 0 && gaps.Log.IndexOf("9847166") >= 0 && gaps.Log.IndexOf("prev=66") >= 0, "a jump in the running total is logged as a gap, got " + gaps.Log);
+            gaps.Observe(m1 + "\n" + m2 + "\n" + m3 + "\n" + m4);
+            Check(gaps.Log.IndexOf("sac ok") >= 0, "a total that matches the previous plus the gain is logged ok, got " + gaps.Log);
+            SacrificeBook news = new SacrificeBook();
+            news.Observe(news1 + "\n" + news2);
+            Check(!news.Seen && news.SessionCount == 0 && news.SessionGained == 0, "news lines do not start the sacrifice counter");
+            SacrificeBook baseline = new SacrificeBook();
+            baseline.Attach();
+            baseline.Observe("");
+            baseline.Observe(m1);
+            Check(baseline.Seen && baseline.SessionGained == 0 && baseline.SessionCount == 0 && baseline.Total == 66, "a line already on screen at startup sets the total and does not count, got " + baseline.SessionGained.ToString() + " " + baseline.Total.ToString());
+            baseline.Observe(m1 + "\n" + m2);
+            Check(baseline.SessionGained == 11 && baseline.SessionCount == 1 && baseline.Total == 9847166, "the next sacrifice after the baseline does count");
+            book.ResetSession();
+            Check(book.SessionGained == 0 && book.SessionCount == 0 && book.Total == 9844959, "reset clears the session counter and keeps the latest total");
+            book.Observe(full);
+            Check(book.SessionGained == 0 && book.SessionCount == 0, "messages already counted stay counted after a reset");
+            Check(book.Value().IndexOf("0 this session") >= 0 && book.Value().IndexOf("9,844,959") >= 0, "the row shows the session counter and the game total, got " + book.Value());
+            SacrificeBook hidden = new SacrificeBook();
+            Check(hidden.Value() == "\u2014", "the sacrifice row is a dash until a message has been seen");
+        }
+
         private static void PotLines()
         {
             DateTime t = new DateTime(2026, 11, 22, 13, 33, 42, DateTimeKind.Utc);
@@ -2537,7 +2614,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.31" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.32" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -2548,10 +2625,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.31\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.32\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.31.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.32.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

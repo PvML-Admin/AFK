@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.32
+
+- The panel counts sacrifice points from chat. Each new sacrifice message adds its gain once, shows how many sacrifices this session, and shows the latest game total. There is no sound. Reset clears the session counter.
+
 ## 0.2.31
 
 - Chat is read again within two seconds even when the picture hash has not changed, and the crop follows the chat panel down to the newest line. A reused read is logged with its age.

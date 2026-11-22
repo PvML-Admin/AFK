@@ -31,6 +31,7 @@ namespace KavrosAfkWarden
         public List<BuffIcon> Buffs = new List<BuffIcon>();
         public List<IntRect> BuffRects = new List<IntRect>();
         public List<ChatHit> ChatHits = new List<ChatHit>();
+        public string ChatText = "";
         public bool MetricsFound;
         public long MetricsXp;
         public bool MetricsGain;

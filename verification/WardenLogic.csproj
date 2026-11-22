@@ -17,6 +17,7 @@
     <Compile Include="..\source\ChatPrep.cs" />
     <Compile Include="..\source\ChatLineTemplates.cs" />
     <Compile Include="..\source\ChatPotionBook.cs" />
+    <Compile Include="..\source\SacrificeBook.cs" />
     <Compile Include="..\source\MetricsReader.cs" />
     <Compile Include="..\source\GlyphBook.cs" />
     <Compile Include="..\source\PotionTemplates.cs" />
