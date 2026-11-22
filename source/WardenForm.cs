@@ -159,9 +159,9 @@ namespace KavrosAfkWarden
             if (lines.Length > 1)
             {
                 int lineH = Math.Max(1, Height / lines.Length);
-                Font font = KavrosTheme.Ui(9F, false);
+                Font lineFont = KavrosTheme.Ui(9F, false);
                 for (int i = 0; i < lines.Length; i++)
-                    TextRenderer.DrawText(g, lines[i], font, new Rectangle(width + 10, i * lineH, Math.Max(1, Width - width - 12), lineH), ink, KavrosTheme.Bg, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+                    TextRenderer.DrawText(g, lines[i], lineFont, new Rectangle(width + 10, i * lineH, Math.Max(1, Width - width - 12), lineH), ink, KavrosTheme.Bg, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
                 return;
             }
             if (!ColorParts)
