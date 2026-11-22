@@ -39,6 +39,10 @@ namespace KavrosAfkWarden
         private readonly List<long> seenTotals = new List<long>();
         private bool primed = true;
         private bool haveTotal;
+        private bool confirmed;
+        private bool havePending;
+        private long pendingTotal;
+        private long gainsSince;
         public bool Seen;
         public long SessionGained;
         public int SessionCount;
@@ -88,22 +92,28 @@ namespace KavrosAfkWarden
                     if (current[i].TotalKnown) Remember(current[i].Total);
                     Append(log, current[i], "baseline", false, 0);
                 }
-                if (current.Count > 0) Show(current[current.Count - 1]);
+                if (current.Count > 0)
+                {
+                    Show(current[current.Count - 1]);
+                    SacrificeHit last = current[current.Count - 1];
+                    if (last.TotalKnown) ConsiderTotal(last.Total, last.Gain, last.GainKnown);
+                }
                 primed = true;
                 Replace(current);
                 Log = log.ToString();
                 return;
             }
-            bool[] used = new bool[previous.Count];
+            bool[] used = Pair(current);
             for (int i = 0; i < current.Count; i++)
             {
                 SacrificeHit hit = current[i];
-                if (Matched(hit, used))
+                if (used[i])
                 {
-                    Append(log, hit, "seen", false, 0);
+                    if (hit.TotalKnown) ConsiderTotal(hit.Total, hit.Gain, hit.GainKnown);
+                    Append(log, hit, "seen", false, haveTotal ? Total : 0);
                     continue;
                 }
-                if (Accept(hit, log)) { }
+                CountNew(hit, log);
             }
             Replace(current);
             Log = log.ToString();
@@ -196,20 +206,7 @@ namespace KavrosAfkWarden
             // "total sacrifice" at the end of a wrapped half is not its own message.
             if (gainAt < 0) return false;
             long gain = 0;
-            bool gainKnown = false;
-            int slotEnd = line.Length;
-            int stop = NextStop(tokens, gainAt + 1);
-            if (stop >= 0) slotEnd = tokens[stop].Start;
-            int slotStart = tokens[gainAt].End;
-            if (slotEnd > slotStart)
-            {
-                long parsed;
-                if (FixNum(line.Substring(slotStart, slotEnd - slotStart), out parsed))
-                {
-                    gain = parsed;
-                    gainKnown = true;
-                }
-            }
+            bool gainKnown = NumberAfter(line, tokens[gainAt].End, out gain);
             long total = 0;
             bool totalKnown = false;
             int totalAt = Find(tokens, FoldWord("total"), gainAt + 1);
@@ -221,16 +218,12 @@ namespace KavrosAfkWarden
             if (totalAt > 0 || anchor >= 0)
             {
                 int begin = anchor >= 0 ? tokens[anchor].End : (totalAt > 0 ? Math.Max(0, tokens[totalAt].Start - 24) : line.Length);
-                int from = totalAt > 0 ? tokens[totalAt].Start : line.Length;
-                if (from < begin) from = line.Length;
-                if (from > begin)
+                long parsed;
+                // Stop at the number. A trailing "points." is a word, not part of the total.
+                if (NumberAfter(line, begin, out parsed) && parsed > TotalTolerance)
                 {
-                    long parsed;
-                    if (FixNum(line.Substring(begin, from - begin), out parsed) && parsed > TotalTolerance)
-                    {
-                        total = parsed;
-                        totalKnown = true;
-                    }
+                    total = parsed;
+                    totalKnown = true;
                 }
             }
             string item = "";
@@ -292,11 +285,6 @@ namespace KavrosAfkWarden
         private void Show(SacrificeHit hit)
         {
             Seen = true;
-            if (hit.TotalKnown)
-            {
-                haveTotal = true;
-                Total = hit.Total;
-            }
             LastGain = hit.Gain;
             LastGainKnown = hit.GainKnown;
             LastItem = hit.Item ?? "";
@@ -317,93 +305,203 @@ namespace KavrosAfkWarden
             return gap <= TotalTolerance;
         }
 
+        private static bool OneDigitOff(long a, long b)
+        {
+            if (a < 0) a = -a;
+            if (b < 0) b = -b;
+            string left = a.ToString();
+            string right = b.ToString();
+            if (left.Length != right.Length) return false;
+            int diff = 0;
+            for (int i = 0; i < left.Length; i++)
+                if (left[i] != right[i]) diff++;
+            return diff == 1;
+        }
+
         private bool Known(long total)
         {
             for (int i = 0; i < seenTotals.Count; i++)
-                if (Close(seenTotals[i], total)) return true;
+                if (Close(seenTotals[i], total) || OneDigitOff(seenTotals[i], total)) return true;
             return false;
         }
 
-        private bool Accept(SacrificeHit hit, System.Text.StringBuilder log)
+        private bool[] Pair(List<SacrificeHit> current)
+        {
+            bool[] matched = new bool[current.Count];
+            bool[] taken = new bool[previous.Count];
+            for (int i = 0; i < current.Count; i++)
+            {
+                if (!current[i].TotalKnown) continue;
+                for (int j = 0; j < previous.Count; j++)
+                {
+                    if (taken[j] || !previous[j].TotalKnown) continue;
+                    if (!Close(current[i].Total, previous[j].Total) && !OneDigitOff(current[i].Total, previous[j].Total)) continue;
+                    taken[j] = true;
+                    matched[i] = true;
+                    break;
+                }
+            }
+            for (int i = 0; i < current.Count; i++)
+            {
+                if (matched[i]) continue;
+                if (i >= previous.Count || taken[i]) continue;
+                if (current[i].TotalKnown && previous[i].TotalKnown && !Close(current[i].Total, previous[i].Total) && !OneDigitOff(current[i].Total, previous[i].Total)) continue;
+                if (!Similar(current[i].Fold, previous[i].Fold)) continue;
+                taken[i] = true;
+                matched[i] = true;
+            }
+            return matched;
+        }
+
+        private void CountNew(SacrificeHit hit, System.Text.StringBuilder log)
         {
             if (hit.TotalKnown && Known(hit.Total))
             {
-                Note(hit);
-                Append(log, hit, "seen", false, Total);
-                return false;
+                ConsiderTotal(hit.Total, hit.Gain, hit.GainKnown);
+                Append(log, hit, "seen", false, haveTotal ? Total : 0);
+                return;
             }
-            if (!hit.GainKnown && !hit.TotalKnown)
-            {
-                Append(log, hit, "seen", false, Total);
-                return false;
-            }
+            long prev = haveTotal ? Total : 0;
             if (!hit.GainKnown)
             {
-                if (!haveTotal || Close(hit.Total, Total) || hit.Total + TotalTolerance < Total)
+                long inferred;
+                if (TryInfer(hit, out inferred))
                 {
-                    Note(hit);
-                    Append(log, hit, "seen", false, Total);
-                    return false;
+                    hit.Gain = inferred;
+                    hit.GainKnown = true;
                 }
-                long rise = hit.Total - Total;
-                hit.Gain = rise;
-                hit.GainKnown = true;
-                Commit(hit, log, rise);
-                return true;
-            }
-            if (hit.TotalKnown && haveTotal)
-            {
-                long parsed = hit.Gain;
-                long rise = hit.Total - Total;
-                if (Close(hit.Total, Total))
+                else
                 {
-                    Note(hit);
-                    Append(log, hit, "seen", false, Total);
-                    return false;
+                    SessionCount++;
+                    Seen = true;
+                    Append(log, hit, "new", false, prev);
+                    return;
                 }
-                if (rise > TotalTolerance && !Close(parsed, rise)) hit.Gain = rise;
-                Commit(hit, log, parsed);
-                return true;
             }
-            Commit(hit, log, hit.Gain);
-            return true;
-        }
-
-        private void Commit(SacrificeHit hit, System.Text.StringBuilder log, long parsedGain)
-        {
-            long prev = haveTotal ? Total : 0;
-            bool gap = hit.TotalKnown && prev + parsedGain != hit.Total;
-            if (hit.TotalKnown) Remember(hit.Total);
+            bool trusted = hit.TotalKnown && ConsiderTotal(hit.Total, hit.Gain, true);
+            bool gap = hit.TotalKnown && !trusted;
+            if (hit.TotalKnown && !trusted) Remember(hit.Total);
+            if (!trusted) gainsSince += hit.Gain;
             SessionGained += hit.Gain;
             SessionCount++;
             Show(hit);
             Append(log, hit, "new", gap, prev);
         }
 
-        private void Note(SacrificeHit hit)
+        // A total is trusted when it agrees with the last good total plus the
+        // gain, or plus the gains counted since that total. A lower total, a
+        // different number of digits, or a wild jump is a misread.
+        private bool ConsiderTotal(long total, long gain, bool gainKnown)
         {
-            if (!hit.TotalKnown) return;
-            haveTotal = true;
-            Total = hit.Total;
-            Remember(hit.Total);
-        }
-
-        private bool Matched(SacrificeHit hit, bool[] used)
-        {
-            for (int i = 0; i < previous.Count; i++)
+            if (!gainKnown) gain = 0;
+            if (!haveTotal)
             {
-                if (used[i]) continue;
-                if (hit.TotalKnown && previous[i].TotalKnown)
-                {
-                    if (Close(hit.Total, previous[i].Total)) { used[i] = true; return true; }
-                    continue;
-                }
-                if (hit.TotalKnown && haveTotal && hit.Total > Total + TotalTolerance) continue;
-                if (!Similar(previous[i].Fold, hit.Fold)) continue;
-                used[i] = true;
+                haveTotal = true;
+                confirmed = false;
+                Total = total;
+                gainsSince = 0;
+                Remember(total);
                 return true;
             }
+            // Digit length and a falling total are checks against a confirmed total.
+            // The first total is only tentative, so a later consistent pair may re-anchor.
+            if (confirmed)
+            {
+                if (Digits(total) != Digits(Total)) return false;
+                if (total + TotalTolerance < Total) return false;
+            }
+            if (Close(total, Total + gain) || (gainsSince > 0 && Close(total, Total + gainsSince + gain)))
+            {
+                Total = total;
+                confirmed = true;
+                havePending = false;
+                gainsSince = 0;
+                Remember(total);
+                return true;
+            }
+            if (!confirmed)
+            {
+                if (havePending && gainKnown && Close(total, pendingTotal + gain))
+                {
+                    Total = total;
+                    confirmed = true;
+                    havePending = false;
+                    gainsSince = 0;
+                    Remember(pendingTotal);
+                    Remember(total);
+                    return true;
+                }
+                havePending = true;
+                pendingTotal = total;
+            }
             return false;
+        }
+
+        private bool TryInfer(SacrificeHit hit, out long gain)
+        {
+            gain = 0;
+            if (!hit.TotalKnown || !haveTotal || !confirmed) return false;
+            if (Digits(hit.Total) != Digits(Total) || hit.Total <= Total) return false;
+            if (gainsSince != 0) return false;
+            long diff = hit.Total - Total;
+            if (diff <= 0) return false;
+            gain = diff;
+            return true;
+        }
+
+        private static int Digits(long value)
+        {
+            if (value < 0) value = -value;
+            int count = 1;
+            while (value >= 10) { value /= 10; count++; }
+            return count;
+        }
+
+        private static bool NumberAfter(string line, int start, out long value)
+        {
+            value = 0;
+            if (line == null || start < 0 || start >= line.Length) return false;
+            int i = start;
+            while (i < line.Length && line[i] == ' ') i++;
+            int begin = i;
+            bool any = false;
+            while (i < line.Length)
+            {
+                char c = line[i];
+                if ((c >= '0' && c <= '9') || FixLetter(c) || c == ',' || c == '.' || c == '\'' || c == '\u2019')
+                {
+                    any = true;
+                    i++;
+                    continue;
+                }
+                if (c == ' ')
+                {
+                    int k = i + 1;
+                    while (k < line.Length && line[k] == ' ') k++;
+                    if (k < line.Length && ((line[k] >= '0' && line[k] <= '9') || FixLetter(line[k])))
+                    {
+                        i = k;
+                        continue;
+                    }
+                    break;
+                }
+                break;
+            }
+            if (!any || i <= begin) return false;
+            string slice = line.Substring(begin, i - begin);
+            bool digit = false;
+            for (int n = 0; n < slice.Length; n++)
+                if (slice[n] >= '0' && slice[n] <= '9') digit = true;
+            if (!digit && i < line.Length && ((line[i] >= 'A' && line[i] <= 'Z') || (line[i] >= 'a' && line[i] <= 'z'))) return false;
+            return FixNum(slice, out value) && value > 0;
+        }
+
+        private static bool FixLetter(char c)
+        {
+            return c == 'I' || c == 'l' || c == 'L' || c == '|' || c == '!'
+                || c == 'S' || c == 's' || c == 'O' || c == 'o'
+                || c == 'g' || c == 'G' || c == 'q' || c == 'Q'
+                || c == 'B' || c == 'b' || c == 'Z' || c == 'z';
         }
 
         private static void Append(System.Text.StringBuilder log, SacrificeHit hit, string decision, bool gap, long prev)

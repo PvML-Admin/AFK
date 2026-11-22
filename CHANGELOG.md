@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.35
+
+- Sacrifice points come from the gain written in the chat line. A total is kept only when it agrees with that gain, so a misread digit cannot add millions. The row still shows the session points and how many sacrifices.
+
 ## 0.2.34
 
 - A sacrifice is counted from a real rise in the running total. A last-digit OCR flip, or a line with no readable gain, does not count again. The row shows only the session points and how many sacrifices.
