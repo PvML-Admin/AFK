@@ -673,6 +673,7 @@ namespace KavrosAfkWarden
             settings.PotionSeconds = 22;
             settings.PotionSound = false;
             settings.PotionNotify = true;
+            settings.SeenNotes = "0.2.36";
             settings.BuffPinX = 0.05;
             settings.BuffPinY = 0.02;
             settings.BuffPinW = 0.4;
@@ -695,6 +696,7 @@ namespace KavrosAfkWarden
             Check(rates.AfkSeconds == 3000, "grandmaster-only AFK rate");
             Check(loaded.Grandmaster && loaded.TreePerk && loaded.AfkSeconds == 3900 && loaded.AfkLeadSeconds == 45, "AFK timer settings round-trip");
             Check(!loaded.PotionEnabled && loaded.PotionSeconds == 22 && !loaded.PotionSound && loaded.PotionNotify && loaded.HasBuffPin, "potion alert and buff pin round-trip");
+            Check(loaded.SeenNotes == "0.2.36", "the last seen notes version round-trips");
             string path = Path.Combine(Path.GetTempPath(), "afk-warden-settings-" + Guid.NewGuid().ToString("N") + ".txt");
             SettingsText.Save(path, settings);
             WardenSettings fromDisk = SettingsText.Load(path);
@@ -1579,6 +1581,7 @@ namespace KavrosAfkWarden
             BarAnchor();
             ChatFresh();
             SacrificeCases(root);
+            ReleaseNoteCases();
             string[] chatter = new string[] {
                 "-a ALL CHAT",
                 ". 14KlllS In core",
@@ -2147,6 +2150,25 @@ namespace KavrosAfkWarden
             Check(box.Width >= 80 && box.Y <= 430 && box.Bottom >= 550, "the chat box reaches the newest line at the bottom, got " + box.X.ToString() + "," + box.Y.ToString() + " " + box.Width.ToString() + "x" + box.Height.ToString());
         }
 
+        private static void ReleaseNoteCases()
+        {
+            string text = ReleaseNotes.Text();
+            int at = 0;
+            for (int i = 0; i < ReleaseNotes.Count; i++)
+            {
+                string version = ReleaseNotes.VersionAt(i);
+                int next = text.IndexOf(version, at);
+                Check(next >= at, "notes are newest first, missing " + version);
+                at = next + 1;
+            }
+            Check(text.IndexOf("v0.2.37") >= 0 && text.IndexOf("v0.2.29") > text.IndexOf("v0.2.37"), "notes run from this release back to the heading fix");
+            Check(text.IndexOf("What's new") >= 0 && text.IndexOf("points per hour") >= 0, "this release mentions the notes and the hourly rate");
+            Check(text.IndexOf("five minutes") >= 0 && text.IndexOf("prayer bars") >= 0, "the notes mention potion cooldown and the bars");
+            Check(text.IndexOf("two seconds") >= 0 && text.IndexOf("RuneMetrics") >= 0 && text.IndexOf("Reset") >= 0, "the notes mention chat, the reminder and Reset");
+            Check(text.IndexOf("headings") >= 0, "the notes mention the settings headings");
+            Check(ReleaseNotes.Unseen("", AppInfo.Version) && ReleaseNotes.Unseen("0.2.36", AppInfo.Version) && !ReleaseNotes.Unseen(AppInfo.Version, AppInfo.Version), "notes show once for a new version");
+        }
+
         private static void SacrificeCases(string root)
         {
             string m1 = "[17:31:37] You sacrifice Off-hand khopesh of the Kharidian and gain 11 points. You now have 66 total sacrifice points.";
@@ -2191,7 +2213,7 @@ namespace KavrosAfkWarden
             string full = chat.ToString();
             book.Observe(full);
             Check(book.SessionGained == 11 + 11 + 11 + 115 + 460 + 862 && book.SessionCount == 6 && book.Total == 66 && SacCounts(book.Log) == 6, "six sacrifices add the parsed gains once the last line is read again, got " + book.SessionGained.ToString() + " " + book.Log);
-            Check(book.LastItem == "Scripture of Ful" && book.Value() == "1,470 this session \u00b7 6 sacrifices", "the row is the session counter and the newest item is kept, got " + book.Value() + " " + book.LastItem);
+            Check(book.LastItem == "Scripture of Ful" && book.Value() == "1,470 this session \u00b7 6 sacrifices \u00b7 \u2014/h", "the row is the session counter and the newest item is kept, got " + book.Value() + " " + book.LastItem);
             book.Observe(full);
             Check(book.SessionGained == 1470 && book.SessionCount == 6, "re-reading the same chat adds nothing");
             string scrolled = full.Replace("You sacrifice Scripture", "Y0u sacrifice Scripture");
@@ -2227,9 +2249,22 @@ namespace KavrosAfkWarden
             Check(book.SessionGained == 0 && book.SessionCount == 0 && book.Total == 66 && SacCounts(book.Log) == 0, "reset clears the session counter and keeps the last trusted total");
             book.Observe(full);
             Check(book.SessionGained == 0 && book.SessionCount == 0, "messages already counted stay counted after a reset");
-            Check(book.Value() == "0 this session \u00b7 0 sacrifices", "the row shows only the session counter, got " + book.Value());
+            Check(book.Value() == "0 this session \u00b7 0 sacrifices \u00b7 \u2014/h", "the row shows the session counter and a blank rate, got " + book.Value());
             SacrificeBook hidden = new SacrificeBook();
             Check(hidden.Value() == "\u2014", "the sacrifice row is a dash until a message has been seen");
+            Check(SacrificeBook.Rate(690, 59) == "\u2014/h" && SacrificeBook.Rate(690, 0) == "\u2014/h", "the rate stays blank for the first minute");
+            Check(SacrificeBook.Rate(690, 60) == "41,400/h", "six hundred and ninety points in a minute is 41,400 an hour, got " + SacrificeBook.Rate(690, 60));
+            Check(SacrificeBook.Rate(1500000, 3600) == "1,500,000/h", "a large rate keeps thousands separators, got " + SacrificeBook.Rate(1500000, 3600));
+            Check(SacrificeBook.Format(true, 115, 1, 120) == "115 this session \u00b7 1 sacrifices \u00b7 3,450/h", "the row shows points, count and rate, got " + SacrificeBook.Format(true, 115, 1, 120));
+            SacrificeBook timed = new SacrificeBook();
+            DateTime stamp = new DateTime(2026, 11, 22, 20, 0, 0, DateTimeKind.Utc);
+            timed.Seen = true;
+            timed.SessionGained = 600;
+            timed.SessionCount = 1;
+            timed.SessionStarted = stamp.AddMinutes(-10);
+            Check(timed.ElapsedSeconds(stamp) == 600 && SacrificeBook.Format(true, timed.SessionGained, timed.SessionCount, timed.ElapsedSeconds(stamp)).IndexOf("3,600/h") >= 0, "ten minutes of points makes an hourly rate");
+            timed.ResetSession();
+            Check(timed.SessionGained == 0 && timed.SessionCount == 0 && timed.ElapsedSeconds(DateTime.UtcNow) < 60 && timed.Value().IndexOf("\u2014/h") >= 0, "reset restarts the points and the rate timer, got " + timed.Value());
             GarbledSacrifice(root);
         }
 
@@ -2352,7 +2387,7 @@ namespace KavrosAfkWarden
             Check(live.SessionCount == 6 && live.SessionGained == 690, "the 18:41 log is 6 sacrifices and 690 points, got " + live.SessionCount.ToString() + " " + live.SessionGained.ToString() + " steps " + trace.ToString() + " last " + live.Log);
             live.Observe(last);
             Check(live.SessionCount == 6 && live.SessionGained == 690, "re-reading the last 18:41 chat adds nothing");
-            Check(live.Value() == "690 this session \u00b7 6 sacrifices", "the row is only the session counter, got " + live.Value());
+            Check(live.Value() == "690 this session \u00b7 6 sacrifices \u00b7 \u2014/h", "the row shows the session counter and holds the rate, got " + live.Value());
             SacrificeBook big = new SacrificeBook();
             big.Observe("] You sacrifice a large pile and gain 50000 points. You now have 50,000 total sacrifice points.");
             big.Observe("] You sacrifice a large pile and gain 50000 points. You now have 50,000 total sacrifice points.\n] You sacrifice a large pile and gain 50000 points. You now have 100,000 total sacrifice points.");
@@ -2858,7 +2893,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.36" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.37" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -2869,10 +2904,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.36\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.37\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.36.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.37.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

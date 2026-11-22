@@ -214,6 +214,11 @@ namespace KavrosAfkWarden
         internal event Action PauseRequested;
         internal event Action Moved;
         internal event Action SacrificeReset;
+        internal event Action NotesDismissed;
+        private Panel notesHost;
+        private TextBox notesBox;
+        private bool notesWanted;
+        private const int NotesHeight = 168;
 
         internal WatchPanel()
         {
@@ -330,7 +335,80 @@ namespace KavrosAfkWarden
             Idle.Visible = Hp.Visible = Prayer.Visible = Potion.Visible = Sacrifice.Visible = Afk.Visible = !collapsed;
             sacrificeReset.Visible = !collapsed && sacrificeResetWanted;
             pause.Visible = exit.Visible = !collapsed;
-            ClientSize = new Size(ClientSize.Width < 80 ? 400 : ClientSize.Width, collapsed ? 32 : openHeight);
+            ApplyNotes();
+        }
+
+        internal void ShowNotes(string text)
+        {
+            EnsureNotes();
+            notesBox.Text = text ?? "";
+            notesWanted = true;
+            ApplyNotes();
+        }
+
+        internal void HideNotes()
+        {
+            notesWanted = false;
+            ApplyNotes();
+        }
+
+        private void EnsureNotes()
+        {
+            if (notesHost != null) return;
+            notesHost = new Panel();
+            notesHost.BackColor = KavrosTheme.BgRaise;
+            notesHost.Visible = false;
+            Panel header = new Panel();
+            header.Dock = DockStyle.Top;
+            header.Height = 28;
+            header.BackColor = KavrosTheme.BgRaise;
+            Label title = new Label();
+            title.Text = "What's new";
+            title.Dock = DockStyle.Fill;
+            title.TextAlign = ContentAlignment.MiddleLeft;
+            title.Padding = new Padding(8, 0, 0, 0);
+            title.ForeColor = KavrosTheme.Gold;
+            title.BackColor = KavrosTheme.BgRaise;
+            title.Font = KavrosTheme.Ui(9F, true);
+            OpaqueButton close = new OpaqueButton();
+            close.Text = "Got it";
+            close.Dock = DockStyle.Right;
+            close.Width = 72;
+            close.Tone = ButtonTone.Secondary;
+            close.TabStop = false;
+            close.Click += delegate
+            {
+                HideNotes();
+                if (NotesDismissed != null) NotesDismissed();
+            };
+            header.Controls.Add(title);
+            header.Controls.Add(close);
+            notesBox = new TextBox();
+            notesBox.Multiline = true;
+            notesBox.ReadOnly = true;
+            notesBox.ScrollBars = ScrollBars.Vertical;
+            notesBox.Dock = DockStyle.Fill;
+            notesBox.BorderStyle = BorderStyle.None;
+            notesBox.TabStop = false;
+            notesBox.Font = KavrosTheme.Ui(8.5F, false);
+            notesBox.BackColor = KavrosTheme.Bg;
+            notesBox.ForeColor = KavrosTheme.Text;
+            notesHost.Controls.Add(notesBox);
+            notesHost.Controls.Add(header);
+            Controls.Add(notesHost);
+        }
+
+        private void ApplyNotes()
+        {
+            bool show = notesWanted && !collapsed && notesHost != null;
+            if (notesHost != null) notesHost.Visible = show;
+            int width = ClientSize.Width < 80 ? 400 : ClientSize.Width;
+            int height = collapsed ? 32 : openHeight + (show ? NotesHeight : 0);
+            if (ClientSize.Width != width || ClientSize.Height != height)
+                ClientSize = new Size(width, height);
+            if (!show || notesHost == null) return;
+            notesHost.SetBounds(8, openHeight, Math.Max(40, width - 16), NotesHeight);
+            notesHost.BringToFront();
         }
 
         private int openHeight = 360;
@@ -364,7 +442,7 @@ namespace KavrosAfkWarden
                 buttonY = hintY + hintH + 16;
                 panelH = buttonY + 28 + 16;
                 int resetW = Math.Max(64, TextRenderer.MeasureText("Reset", rowFont).Width + 18);
-                string sample = "1,470 this session · 6 sacrifices";
+                string sample = "1,470 this session · 6 sacrifices · 12,345/h";
                 int sampleW = TextRenderer.MeasureText(sample, rowFont).Width;
                 int pillW = TextRenderer.MeasureText("Sacrifice", rowFont).Width + 48;
                 panelW = Math.Max(panelW, pillW + sampleW + resetW + 36);
@@ -382,8 +460,9 @@ namespace KavrosAfkWarden
                 pause.SetBounds(12, buttonY, buttonW, 28);
                 exit.SetBounds(12 + buttonW + 8, buttonY, buttonW, 28);
                 openHeight = panelH;
-                if (!collapsed) ClientSize = new Size(panelW, openHeight);
+                ClientSize = new Size(panelW, collapsed ? 32 : openHeight);
                 LayoutHeader();
+                ApplyNotes();
             }
             finally { layingOut = false; }
         }
@@ -497,6 +576,8 @@ namespace KavrosAfkWarden
         private OpaqueButton testSoundButton;
         private OpaqueButton updateButton;
         private OpaqueButton debugButton;
+        private OpaqueButton whatsNewButton;
+        private Panel releaseNotes;
         private MainSurface settingsBody;
         private readonly WatchPanel panel = new WatchPanel();
         private readonly AlertSound sound = new AlertSound();
@@ -560,6 +641,11 @@ namespace KavrosAfkWarden
             panel.ExitRequested += Exit;
             panel.PauseRequested += delegate { pause.Checked = !pause.Checked; };
             panel.SacrificeReset += delegate { sacrifice.ResetSession(); };
+            panel.NotesDismissed += delegate
+            {
+                settings.SeenNotes = AppInfo.Version;
+                Save();
+            };
             panel.Moved += delegate
             {
                 if (selected != IntPtr.Zero && NativeMethods.IsWindow(selected))
@@ -740,6 +826,7 @@ namespace KavrosAfkWarden
             saveDebug = Check("Save debug capture", 0, 0, 240, settings.SaveDebug);
             updateButton = AddButton("Check for updates", 0, 0, 170, ButtonTone.Secondary, delegate { AppUpdates.Check(this, true, SetStatus); });
             debugButton = AddButton("Debug", 0, 0, 120, ButtonTone.Secondary, delegate { OpenDebugFolder(); });
+            whatsNewButton = AddButton("What's new", 0, 0, 140, ButtonTone.Secondary, delegate { ShowReleaseNotes(); });
             status.ForeColor = KavrosTheme.TextFaint;
             status.BackColor = KavrosTheme.Panel;
             status.Font = KavrosTheme.Ui(8F, false);
@@ -943,6 +1030,8 @@ namespace KavrosAfkWarden
             int longLine = left + FitWidth(updates) + U(48);
             if (pair > width) width = pair;
             if (longLine > width) width = longLine;
+            int notesEnd = left + U(348) + U(150) + U(36);
+            if (notesEnd > width) width = notesEnd;
             if (width < U(720)) width = U(720);
             int head = KavrosTheme.CardHeadingHeight() + Math.Max(8, KavrosTheme.CardHeadingHeight() / 5) + U(12);
             int y = U(300);
@@ -1005,6 +1094,7 @@ namespace KavrosAfkWarden
             y += row;
             updateButton.SetBounds(left, y, U(190), U(28));
             debugButton.SetBounds(left + U(206), y, U(130), U(28));
+            whatsNewButton.SetBounds(left + U(348), y, U(150), U(28));
             y += U(40);
             status.SetBounds(left, y, Math.Max(U(200), width - left - U(36)), U(36));
             int content = y + U(48);
@@ -1209,6 +1299,54 @@ namespace KavrosAfkWarden
             Show();
             BringToFront();
             Activate();
+        }
+
+        // The notes stay inside this window. Opening them does not activate
+        // anything, so the game keeps focus.
+        private void ShowReleaseNotes()
+        {
+            if (releaseNotes == null)
+            {
+                releaseNotes = new Panel();
+                releaseNotes.BackColor = KavrosTheme.Bg;
+                Panel header = new Panel();
+                header.Dock = DockStyle.Top;
+                header.Height = 36;
+                header.BackColor = KavrosTheme.BgRaise;
+                Label title = new Label();
+                title.Text = "What's new";
+                title.Dock = DockStyle.Fill;
+                title.TextAlign = ContentAlignment.MiddleLeft;
+                title.Padding = new Padding(10, 0, 0, 0);
+                title.ForeColor = KavrosTheme.Gold;
+                title.BackColor = KavrosTheme.BgRaise;
+                title.Font = KavrosTheme.Ui(10F, true);
+                OpaqueButton close = new OpaqueButton();
+                close.Text = "Close";
+                close.Dock = DockStyle.Right;
+                close.Width = 88;
+                close.Tone = ButtonTone.Secondary;
+                close.Click += delegate { releaseNotes.Visible = false; };
+                header.Controls.Add(title);
+                header.Controls.Add(close);
+                TextBox body = new TextBox();
+                body.Multiline = true;
+                body.ReadOnly = true;
+                body.ScrollBars = ScrollBars.Vertical;
+                body.Dock = DockStyle.Fill;
+                body.BorderStyle = BorderStyle.None;
+                body.TabStop = false;
+                body.Font = KavrosTheme.Ui(9F, false);
+                body.BackColor = KavrosTheme.Bg;
+                body.ForeColor = KavrosTheme.Text;
+                body.Text = ReleaseNotes.Text();
+                releaseNotes.Controls.Add(body);
+                releaseNotes.Controls.Add(header);
+                Controls.Add(releaseNotes);
+            }
+            releaseNotes.Bounds = new Rectangle(16, 72, Math.Max(40, ClientSize.Width - 32), Math.Max(40, ClientSize.Height - 110));
+            releaseNotes.Visible = true;
+            releaseNotes.BringToFront();
         }
 
         private void ShowPanel()
@@ -1436,6 +1574,8 @@ namespace KavrosAfkWarden
             PlacePanel();
             nextUpdateCheck = DateTime.UtcNow.AddHours(3);
             if (settings.CheckForUpdates) AppUpdates.Check(this, false, SetStatus);
+            if (ReleaseNotes.Unseen(settings.SeenNotes, AppInfo.Version)) panel.ShowNotes(ReleaseNotes.Text());
+            else panel.HideNotes();
             CompanionStatus.Write("running", settings.Paused);
             DiscoverClients();
             panel.SetNote("Waiting for Kavros");

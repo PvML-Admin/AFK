@@ -47,6 +47,7 @@ namespace KavrosAfkWarden
         public bool Paused;
         public bool CheckForUpdates = true;
         public bool SaveDebug;
+        public string SeenNotes = "";
         public bool PanelTopMost = true;
         public int PanelX = int.MinValue;
         public int PanelY = int.MinValue;

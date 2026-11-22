@@ -53,6 +53,12 @@ namespace KavrosAfkWarden
         public bool Seen;
         public long SessionGained;
         public int SessionCount;
+        public DateTime SessionStarted;
+
+        public SacrificeBook()
+        {
+            SessionStarted = DateTime.UtcNow;
+        }
         public long Total;
         public long LastGain;
         public bool LastGainKnown;
@@ -71,12 +77,36 @@ namespace KavrosAfkWarden
             SessionCount = 0;
             counts.Length = 0;
             Log = "";
+            SessionStarted = DateTime.UtcNow;
+        }
+
+        public double ElapsedSeconds(DateTime now)
+        {
+            double seconds = (now - SessionStarted).TotalSeconds;
+            if (seconds < 0) seconds = 0;
+            return seconds;
         }
 
         public string Value()
         {
-            if (!Seen) return "\u2014";
-            return Commas(SessionGained) + " this session \u00b7 " + SessionCount.ToString() + " sacrifices";
+            return Format(Seen, SessionGained, SessionCount, ElapsedSeconds(DateTime.UtcNow));
+        }
+
+        public static string Format(bool seen, long gained, int count, double elapsedSeconds)
+        {
+            if (!seen) return "\u2014";
+            return Commas(gained) + " this session \u00b7 " + count.ToString() + " sacrifices \u00b7 " + Rate(gained, elapsedSeconds);
+        }
+
+        // The rate stays blank for the first minute so a single sacrifice does not look huge.
+        public static string Rate(long points, double elapsedSeconds)
+        {
+            if (elapsedSeconds < 60 || double.IsNaN(elapsedSeconds) || double.IsInfinity(elapsedSeconds)) return "\u2014/h";
+            double perHour = points * 3600.0 / elapsedSeconds;
+            if (perHour < 0) perHour = 0;
+            if (perHour > 999999999999d) perHour = 999999999999d;
+            long rounded = (long)Math.Round(perHour);
+            return Commas(rounded) + "/h";
         }
 
         public void Observe(string text)

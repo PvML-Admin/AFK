@@ -27,6 +27,7 @@
     <Compile Include="..\source\ClientBind.cs" />
     <Compile Include="..\source\ClientNames.cs" />
     <Compile Include="..\source\SettingsText.cs" />
+    <Compile Include="..\source\ReleaseNotes.cs" />
     <Compile Include="..\source\WardenTests.cs" />
     <Compile Include="TestMain.cs" />
   </ItemGroup>

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.37
+
+- What's new opens on the panel once after an update. Settings can open it again. The sacrifice row shows points per hour since the last Reset, and waits a minute before the first rate.
+
 ## 0.2.36
 
 - A sacrifice line counts once, from its place in the chat. A total that does not match the last trusted total plus the gain is held until the same line is read again, so one misread total cannot add an extra sacrifice. The log lists every sacrifice the panel counted.
