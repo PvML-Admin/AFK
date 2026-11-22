@@ -1577,6 +1577,7 @@ namespace KavrosAfkWarden
             BoostedLife(root);
             PotLines();
             BarAnchor();
+            ChatFresh();
             string[] chatter = new string[] {
                 "-a ALL CHAT",
                 ". 14KlllS In core",
@@ -2097,6 +2098,44 @@ namespace KavrosAfkWarden
             Check(mainXp.Found && mainXp.Xp > 1000000L, "the main-account layout still reads a full XP total, got " + mainXp.Xp.ToString() + " " + (mainXp.Note ?? ""));
         }
 
+        private static void ChatFresh()
+        {
+            DateTime t = new DateTime(2026, 11, 22, 15, 14, 34, DateTimeKind.Utc);
+            ChatOcrGate gate = new ChatOcrGate();
+            Check(gate.Due(4, false, t), "the first chat crop is read");
+            Check(gate.Due(4, false, t) && gate.Due(4, false, t), "the hash still gets its short settle");
+            Check(!gate.Due(4, false, t.AddSeconds(1)), "an unchanged chat hash does not read again after one second");
+            Check(gate.Due(4, false, t.AddSeconds(2)), "the same hash is read again within two seconds, so a new bottom line is not missed");
+            ChatOcrGate moved = new ChatOcrGate();
+            Check(moved.Due(9, false, t), "a fresh crop is read");
+            Check(moved.Due(9, false, t) && moved.Due(9, false, t), "the settle reads still run");
+            Check(moved.Due(10, false, t.AddMilliseconds(200)), "a red line that changes the hash is read at once");
+            ImageBuffer calm = ImageBuffer.Blank(360, 160, ImageBuffer.Pack(10, 12, 16));
+            calm.Fill(24, 40, 90, 3, ImageBuffer.Pack(220, 180, 40));
+            int before = ChatPrep.Stamp(calm);
+            calm.Fill(24, 130, 160, 6, ImageBuffer.Pack(176, 12, 14));
+            int after = ChatPrep.Stamp(calm);
+            Check(before != after, "red text alone changes the chat stamp");
+            ImageBuffer panel = ImageBuffer.Blank(800, 600, ImageBuffer.Pack(48, 90, 42));
+            panel.Fill(8, 400, 380, 180, ImageBuffer.Pack(8, 10, 14));
+            int[] rows = new int[] { 430, 448, 466 };
+            for (int r = 0; r < rows.Length; r++)
+            {
+                for (int x = 28; x < 150; x += 3)
+                {
+                    panel.Set(x, rows[r], ImageBuffer.Pack(220, 180, 40));
+                    panel.Set(x, rows[r] + 1, ImageBuffer.Pack(220, 180, 40));
+                }
+            }
+            for (int x = 30; x < 560; x += 3)
+            {
+                panel.Set(x, 548, ImageBuffer.Pack(170, 8, 10));
+                panel.Set(x, 549, ImageBuffer.Pack(170, 8, 10));
+            }
+            IntRect box = ChatPrep.FindBox(panel);
+            Check(box.Width >= 80 && box.Y <= 430 && box.Bottom >= 550, "the chat box reaches the newest line at the bottom, got " + box.X.ToString() + "," + box.Y.ToString() + " " + box.Width.ToString() + "x" + box.Height.ToString());
+        }
+
         private static void PotLines()
         {
             DateTime t = new DateTime(2026, 11, 22, 13, 33, 42, DateTimeKind.Utc);
@@ -2498,7 +2537,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.30" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.31" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -2509,10 +2548,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.30\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.31\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.30.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.31.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

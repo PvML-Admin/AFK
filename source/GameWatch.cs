@@ -806,15 +806,20 @@ namespace KavrosAfkWarden
             IntRect box = ChatPrep.FindBox(frame);
             if (box.Width < 40 || box.Height < 20)
             {
+                NoteCachedChat();
                 System.Threading.Interlocked.Exchange(ref chatBusy, 0);
                 return;
             }
+            bool resized = chatBox.Width > 8 && (Math.Abs(box.X - chatBox.X) > 8 || Math.Abs(box.Y - chatBox.Y) > 8
+                || Math.Abs(box.Width - chatBox.Width) > 12 || Math.Abs(box.Height - chatBox.Height) > 12);
             chatBox = box;
+            if (resized) chatGate.Invalidate();
             ImageBuffer crop = frame.Crop(box.X, box.Y, box.Width, box.Height);
             int stamp = ChatPrep.Stamp(crop);
             bool follow = System.Threading.Interlocked.Exchange(ref ocrFollow, 0) == 1;
-            if (!chatGate.Due(stamp, follow))
+            if (!chatGate.Due(stamp, follow, DateTime.UtcNow))
             {
+                NoteCachedChat();
                 System.Threading.Interlocked.Exchange(ref chatBusy, 0);
                 return;
             }
@@ -823,6 +828,19 @@ namespace KavrosAfkWarden
                 try { ReadChat(crop); }
                 finally { System.Threading.Interlocked.Exchange(ref chatBusy, 0); }
             });
+        }
+
+        private void NoteCachedChat()
+        {
+            double age = chatGate.AgeSeconds(DateTime.UtcNow);
+            lock (gate)
+            {
+                string raw = ocrTrace ?? "";
+                int at = raw.IndexOf(" cached age=");
+                if (at >= 0) raw = raw.Substring(0, at);
+                ocrTrace = raw + " cached age=" + age.ToString("0.0") + "s";
+                ChatReader.Trace = ocrTrace;
+            }
         }
 
         private void ReadChat(ImageBuffer crop)
