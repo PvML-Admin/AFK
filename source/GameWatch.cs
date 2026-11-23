@@ -305,42 +305,33 @@ namespace KavrosAfkWarden
         {
             IntPtr hwnd;
             lock (gate) { hwnd = requestSettings.Paused ? IntPtr.Zero : requestHwnd; }
-            bool foreground = hwnd != IntPtr.Zero && WindowLocator.IsForeground(hwnd);
-            if (!foreground) { pollForeground = false; return; }
+            bool alive = hwnd != IntPtr.Zero && NativeMethods.IsWindow(hwnd) && !NativeMethods.IsIconic(hwnd);
+            if (!alive) { pollForeground = false; return; }
             NativeMethods.LastInput last = new NativeMethods.LastInput();
             last.Size = System.Runtime.InteropServices.Marshal.SizeOf(typeof(NativeMethods.LastInput));
             if (!NativeMethods.GetLastInputInfo(ref last)) return;
             if (pollForeground && last.Time == lastInputStamp) return;
-            bool wasForeground = pollForeground;
             pollForeground = true;
             lastInputStamp = last.Time;
-            bool edge = false;
-            bool click = false;
-            for (int vk = 1; vk < 256; vk++)
-            {
-                if (!WatchKey(vk)) continue;
-                short state = NativeMethods.GetAsyncKeyState(vk);
-                bool pressed = (state & 0x8000) != 0;
-                // Bit 0 catches a press that went down and up between two polls.
-                bool tapped = (state & 1) != 0;
-                if (((pressed && !keyDown[vk]) || tapped) && foreground)
-                {
-                    edge = true;
-                    if (vk <= 6) click = true;
-                }
-                keyDown[vk] = pressed;
-            }
-            // Keys only count once the game was already in front, so typing in
-            // another app right before switching does not. A mouse click that
-            // brings the game to the front is a click on the game and counts.
-            if (edge && (wasForeground || click)) lock (gate) { publishedInput = true; }
+            short state = NativeMethods.GetAsyncKeyState(AfkInput.LeftButton);
+            bool pressed = (state & 0x8000) != 0;
+            // Bit 0 catches a press that went down and up between two polls.
+            bool tapped = (state & 1) != 0;
+            bool wentDown = (pressed && !keyDown[AfkInput.LeftButton]) || tapped;
+            keyDown[AfkInput.LeftButton] = pressed;
+            if (AfkInput.Resets(true, CursorOnWindow(hwnd), AfkInput.LeftButton, wentDown))
+                lock (gate) { publishedInput = true; }
         }
 
-        private static bool WatchKey(int vk)
+        private static bool CursorOnWindow(IntPtr hwnd)
         {
-            if (vk == 1 || vk == 2 || vk == 4 || vk == 5 || vk == 6) return true;
-            if (vk >= 8 && vk <= 254 && vk != 16 && vk != 17 && vk != 18) return true;
-            return false;
+            NativeMethods.PointStruct cursor;
+            if (!NativeMethods.GetCursorPos(out cursor)) return false;
+            IntPtr hit = NativeMethods.WindowFromPoint(cursor);
+            if (hit == IntPtr.Zero) return false;
+            if (hit == hwnd) return true;
+            IntPtr root = NativeMethods.GetAncestor(hit, 2);
+            return root == hwnd;
         }
 
         private void Sample()

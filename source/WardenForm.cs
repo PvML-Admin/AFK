@@ -1204,6 +1204,38 @@ namespace KavrosAfkWarden
         }
 
         private string lastLoggedReason = "";
+        private string lastSacrificeTrace = "";
+
+        private void AppendDebug(string dir, string text)
+        {
+            string logPath = Path.Combine(dir, DebugLogName());
+            File.AppendAllText(logPath, text);
+            DebugLog.TrimFile(logPath);
+        }
+
+        private void NoteSacrificeTrace()
+        {
+            if (!settings.SaveDebug) return;
+            string trace = sacrifice.Trace ?? "";
+            if (trace == lastSacrificeTrace) return;
+            lastSacrificeTrace = trace;
+            if (trace.Length == 0) return;
+            try
+            {
+                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KavrosAfkWarden");
+                Directory.CreateDirectory(dir);
+                string[] rows = trace.Replace("\r", "").Split('\n');
+                System.Text.StringBuilder body = new System.Text.StringBuilder();
+                string stamp = DateTime.Now.ToString("HH:mm:ss");
+                for (int i = 0; i < rows.Length; i++)
+                {
+                    if (rows[i].Length == 0) continue;
+                    body.Append(stamp).Append(' ').Append(rows[i]).Append("\r\n");
+                }
+                if (body.Length > 0) AppendDebug(dir, body.ToString());
+            }
+            catch (Exception) { }
+        }
 
         private void WriteDebug(bool pixels, bool moving)
         {
@@ -1241,14 +1273,7 @@ namespace KavrosAfkWarden
                     + " idleReset=" + (moving ? "yes" : "no")
                     + " " + panelDebug
                     + "\r\n";
-                string logPath = Path.Combine(dir, DebugLogName());
-                File.AppendAllText(logPath, line);
-                FileInfo info = new FileInfo(logPath);
-                if (info.Exists && info.Length > 200000)
-                {
-                    string tail = File.ReadAllText(logPath);
-                    if (tail.Length > 80000) File.WriteAllText(logPath, tail.Substring(tail.Length - 80000));
-                }
+                AppendDebug(dir, line);
                 if (due) File.AppendAllText(Path.Combine(dir, "startup.txt"), "captureMs=" + grab.LastTickMs.ToString() + " shownMs=" + StartupClock.ShownMs.ToString() + "\r\n");
             }
             catch (Exception) { }
@@ -1788,6 +1813,7 @@ namespace KavrosAfkWarden
             sample.PotionClear = false;
             List<ChatNotice> potionNotices = freshFrame ? chatPots.Observe(lastHud.ChatHits) : new List<ChatNotice>();
             if (freshFrame) sacrifice.Observe(lastHud.ChatText);
+            NoteSacrificeTrace();
             List<AlertEvent> events = engine.Tick(sample, settings);
             for (int n = 0; n < potionNotices.Count; n++)
             {

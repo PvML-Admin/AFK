@@ -64,6 +64,7 @@ namespace KavrosAfkWarden
         public bool LastGainKnown;
         public string LastItem = "";
         public string Log = "";
+        public string Trace = "";
 
         public void Attach()
         {
@@ -119,11 +120,13 @@ namespace KavrosAfkWarden
                 if (TryParse(lines[i], out hit)) current.Add(hit);
             }
             System.Text.StringBuilder notes = new System.Text.StringBuilder();
+            System.Text.StringBuilder trace = new System.Text.StringBuilder();
             if (!primed)
             {
                 if (text == null || text.Trim().Length == 0)
                 {
                     Log = "";
+                    Trace = "";
                     return;
                 }
                 previous.Clear();
@@ -135,6 +138,7 @@ namespace KavrosAfkWarden
                     previous.Add(slot);
                     if (current[i].TotalKnown) Remember(current[i].Total);
                     Note(notes, "sac reject reason=baseline", current[i]);
+                    TraceLine(trace, "rejected reason=baseline", current[i]);
                 }
                 if (current.Count > 0)
                 {
@@ -144,11 +148,13 @@ namespace KavrosAfkWarden
                 }
                 primed = true;
                 Publish(notes);
+                Trace = trace.ToString();
                 return;
             }
             if (current.Count == 0)
             {
                 Publish(notes);
+                Trace = "";
                 return;
             }
             int shift = Align(current);
@@ -167,29 +173,75 @@ namespace KavrosAfkWarden
                 {
                     if (Validates(slot.Hit)) Adopt(slot.Hit);
                     Note(notes, "sac reject reason=same-slot", slot.Hit);
+                    TraceLine(trace, "rejected reason=same-slot", slot.Hit);
                     continue;
                 }
                 if (slot.Hit.TotalKnown && Known(slot.Hit.Total) && !Validates(slot.Hit))
                 {
                     slot.Counted = true;
                     Note(notes, "sac reject reason=already-counted", slot.Hit);
+                    TraceLine(trace, "rejected reason=already-counted", slot.Hit);
                     continue;
                 }
-                if (Validates(slot.Hit) || ConfirmedByLater(next, i))
+                if (Validates(slot.Hit) || ConfirmedByLater(next, i) || FirstAnchor(slot.Hit))
                 {
                     Accept(slot, "total");
+                    TraceLine(trace, "counted reason=total", slot.Hit);
                     continue;
                 }
                 if (slot.Reads >= 2)
                 {
                     Accept(slot, "position");
+                    TraceLine(trace, "counted reason=position", slot.Hit);
                     continue;
                 }
                 Note(notes, "sac pending reason=unvalidated", slot.Hit);
+                TraceLine(trace, "pending reason=unvalidated", slot.Hit);
+            }
+            for (int i = 0; i < lines.Count; i++)
+            {
+                if (!LooksLike(lines[i]) || Listed(current, lines[i])) continue;
+                if (trace.Length > 0) trace.Append("\n");
+                trace.Append("sac-trace rejected reason=gain-unreadable gain=0 total=0 raw=\"").Append(Clean(lines[i])).Append("\"");
             }
             previous.Clear();
             for (int i = 0; i < next.Count; i++) previous.Add(next[i]);
             Publish(notes);
+            Trace = trace.ToString();
+        }
+
+        private bool FirstAnchor(SacrificeHit hit)
+        {
+            return !confirmed && hit.GainKnown && hit.TotalKnown;
+        }
+
+        private static bool Listed(List<SacrificeHit> hits, string line)
+        {
+            for (int i = 0; i < hits.Count; i++)
+                if (hits[i].Text == line) return true;
+            return false;
+        }
+
+        public static bool LooksLike(string line)
+        {
+            if (line == null || line.Length == 0) return false;
+            return Find(Tokens(line), FoldWord("sacrifice"), 0) >= 0;
+        }
+
+        private static void TraceLine(System.Text.StringBuilder trace, string decision, SacrificeHit hit)
+        {
+            if (trace.Length > 0) trace.Append("\n");
+            trace.Append("sac-trace ").Append(decision);
+            trace.Append(" gain=").Append(hit.GainKnown ? hit.Gain.ToString() : "0");
+            trace.Append(" total=").Append(hit.Total.ToString());
+            if (!hit.GainKnown) trace.Append(" gain-unreadable");
+            trace.Append(" raw=\"").Append(Clean(hit.Text)).Append("\"");
+        }
+
+        private static string Clean(string text)
+        {
+            if (text == null) return "";
+            return text.Replace("\"", "'").Replace("\r", " ").Replace("\n", " ");
         }
 
         private static Track TrackFrom(SacrificeHit hit, Track prior)

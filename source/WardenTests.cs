@@ -834,13 +834,30 @@ namespace KavrosAfkWarden
 
         private static void Input()
         {
-            Check(!InputActivity.IsActivity(false, false, true, true, false, false), "cursor motion does not reset idle");
-            Check(!InputActivity.IsActivity(false, true, true, true, false, false), "mouse movement over the focused game is not a click");
-            Check(!InputActivity.IsActivity(false, false, false, false, false, true), "keys typed into another app do not reset it");
-            Check(InputActivity.IsActivity(false, true, false, false, false, true), "keys reset it while the game is focused");
-            Check(InputActivity.IsActivity(false, true, true, false, true, false), "a click in the focused game resets idle");
-            Check(!InputActivity.IsActivity(true, false, true, true, true, true), "a minimized game receives none of this input");
+            Check(!InputActivity.IsActivity(false, false, true, true, false, false), "cursor motion does not reset the AFK timer");
+            Check(!InputActivity.IsActivity(false, true, true, true, false, false), "camera movement over the game is not a left click");
+            Check(!InputActivity.IsActivity(false, true, true, false, false, true), "keys do not reset the AFK timer");
+            Check(!InputActivity.IsActivity(false, true, true, false, false, false), "a middle or right click does not reset the AFK timer");
+            Check(InputActivity.IsActivity(false, false, true, false, true, false), "a left click on the game window resets the AFK timer");
+            Check(!InputActivity.IsActivity(false, true, false, false, true, false), "a left click outside the game window does not reset it");
+            Check(!InputActivity.IsActivity(true, true, true, false, true, true), "a minimized game receives none of this input");
             Check(!InputActivity.IsActivity(false, false, false, true, true, false), "clicks on the window that covers the game do not count");
+            Check(AfkInput.Resets(true, true, AfkInput.LeftButton, true), "left button down on the window is the only reset");
+            Check(!AfkInput.Resets(true, true, 4, true) && !AfkInput.Resets(true, true, 2, true), "middle and right buttons do not reset the timer");
+            Check(!AfkInput.Resets(true, true, AfkInput.LeftButton, false), "a left button that did not go down is not a new click");
+            WardenEngine afk = new WardenEngine();
+            WardenSettings afkSettings = new WardenSettings();
+            afkSettings.AfkEnabled = true;
+            afkSettings.IdleEnabled = false;
+            afkSettings.HpEnabled = false;
+            afkSettings.PrayerEnabled = false;
+            afkSettings.PotionEnabled = false;
+            DateTime afkTime = new DateTime(2026, 11, 23, 6, 0, 0, DateTimeKind.Utc);
+            afk.Tick(Sample(afkTime, true, true, true, false), afkSettings);
+            afk.Tick(Sample(afkTime.AddMinutes(10), true, true, true, false), afkSettings);
+            Check(afk.AfkRemaining <= TimeSpan.FromSeconds(afkSettings.AfkSeconds - 590) && afk.AfkRemaining >= TimeSpan.FromSeconds(afkSettings.AfkSeconds - 610), "moving the camera for ten minutes does not reset the AFK timer, left " + afk.AfkRemaining.TotalSeconds.ToString());
+            afk.Tick(Sample(afkTime.AddMinutes(10).AddSeconds(1), true, true, true, true), afkSettings);
+            Check(afk.AfkRemaining >= TimeSpan.FromSeconds(afkSettings.AfkSeconds - 2), "a left click resets the AFK timer, left " + afk.AfkRemaining.TotalSeconds.ToString());
             Check(!CapturePlan.WantFull(false, DateTime.UtcNow, DateTime.UtcNow.AddSeconds(3)), "unread HUD backs off between full-frame attempts");
             Check(!CapturePlan.WantFull(true, DateTime.UtcNow, DateTime.UtcNow.AddSeconds(12)), "a locked slot waits out the slow full search");
             Check(CapturePlan.SampleMilliseconds <= 500 && CapturePlan.FullIntervalSeconds >= 10, "steady capture stays at or under 2 Hz");
@@ -2161,7 +2178,8 @@ namespace KavrosAfkWarden
                 Check(next >= at, "notes are newest first, missing " + version);
                 at = next + 1;
             }
-            Check(text.IndexOf("v0.2.37") >= 0 && text.IndexOf("v0.2.29") > text.IndexOf("v0.2.37"), "notes run from this release back to the heading fix");
+            Check(ReleaseNotes.VersionAt(0) == "v0.2.38" && text.IndexOf("v0.2.29") > text.IndexOf("v0.2.38"), "notes run from this release back to the heading fix");
+            Check(text.IndexOf("left-click") >= 0, "the notes mention the left click");
             Check(text.IndexOf("What's new") >= 0 && text.IndexOf("points per hour") >= 0, "this release mentions the notes and the hourly rate");
             Check(text.IndexOf("five minutes") >= 0 && text.IndexOf("prayer bars") >= 0, "the notes mention potion cooldown and the bars");
             Check(text.IndexOf("two seconds") >= 0 && text.IndexOf("RuneMetrics") >= 0 && text.IndexOf("Reset") >= 0, "the notes mention chat, the reminder and Reset");
@@ -2198,11 +2216,11 @@ namespace KavrosAfkWarden
             SacrificeBook book = new SacrificeBook();
             System.Text.StringBuilder chat = new System.Text.StringBuilder();
             string[] steps = new string[] { m1, m2, m3, m4, news1 + "\n" + news2 + "\n" + m5, m6 };
-            // An unvalidated total waits for the next read. Each step therefore
-            // confirms the previous line, and the newest line stays pending.
-            long[] gained = new long[] { 0, 11, 22, 33, 148, 608 };
-            int[] counted = new int[] { 0, 1, 2, 3, 4, 5 };
-            long[] trusted = new long[] { 0, 66, 66, 66, 66, 66 };
+            // A complete first sacrifice counts at once. A later total that does
+            // not match waits for the next read of that same line.
+            long[] gained = new long[] { 11, 11, 22, 33, 148, 608 };
+            int[] counted = new int[] { 1, 1, 2, 3, 4, 5 };
+            long[] trusted = new long[] { 66, 66, 66, 66, 66, 66 };
             for (int i = 0; i < steps.Length; i++)
             {
                 if (chat.Length > 0) chat.Append('\n');
@@ -2265,6 +2283,24 @@ namespace KavrosAfkWarden
             Check(timed.ElapsedSeconds(stamp) == 600 && SacrificeBook.Format(true, timed.SessionGained, timed.SessionCount, timed.ElapsedSeconds(stamp)).IndexOf("3,600/h") >= 0, "ten minutes of points makes an hourly rate");
             timed.ResetSession();
             Check(timed.SessionGained == 0 && timed.SessionCount == 0 && timed.ElapsedSeconds(DateTime.UtcNow) < 60 && timed.Value().IndexOf("\u2014/h") >= 0, "reset restarts the points and the rate timer, got " + timed.Value());
+            string laceration = "] You sacrifice Laceration boots and gain 115 points. You now have 774 total sacrifice\npoints.";
+            SacrificeBook first = new SacrificeBook();
+            first.Observe(laceration);
+            Check(first.SessionCount == 1 && first.SessionGained == 115 && first.Total == 774, "the first sacrifice, wrapped before points, counts at once, got " + first.SessionCount.ToString() + " " + first.SessionGained.ToString() + " total " + first.Total.ToString() + " " + first.Log);
+            Check(first.Trace.IndexOf("counted") >= 0 && first.Trace.IndexOf("Laceration boots") >= 0 && first.Trace.IndexOf("gain=115") >= 0, "the sacrifice trace records the counted line, got " + first.Trace);
+            string again = first.Trace;
+            first.Observe(laceration);
+            Check(first.SessionCount == 1 && first.SessionGained == 115 && first.Trace.IndexOf("rejected reason=same-slot") >= 0 && first.Trace != again, "reading that same wrapped line again does not count it twice, got " + first.Trace);
+            string kept = new string('x', 50) + "\nEND-OF-LOG\n";
+            string bulky = new string('a', 80) + "\n" + kept;
+            Check(DebugLog.Tail(bulky, 40).EndsWith("END-OF-LOG\n") && DebugLog.Tail(bulky, 40).IndexOf("aaaa") < 0, "trimming the debug log keeps the newest lines");
+            string path = Path.Combine(Path.GetTempPath(), "afk-debug-" + Guid.NewGuid().ToString("N") + ".txt");
+            File.WriteAllText(path, bulky);
+            DebugLog.TrimFile(path, 60, 30);
+            string trimmed = File.ReadAllText(path);
+            File.Delete(path);
+            Check(trimmed.Length <= 30 && trimmed.IndexOf("END-OF-LOG") >= 0, "a long debug file is cut back to its tail, got " + trimmed.Length.ToString());
+            Check(DebugLog.OverCap(DebugLog.CapBytes + 1) && !DebugLog.OverCap(DebugLog.KeepBytes) && DebugLog.CapBytes >= 5 * 1024 * 1024 && DebugLog.KeepBytes >= 2 * 1024 * 1024, "the debug log keeps about two megabytes and caps near five");
             GarbledSacrifice(root);
         }
 
@@ -2893,7 +2929,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.37" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.38" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -2904,10 +2940,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.37\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.38\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.37.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.38.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

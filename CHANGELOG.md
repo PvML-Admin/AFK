@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.38
+
+- The AFK timer resets only when you left-click the game. Moving the camera does not reset it. The debug log keeps a much longer history and writes down each sacrifice line.
+
 ## 0.2.37
 
 - What's new opens on the panel once after an update. Settings can open it again. The sacrifice row shows points per hour since the last Reset, and waits a minute before the first rate.

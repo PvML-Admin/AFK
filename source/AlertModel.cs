@@ -1285,12 +1285,25 @@ namespace KavrosAfkWarden
         }
     }
 
+    // The AFK teleport timer resets only on a left click on the bound game window.
+    // Camera movement, other mouse buttons, the wheel and keys do not reset it.
+    public static class AfkInput
+    {
+        public const int LeftButton = 1;
+
+        public static bool Resets(bool windowAlive, bool cursorOnWindow, int virtualKey, bool wentDown)
+        {
+            if (!windowAlive || !cursorOnWindow || !wentDown) return false;
+            return virtualKey == LeftButton;
+        }
+    }
+
     public static class InputActivity
     {
-        public static bool IsActivity(bool iconic, bool foreground, bool cursorOverGame, bool cursorMoved, bool buttonDown, bool keyDown)
+        public static bool IsActivity(bool iconic, bool foreground, bool cursorOverGame, bool cursorMoved, bool leftButtonDown, bool keyDown)
         {
-            if (iconic || !foreground) return false;
-            return buttonDown || keyDown;
+            if (iconic) return false;
+            return AfkInput.Resets(true, cursorOverGame, leftButtonDown ? AfkInput.LeftButton : 0, leftButtonDown);
         }
     }
 
