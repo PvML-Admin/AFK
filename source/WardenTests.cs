@@ -2178,7 +2178,7 @@ namespace KavrosAfkWarden
                 Check(next >= at, "notes are newest first, missing " + version);
                 at = next + 1;
             }
-            Check(ReleaseNotes.VersionAt(0) == "v0.2.38" && text.IndexOf("v0.2.29") > text.IndexOf("v0.2.38"), "notes run from this release back to the heading fix");
+            Check(ReleaseNotes.VersionAt(0) == "v0.2.39" && text.IndexOf("v0.2.29") > text.IndexOf("v0.2.39"), "notes run from this release back to the heading fix");
             Check(text.IndexOf("left-click") >= 0, "the notes mention the left click");
             Check(text.IndexOf("What's new") >= 0 && text.IndexOf("points per hour") >= 0, "this release mentions the notes and the hourly rate");
             Check(text.IndexOf("five minutes") >= 0 && text.IndexOf("prayer bars") >= 0, "the notes mention potion cooldown and the bars");
@@ -2290,7 +2290,7 @@ namespace KavrosAfkWarden
             Check(first.Trace.IndexOf("counted") >= 0 && first.Trace.IndexOf("Laceration boots") >= 0 && first.Trace.IndexOf("gain=115") >= 0, "the sacrifice trace records the counted line, got " + first.Trace);
             string again = first.Trace;
             first.Observe(laceration);
-            Check(first.SessionCount == 1 && first.SessionGained == 115 && first.Trace.IndexOf("rejected reason=same-slot") >= 0 && first.Trace != again, "reading that same wrapped line again does not count it twice, got " + first.Trace);
+            Check(first.SessionCount == 1 && first.SessionGained == 115 && first.Trace.IndexOf("rejected") >= 0 && first.Trace != again, "reading that same wrapped line again does not count it twice, got " + first.Trace);
             string kept = new string('x', 50) + "\nEND-OF-LOG\n";
             string bulky = new string('a', 80) + "\n" + kept;
             Check(DebugLog.Tail(bulky, 40).EndsWith("END-OF-LOG\n") && DebugLog.Tail(bulky, 40).IndexOf("aaaa") < 0, "trimming the debug log keeps the newest lines");
@@ -2512,6 +2512,54 @@ namespace KavrosAfkWarden
             Check(over.SessionCount == 6 && over.SessionGained == 690 && SacCounts(over.Log) == 6, "the 20:10 log is 6 sacrifices and 690 points, got " + over.SessionCount.ToString() + " " + over.SessionGained.ToString() + " " + over.Log);
             over.Observe(sevenLast);
             Check(over.SessionCount == 6 && over.SessionGained == 690, "re-reading the 20:10 chat adds nothing");
+            string slotA = "] You sacrifice Laceration boots and gain 115 points. You now have 889 total sacrifice points.";
+            string slotB = "] You sacrifice Laceration boots and gain 115 points. You now have 1,004 total sacrifice points.";
+            string slotC = "] You sacrifice Laceration boots and gain 115 points. You now have 1,119 total sacrifice points.";
+            SacrificeBook scrolled = new SacrificeBook();
+            scrolled.Observe(slotA);
+            scrolled.Observe(slotA);
+            scrolled.Observe(slotB);
+            scrolled.Observe(slotC);
+            Check(scrolled.SessionCount == 3 && scrolled.SessionGained == 345 && scrolled.Total == 1119, "a new total in an old chat slot still counts, got " + scrolled.SessionCount.ToString() + " " + scrolled.SessionGained.ToString() + " " + scrolled.Log);
+            scrolled.Observe(slotA);
+            scrolled.Observe(slotC);
+            Check(scrolled.SessionCount == 3 && scrolled.SessionGained == 345, "re-reading 889 or 1,119 does not count again, got " + scrolled.SessionCount.ToString() + " " + scrolled.Log);
+            string sameSlot = Path.Combine(root, "verification", "fixtures", "fixtures-chat", "debug-log-v0238-sameslot.txt");
+            if (!File.Exists(sameSlot))
+            {
+                Check(false, "missing debug-log-v0238-sameslot.txt");
+                return;
+            }
+            SacrificeBook slotLog = ReplaySacrificeLog(File.ReadAllLines(sameSlot), "");
+            Check(slotLog.SessionCount == 3 && slotLog.SessionGained == 345 && SacCounts(slotLog.Log) == 3, "the 16:42 log is 3 sacrifices and 345 points, got " + slotLog.SessionCount.ToString() + " " + slotLog.SessionGained.ToString() + " " + slotLog.Log);
+        }
+
+        private static SacrificeBook ReplaySacrificeLog(string[] rows, string prefix)
+        {
+            SacrificeBook book = new SacrificeBook();
+            for (int n = 0; n < rows.Length; n++)
+            {
+                if (prefix.Length > 0 && (rows[n].Length < prefix.Length || rows[n].Substring(0, prefix.Length) != prefix)) continue;
+                int at = rows[n].IndexOf(" chat=");
+                int potsAt = rows[n].IndexOf(" pots=");
+                if (at < 0 || potsAt < at) continue;
+                string raws = rows[n].Substring(at + 6, potsAt - (at + 6));
+                System.Text.StringBuilder body = new System.Text.StringBuilder();
+                int from = 0;
+                while (from < raws.Length)
+                {
+                    int raw = raws.IndexOf("raw=\"", from);
+                    if (raw < 0) break;
+                    int start = raw + 5;
+                    int end = raws.IndexOf('"', start);
+                    if (end < 0) break;
+                    if (body.Length > 0) body.Append('\n');
+                    body.Append(raws.Substring(start, end - start));
+                    from = end + 1;
+                }
+                book.Observe(body.ToString());
+            }
+            return book;
         }
 
         private static int SacCounts(string log)
@@ -2929,7 +2977,7 @@ namespace KavrosAfkWarden
 
         private static void Manifest(string root)
         {
-            Check(AppInfo.Version == "0.2.38" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
+            Check(AppInfo.Version == "0.2.39" && AppInfo.Name == "AFK Warden" && AppInfo.Author == "Zenity", "module identity");
             if (string.IsNullOrEmpty(root)) return;
             string jsonPath = Path.Combine(root, "companion.module.json");
             string manifestPath = Path.Combine(root, "source", "app.manifest");
@@ -2940,10 +2988,10 @@ namespace KavrosAfkWarden
             }
             string json = File.ReadAllText(jsonPath);
             string manifest = File.ReadAllText(manifestPath);
-            Check(json.IndexOf("\"version\": \"0.2.38\"") >= 0, "public module manifest version");
+            Check(json.IndexOf("\"version\": \"0.2.39\"") >= 0, "public module manifest version");
             Check(json.IndexOf("\"name\": \"AFK Warden\"") >= 0 && json.IndexOf("\"author\": \"Zenity\"") >= 0, "public module manifest name and author");
             Check(json.IndexOf("\"id\": \"afk-warden\"") >= 0, "public module id");
-            Check(manifest.IndexOf("version=\"0.2.38.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
+            Check(manifest.IndexOf("version=\"0.2.39.0\"") >= 0 && manifest.IndexOf("name=\"KavrosAfkWarden\"") >= 0, "assembly manifest version");
         }
     }
 }

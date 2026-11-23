@@ -169,24 +169,36 @@ namespace KavrosAfkWarden
             for (int i = 0; i < next.Count; i++)
             {
                 Track slot = next[i];
-                if (slot.Counted)
+                // A total that matches the last counted total plus the gain is a new
+                // sacrifice, even when chat scrolled it into an older line's slot.
+                // A one-digit or dropped-digit correction of that same slot is not.
+                if (Validates(slot.Hit) || ConfirmedByLater(next, i) || FirstAnchor(slot.Hit))
                 {
-                    if (Validates(slot.Hit)) Adopt(slot.Hit);
-                    Note(notes, "sac reject reason=same-slot", slot.Hit);
-                    TraceLine(trace, "rejected reason=same-slot", slot.Hit);
+                    int linked = i + shift;
+                    bool sameLine = slot.Counted && linked >= 0 && linked < previous.Count && previous[linked].HeldKnown
+                        && MisreadOf(previous[linked].HeldTotal, slot.Hit.Total);
+                    if (sameLine)
+                    {
+                        if (slot.Hit.TotalKnown) Adopt(slot.Hit);
+                        Note(notes, "sac reject reason=same-slot", slot.Hit);
+                        TraceLine(trace, "rejected reason=same-slot", slot.Hit);
+                        continue;
+                    }
+                    Accept(slot, "total");
+                    TraceLine(trace, "counted reason=total", slot.Hit);
                     continue;
                 }
-                if (slot.Hit.TotalKnown && Known(slot.Hit.Total) && !Validates(slot.Hit))
+                if (slot.Hit.TotalKnown && Known(slot.Hit.Total))
                 {
                     slot.Counted = true;
                     Note(notes, "sac reject reason=already-counted", slot.Hit);
                     TraceLine(trace, "rejected reason=already-counted", slot.Hit);
                     continue;
                 }
-                if (Validates(slot.Hit) || ConfirmedByLater(next, i) || FirstAnchor(slot.Hit))
+                if (slot.Counted)
                 {
-                    Accept(slot, "total");
-                    TraceLine(trace, "counted reason=total", slot.Hit);
+                    Note(notes, "sac reject reason=same-slot", slot.Hit);
+                    TraceLine(trace, "rejected reason=same-slot", slot.Hit);
                     continue;
                 }
                 if (slot.Reads >= 2)
@@ -213,6 +225,55 @@ namespace KavrosAfkWarden
         private bool FirstAnchor(SacrificeHit hit)
         {
             return !confirmed && hit.GainKnown && hit.TotalKnown;
+        }
+
+        // The same chat line read again: one digit flipped, or one digit dropped.
+        private static bool MisreadOf(long prior, long now)
+        {
+            if (prior == now || Close(prior, now)) return true;
+            if (OneDigitOff(prior, now)) return true;
+            return DroppedDigit(prior, now);
+        }
+
+        private static bool OneDigitOff(long a, long b)
+        {
+            if (a < 0) a = -a;
+            if (b < 0) b = -b;
+            string left = a.ToString();
+            string right = b.ToString();
+            if (left.Length != right.Length) return false;
+            int diff = 0;
+            for (int i = 0; i < left.Length; i++)
+                if (left[i] != right[i]) diff++;
+            return diff == 1;
+        }
+
+        private static bool DroppedDigit(long a, long b)
+        {
+            if (a < 0) a = -a;
+            if (b < 0) b = -b;
+            string left = a.ToString();
+            string right = b.ToString();
+            if (left.Length + 1 == right.Length) return DroppedOne(right, left);
+            if (right.Length + 1 == left.Length) return DroppedOne(left, right);
+            return false;
+        }
+
+        private static bool DroppedOne(string longer, string shorter)
+        {
+            for (int skip = 0; skip < longer.Length; skip++)
+            {
+                int at = 0;
+                bool same = true;
+                for (int i = 0; i < longer.Length; i++)
+                {
+                    if (i == skip) continue;
+                    if (at >= shorter.Length || longer[i] != shorter[at]) { same = false; break; }
+                    at++;
+                }
+                if (same && at == shorter.Length) return true;
+            }
+            return false;
         }
 
         private static bool Listed(List<SacrificeHit> hits, string line)

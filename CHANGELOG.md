@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.39
+
+- A new sacrifice still counts when the chat scrolls and the line sits where an older sacrifice was. The total has to match the last counted total plus the gain.
+
 ## 0.2.38
 
 - The AFK timer resets only when you left-click the game. Moving the camera does not reset it. The debug log keeps a much longer history and writes down each sacrifice line.
